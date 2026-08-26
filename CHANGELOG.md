@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.6.2
+
+Follows [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI) to 1.5.1,
+which drops the `gen1_wild_ui` entry from its own `optional_dependencies` —
+an optional dependency on this bundle that could never be satisfied, since
+this bundle carries that mod as `BATTLE MENUS` and lists it in `conflicts`,
+so the engine will not have both installed for it to resolve against.
+
+No module content changed: the rebuild is byte-identical and the whole diff is
+the pin and the version map `mod.find` hands out. Nothing in the menu moved.
+
 ## 1.6.1
 
 Adds the `LICENSE` this repository never had. Every standalone mod in the suite
