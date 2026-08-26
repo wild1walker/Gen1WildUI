@@ -21,6 +21,11 @@
 --   defaults     bundle-level overrides for any upstream row's default
 --   aliases      every name a sibling might call this feature by, for
 --                mod.find
+--   priority     the upstream manifest's own load priority.  Features install
+--                in ascending priority, ties in declaration order -- which is
+--                the order these mods were built and tested against.  It is
+--                deliberately independent of the order they are written here,
+--                which is the order the menu reads them in.
 --   raw_option_keys  rows this feature writes by calling the engine's mod
 --                manager, which does not know about prefixes
 
@@ -39,6 +44,7 @@ return {
 
     {
       id = "arena",
+      priority = 50,
       dir = "Gen1Arena",
       entry = "main.lua",
       label = "BACKDROPS",
@@ -50,13 +56,14 @@ return {
 
     -- ---- the menus a player lives in
     --
-    -- Load order matters between these three the same way it does when they
-    -- are installed separately: Gen1Party optionally reads Gen1Dex and
-    -- Gen1BillsBox, so they are registered ahead of it and resolve through
-    -- the registry rather than through the engine.
+    -- These three share priority 1100 upstream, so they install in the order
+    -- written here.  That order is load-bearing: Gen1Party optionally reads
+    -- Gen1Dex and Gen1BillsBox, and needs both registered ahead of it to
+    -- resolve them through the bundle registry rather than the engine.
 
     {
       id = "dex",
+      priority = 1100,
       dir = "Gen1Dex",
       entry = "main.lua",
       label = "POKEDEX",
@@ -67,6 +74,7 @@ return {
 
     {
       id = "box",
+      priority = 1100,
       dir = "Gen1BillsBox",
       entry = "main.lua",
       label = "POKEMON BOX",
@@ -77,6 +85,7 @@ return {
 
     {
       id = "party",
+      priority = 1100,
       dir = "Gen1Party",
       entry = "main.lua",
       label = "PARTY MENU",
@@ -87,6 +96,7 @@ return {
 
     {
       id = "bag",
+      priority = 520,
       dir = "Gen1ModernBag",
       entry = "main.lua",
       label = "BAG",
@@ -99,6 +109,7 @@ return {
 
     {
       id = "menus",
+      priority = 900,
       dir = "Gen1MenuManager",
       entry = "main.lua",
       label = "MENU LAYOUT",
@@ -109,6 +120,7 @@ return {
 
     {
       id = "modmenu",
+      priority = 500,
       dir = "Gen1ModMenu",
       entry = "main.lua",
       label = "MOD MANAGER",

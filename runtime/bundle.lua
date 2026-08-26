@@ -73,6 +73,32 @@ function Bundle.install(mod, spec, features)
     end
   end
 
+  -- ---- 1b. installation order
+  --
+  -- Menu order and load order are different questions and are answered
+  -- separately.  features.lua is written in the order the menu should read --
+  -- related features next to each other, the ones most players touch first at
+  -- the top -- while installation follows each mod's own manifest priority,
+  -- because that is the order these mods were built and tested against.
+  -- Gen1Arena hooks the battle screen at 50 and Gen1Party redraws the party
+  -- at 1100; swapping them because one reads better in a list would be a
+  -- silent behaviour change.
+  --
+  -- A stable sort, so features sharing a priority keep the order they are
+  -- declared in -- which is how Gen1Party still finds Gen1Dex and
+  -- Gen1BillsBox registered ahead of it.
+
+  local loadOrder = {}
+  for index, feature in ipairs(active) do
+    loadOrder[#loadOrder + 1] = { feature = feature, index = index }
+  end
+  table.sort(loadOrder, function(a, b)
+    local pa = a.feature.priority or 100
+    local pb = b.feature.priority or 100
+    if pa ~= pb then return pa < pb end
+    return a.index < b.index
+  end)
+
   -- ---- 2. run each feature
   --
   -- A feature whose switch is its own option row is always installed: its own
@@ -82,7 +108,8 @@ function Bundle.install(mod, spec, features)
   -- asterisk is telling the player.
 
   local installed = {}
-  for _, feature in ipairs(active) do
+  for _, ordered in ipairs(loadOrder) do
+    local feature = ordered.feature
     local wanted = true
     if not feature.live_toggle then
       local key = optionset.groups[feature.id].masterKey

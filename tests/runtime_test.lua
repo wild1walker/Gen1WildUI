@@ -252,7 +252,7 @@ do
   io.write("the facade keeps each feature inside its own namespace\n")
   local mod = fakeMod()
   local optionset = OptionSet.new()
-  local registry = Registry.new(mod, { paired_bundle = "gen1_wild_ui" })
+  local registry = Registry.new(mod, { paired_bundle = "gen1_wild_qol" })
   local feature = { id = "bag", label = "BAG", dir = "Gen1ModernBag" }
   optionset.master(feature)
 
@@ -370,7 +370,7 @@ do
   io.write("mod.find still resolves siblings after bundling\n")
   local mod = fakeMod()
   local optionset = OptionSet.new()
-  local registry = Registry.new(mod, { paired_bundle = "gen1_wild_ui" })
+  local registry = Registry.new(mod, { paired_bundle = "gen1_wild_qol" })
 
   local gen151 = { id = "gen151", label = "ALL 151", dir = "Gen151",
                    aliases = { "Gen151" } }
@@ -394,7 +394,7 @@ do
 
   -- 2. a feature in the paired bundle
   local dexExports = { dexForSpecies = function() end }
-  mod.found["gen1_wild_ui"] = { features = { ["gen1dex"] = dexExports } }
+  mod.found["gen1_wild_qol"] = { features = { ["gen1dex"] = dexExports } }
   eq(gen151Facade.find("Gen1Dex"), dexExports,
      "a feature in the other half of the split is reached through it")
 
@@ -479,6 +479,51 @@ do
   game.save.options.modOptions[mod.id]["help_line"] = false
   eq(optionset.read(mod, "modmenu_help_line"), true,
      "a row outside the list ignores the raw spelling entirely")
+end
+
+-- ------------------------------------------------- install order vs menu order
+
+do
+  io.write("features install by priority and are listed in declaration order\n")
+
+  -- Reproduce the sort bundle.lua does, from the same inputs, so the ordering
+  -- rule is pinned by a test rather than only by a comment.  Declaration
+  -- order here is the menu's; priority is each mod's own manifest value.
+  local declared = {
+    { id = "dex",      priority = 1100 },
+    { id = "box",      priority = 1100 },
+    { id = "party",    priority = 1100 },
+    { id = "arena",    priority = 50 },
+    { id = "modmenu",  priority = 500 },
+    { id = "bag",      priority = 520 },
+    { id = "menus",    priority = 900 },
+  }
+
+  local ordered = {}
+  for index, feature in ipairs(declared) do
+    ordered[#ordered + 1] = { feature = feature, index = index }
+  end
+  table.sort(ordered, function(a, b)
+    local pa = a.feature.priority or 100
+    local pb = b.feature.priority or 100
+    if pa ~= pb then return pa < pb end
+    return a.index < b.index
+  end)
+
+  local names = {}
+  for i, entry in ipairs(ordered) do names[i] = entry.feature.id end
+  eq(table.concat(names, ","), "arena,modmenu,bag,menus,dex,box,party",
+     "installation ascends by the upstream manifest priority")
+
+  -- The tie is what keeps Gen1Party working: it optionally reads Gen1Dex and
+  -- Gen1BillsBox, so both must be registered before it.
+  local position = {}
+  for i, name in ipairs(names) do position[name] = i end
+  ok(position.dex < position.party, "Gen1Dex installs before Gen1Party")
+  ok(position.box < position.party, "Gen1BillsBox installs before Gen1Party")
+
+  -- And the menu is unaffected: it reads the declared list.
+  eq(declared[1].id, "dex", "the menu still lists features as declared")
 end
 
 -- ------------------------------------------------------------------ done
