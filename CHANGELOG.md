@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.5.0
+
+Follows one of its mods; everything else here is already on its newest release.
+The new row appears in the menu on its own — the bundle reads every feature's
+schema at load — so nothing here needed the edit. No key was renamed or removed.
+
+- **PARTY MENU** → [Gen1Party](https://github.com/wild1walker/Gen1Party) 1.4.0.
+  The popup's `SWITCH` becomes `MOVE`, and moving a POKéMON is the box's answer
+  rather than the engine's: A lifts the member the cursor is on, it flashes,
+  and UP and DOWN carry it through the list a row at a time with the party
+  reordered under it as it goes. A lets go; B walks it home. A run of steps is
+  an insertion, not an exchange — carry the fourth member to the top and the
+  three it passed keep the order they had. The *battle* popup's `SWITCH` is
+  left alone: there it means *send this one out*. New row: `MOVE NOT SWITCH`,
+  on — off restores the engine's two picks and one exchange exactly.
+
 ## 1.4.0
 
 Follows two of its mods; everything else here is already on its newest release.

@@ -5,15 +5,22 @@
 --
 -- ------- what this screen is, and is not
 --
--- It is the VANILLA party menu with two of its methods replaced.  PartyMenu
+-- It is the VANILLA party menu with three of its methods replaced.  PartyMenu
 -- is not one screen but seven -- the field menu, the battle switch, the
 -- forced switch after a faint, the item target, the TM/HM teach list with its
 -- ABLE / NOT ABLE column, the SOFTBOILED donor, the evolution-stone list --
 -- and each has its own input rules, its own bottom message and its own idea
 -- of what A does.  None of that is touched here: the vanilla constructor
--- builds the screen, and only `draw` and `sgbPalettes` are swapped out.  This
--- mod has an opinion about how the party LOOKS and none at all about what it
--- does.
+-- builds the screen, and only `draw`, `sgbPalettes` and `update` are swapped
+-- out.
+--
+-- The first two are the whole of this mod's opinion about how the party
+-- LOOKS.  `update` is the one place it has an opinion about what the party
+-- DOES, and that opinion is exactly one verb long: SWITCH becomes MOVE, and
+-- a member being moved is in your HAND rather than waiting to be exchanged
+-- with a second pick -- see "moving a member" below.  Every other key, on
+-- every other frame, is read by the engine's own update, which this one
+-- calls.
 --
 -- ------- the frame, and what it cost
 --
@@ -335,6 +342,179 @@ return function(mod, C)
     return C.truncate(line, 18)
   end
 
+  -- ------- moving a member
+  --
+  -- The engine's answer is SWITCH: press A on one member, press A on a
+  -- second, and the two change places (PartyMenu's `swapFrom`, party_menu.asm
+  -- via HandlePartyMenuInput).  It is two picks over a list that never moves,
+  -- and the only sign of the first one is a hollow arrow beside a row you
+  -- have already left.
+  --
+  -- Gen1BillsBox answers the same question by putting the POKeMON in your
+  -- HAND: it flashes, it goes where you go, and the screen under it is the
+  -- screen you are arranging.  This is that, on the party list.  MOVE lifts
+  -- the member the cursor is on; UP and DOWN carry it through the list, a row
+  -- at a time, reordering the party as it goes; A lets go and B walks it
+  -- home.  The popup row says MOVE because MOVE is what it now does -- SWITCH
+  -- describes an exchange, and this is not one.
+  --
+  -- What a run of steps adds up to is an INSERTION rather than an exchange:
+  -- each step takes the member out of the array and puts it back in one row
+  -- further on, so carrying the fourth member to the top leaves the three it
+  -- passed in the order they were already in.  Vanilla's SWITCH would have
+  -- traded the first and the fourth and left the two between them alone.
+  --
+  -- The array is reordered on every step rather than once at the end, and
+  -- that is the load-bearing part.  Party order IS battle order -- party[1]
+  -- is who you send out -- so a list drawn in one order over an array stored
+  -- in another has a lead POKeMON nobody on screen can see.  There is no such
+  -- window here: what the list looks like is what the save says, on every
+  -- frame of the carry.  It is also why letting go costs nothing to commit.
+  --
+  -- B is BACK, the way it is in the box rather than the way it is on this
+  -- screen: it walks the member home instead of closing the menu.  Because
+  -- every step leaves the OTHER members in their own order, putting this one
+  -- back in the row it started in restores the party exactly, however far it
+  -- travelled.  There is no way to leave this screen with a POKeMON in hand.
+
+  -- Sixteen steps lit and eight dark at the engine's sixty a second, which is
+  -- Gen1BillsBox's flash to the frame: four shades cannot dim a POKeMON, so
+  -- it blinks, and it stays lit twice as long as it is dark because the thing
+  -- flashing is the thing you are trying to look at.
+  local FLASH_PERIOD, FLASH_ON = 24, 16
+
+  -- The engine's own icon-animation counter wraps at 320, which 24 does not
+  -- divide; the flash keeps its own so that neither jumps when the other
+  -- turns over, and so that a member picked up is lit on the frame you press.
+  local ICON_TICKS = 320
+
+  local MOVE_LABEL = "MOVE"
+
+  local function carrying(self) return self.moveFrom ~= nil end
+
+  local function flashOn(self)
+    return ((self.moveTick or 0) % FLASH_PERIOD) < FLASH_ON
+  end
+
+  -- link and scoped battles hand the menu their own party view; the swap the
+  -- engine does is on that table, so the carry is too
+  local function partyOf(self)
+    return self.party or self.game.save.party
+  end
+
+  local function sound(self, name)
+    if not self.game.data then return end
+    pcall(function()
+      require("src.core.Sound").play(self.game.data, name)
+    end)
+  end
+
+  -- Yellow's sleeping starter Pikachu cannot be moved: the engine refuses the
+  -- A press that picks it (PartyMenu's followerUnavailable -> "There isn't
+  -- any response..."), which covers both ends of a swap because both ends are
+  -- pressed.  A carry presses A over neither of the rows it displaces, so the
+  -- same question is asked here instead -- otherwise the one rule the engine
+  -- has about moving a POKeMON is walked around by moving the one beside it.
+  local function immovable(self, mon)
+    local ok, no = pcall(function()
+      local Follower = require("src.world.PikachuFollower")
+      return Follower.isFollowingDisabled(self.game.overworld)
+        and Follower.isStarterPikachu(self.game.save, mon)
+    end)
+    return (ok and no) or false
+  end
+
+  local function refuse(self)
+    pcall(function()
+      local TextBox = require("src.render.TextBox")
+      local text = (self.game.data and self.game.data.text) or {}
+      self.game.stack:push(TextBox.new(self.game,
+        text._SleepingPikachuText1 or Strings("There isn't any\nresponse...")))
+    end)
+  end
+
+  -- One step of the carry.  Out of the array and back into it at the row the
+  -- cursor is moving to: the same thing as an exchange for a step of one, and
+  -- an insertion for a run of them.  The wrap is the list's own -- the cursor
+  -- wraps, so the member does -- and there it is a rotation, which is still
+  -- every other member keeping its order.
+  local function carryTo(self, to)
+    local party = partyOf(self)
+    -- Clamped because nothing here owns the party table and the row a member
+    -- was picked up from is remembered across frames: a party that got
+    -- shorter under the carry would otherwise reach table.insert with a
+    -- position it will throw on.  The carried member is never out of the
+    -- array -- there is no hand to drop it from -- so the worst a clamp can
+    -- do is put it in the wrong row of a party something else just rewrote.
+    local n = #party
+    if n == 0 then return end
+    self.index = math.max(1, math.min(self.index, n))
+    to = math.max(1, math.min(to, n))
+    table.insert(party, to, table.remove(party, self.index))
+    self.index = to
+    -- swapFrom is the engine's own "a member is in the air" flag and what
+    -- bottomMessage reads for "Move POKéMON where?", so it follows the member
+    -- rather than marking the row it was picked up from
+    self.swapFrom = to
+    self.game.partyMenuSavedIndex = to   -- HandlePartyMenuInput #768
+  end
+
+  local function putDown(self)
+    self.moveFrom, self.swapFrom = nil, nil
+  end
+
+  -- The whole of this screen's own input, and it is reached only with a
+  -- POKeMON in hand.
+  local function carryUpdate(self)
+    local input = self.game.input
+    local party = partyOf(self)
+    local n = #party
+
+    -- HandleMenuInput_ beeps SFX_PRESS_AB on any A or B whatever the menu
+    -- goes on to do with it (#570), and the engine's update is not the one
+    -- reading them this frame
+    if input:wasPressed("a") or input:wasPressed("b") then
+      sound(self, "Press_AB")
+    end
+
+    if input:wasPressed("a") then
+      -- let go.  Nothing to commit: the list already is the party
+      putDown(self)
+      return
+    end
+
+    if input:wasPressed("b") then
+      -- home, and in silence -- the beep above is the answer to the press,
+      -- and the swap chirp would report a move that was just called off
+      if self.index ~= self.moveFrom then carryTo(self, self.moveFrom) end
+      putDown(self)
+      return
+    end
+
+    local up, down = input:wasPressed("up"), input:wasPressed("down")
+    if not (up or down) or n < 2 then return end
+    local to
+    if up then
+      to = self.index > 1 and self.index - 1 or n
+    else
+      to = self.index < n and self.index + 1 or 1
+    end
+
+    -- every row between here and there is displaced by the step, which for a
+    -- step of one is the row it swaps with and for a wrap is all of them
+    for i = math.min(self.index, to), math.max(self.index, to) do
+      if i ~= self.index and immovable(self, party[i]) then
+        refuse(self)
+        return
+      end
+    end
+
+    carryTo(self, to)
+    -- the sound vanilla plays when two members change places, played where
+    -- they actually change places
+    sound(self, "Swap")
+  end
+
   -- ------- drawing
 
   local function drawIcon(self, mon, y, selected)
@@ -384,64 +564,71 @@ return function(mod, C)
       local y = entryY(i)
       local selected = i == self.index
 
-      drawIcon(self, mon, y, selected)
+      -- The member in your hand flashes, so on the dark stretch of the cycle
+      -- its row is simply not drawn: four shades cannot dim a POKeMON, and
+      -- the whole row is the member -- its icon, its name, its level and its
+      -- bar all travel together, so all of them blink together.
+      local lifted = selected and carrying(self)
+      if not (lifted and not flashOn(self)) then
+        drawIcon(self, mon, y, selected)
 
-      -- cut on a glyph boundary, never a byte one: a nickname can carry
-      -- NIDORAN's ♂/♀, which is one glyph across several bytes
-      Font.draw(C.truncate(mon.nickname or def.name, nameGlyphs), nameX, y)
+        -- cut on a glyph boundary, never a byte one: a nickname can carry
+        -- NIDORAN's ♂/♀, which is one glyph across several bytes
+        Font.draw(C.truncate(mon.nickname or def.name, nameGlyphs), nameX, y)
 
-      -- the level, at the column PrintLevel uses.  At L100 the third digit
-      -- takes the <LV> tile's cell, which is why both cases end at 128.
-      if mon.level < 100 then
-        HudTiles.tile(0x6E, LV_TILE, y)
-        Font.draw(tostring(mon.level), LV_X, y)
-      else
-        Font.draw(tostring(mon.level), LV_WIDE_X, y)
-      end
-      C.black()
-
-      if self.tmhm then
-        local can = false
-        for _, m in ipairs(def.tmhm or {}) do
-          if m == self.tmhm.move then can = true break end
+        -- the level, at the column PrintLevel uses.  At L100 the third digit
+        -- takes the <LV> tile's cell, which is why both cases end at 128.
+        if mon.level < 100 then
+          HudTiles.tile(0x6E, LV_TILE, y)
+          Font.draw(tostring(mon.level), LV_X, y)
+        else
+          Font.draw(tostring(mon.level), LV_WIDE_X, y)
         end
-        local text = can and Strings("ABLE") or Strings("NOT ABLE")
-        Font.draw(text, C.rightAlign(text, ABLE_END), y + 8)
-      elseif self.evoStone then
-        local can = false
-        for _, evo in ipairs(def.evolutions or {}) do
-          if evo.method == "ITEM" and evo.item == self.evoStone then
-            can = true break
-          end
-        end
-        local text = can and Strings("ABLE") or Strings("NOT ABLE")
-        Font.draw(text, C.rightAlign(text, ABLE_END), y + 8)
-      else
-        if mon.hp <= 0 then
-          local text = Strings("FNT")
-          Font.draw(text, C.rightAlign(text, C.RIGHT), y)
-        elseif mon.status then
-          local text = Status.hudLabelFor(game.data.statuses, mon.status)
-          Font.draw(text, C.rightAlign(text, C.RIGHT), y)
-        end
-
-        -- While a medicine's UpdateHPBar2 fill runs, this row draws the HP the
-        -- animation has reached rather than the final value; drawHPBar reads
-        -- only .hp and .stats, so a shim is enough and the real mon is never
-        -- mutated for display (#252).
-        local shown = mon
-        if self.heal and self.heal.mon == mon then
-          shown = { hp = math.floor(self.heal.shown), stats = mon.stats }
-        end
-        C.white()
-        HudTiles.drawHPBar(game.data, BAR_TX, (y + 8) / 8, shown, nil,
-                           barZoned, BAR_SEGMENTS)
         C.black()
-        -- "%3d/%3d" rather than variable width on purpose: the bar's right
-        -- cap sits under the first glyph, and the pad's SPACE over that cap is
-        -- what keeps a two-digit HP from colliding with it.
-        local hpText = ("%3d/%3d"):format(shown.hp, mon.stats.hp)
-        Font.draw(hpText, C.rightAlign(hpText, C.RIGHT), y + 8)
+
+        if self.tmhm then
+          local can = false
+          for _, m in ipairs(def.tmhm or {}) do
+            if m == self.tmhm.move then can = true break end
+          end
+          local text = can and Strings("ABLE") or Strings("NOT ABLE")
+          Font.draw(text, C.rightAlign(text, ABLE_END), y + 8)
+        elseif self.evoStone then
+          local can = false
+          for _, evo in ipairs(def.evolutions or {}) do
+            if evo.method == "ITEM" and evo.item == self.evoStone then
+              can = true break
+            end
+          end
+          local text = can and Strings("ABLE") or Strings("NOT ABLE")
+          Font.draw(text, C.rightAlign(text, ABLE_END), y + 8)
+        else
+          if mon.hp <= 0 then
+            local text = Strings("FNT")
+            Font.draw(text, C.rightAlign(text, C.RIGHT), y)
+          elseif mon.status then
+            local text = Status.hudLabelFor(game.data.statuses, mon.status)
+            Font.draw(text, C.rightAlign(text, C.RIGHT), y)
+          end
+
+          -- While a medicine's UpdateHPBar2 fill runs, this row draws the
+          -- HP the animation has reached rather than the final value;
+          -- drawHPBar reads only .hp and .stats, so a shim is enough and
+          -- the real mon is never mutated for display (#252).
+          local shown = mon
+          if self.heal and self.heal.mon == mon then
+            shown = { hp = math.floor(self.heal.shown), stats = mon.stats }
+          end
+          C.white()
+          HudTiles.drawHPBar(game.data, BAR_TX, (y + 8) / 8, shown, nil,
+                             barZoned, BAR_SEGMENTS)
+          C.black()
+          -- "%3d/%3d" rather than variable width on purpose: the bar's
+          -- right cap sits under the first glyph, and the pad's SPACE over
+          -- that cap is what keeps a two-digit HP from colliding with it.
+          local hpText = ("%3d/%3d"):format(shown.hp, mon.stats.hp)
+          Font.draw(hpText, C.rightAlign(hpText, C.RIGHT), y + 8)
+        end
       end
 
       -- PartyMenuInit seeds wTopMenuItemY/X with 1/0, so the cursor sits on
@@ -449,10 +636,16 @@ return function(mod, C)
       -- icon, not on the name row entryY returns (#278).
       local cursorY = y + 8
       if selected then
-        Font.drawCode(Theme.cursor, 0, cursorY)
+        -- The cursor is NOT part of the flash: it is where your thumb is, and
+        -- one that came and went with the row would read as dropped frames.
+        -- Hollow while the row under it is in your hand -- the box's own
+        -- answer, and the same glyph pair vanilla marks a pending swap with.
+        Font.drawCode(lifted and Theme.cursorHollow or Theme.cursor, 0, cursorY)
       end
-      -- the unfilled swap arrow; the filled cursor replaces it in the tilemap
-      -- when they share a row (#814)
+      -- the unfilled arrow on the row a SOFTBOILED donor was picked from, and
+      -- on the swap origin when MOVE NOT SWITCH is off and the engine's own
+      -- two-pick swap is running; the filled cursor replaces it in the
+      -- tilemap when they share a row (#814)
       if (i == self.swapFrom or i == self.softboiledFrom) and not selected then
         Font.drawCode(Theme.cursorHollow, 0, cursorY)
       end
@@ -480,10 +673,81 @@ return function(mod, C)
     C.white()
   end
 
+  -- ------- the engine's update, with one thing in front of it
+  --
+  -- Three jobs, in this order, and the order is the whole of the design:
+  --
+  --   1. a member in hand is this screen's own input, and nothing else runs
+  --      that frame.  It runs whatever MOVE NOT SWITCH says now: the member
+  --      is already up, an option toggled mid-carry must not be able to
+  --      strand one, and the only keys that put it down are in here.
+  --   2. otherwise the engine's update runs, untouched, and reads every key
+  --      on this screen -- including the A that opens the popup and the A
+  --      that picks a row on it.
+  --   3. and if that A was SWITCH, the engine has set swapFrom and is waiting
+  --      for a second pick.  Take the member out of the list's hands and into
+  --      the player's instead: from here it is a carry, and the engine's own
+  --      swap branch is never reached.
+  --
+  -- The row is relabelled here rather than through the ui.party.submenu hook,
+  -- which is the engine's seam for exactly this kind of edit.  The word is a
+  -- promise about what A does; what A does is this file's doing and only this
+  -- file's, so a screen that is not this one must not inherit the promise.
+  -- Keying on the ACTION is what keeps the battle list's own SWITCH alone --
+  -- that one means "send this one out", carries battle_switch, and is a
+  -- different verb wearing the same six letters.
+  local function updateFor(vanillaUpdate)
+    return function(self, dt)
+      if carrying(self) then
+        -- A medicine's fill owns the menu while it runs and no button is read
+        -- until it lands (#252).  One cannot start mid-carry -- the bag is not
+        -- reachable with a POKeMON in hand -- but if one ever did, the engine's
+        -- own update is what steps it, and handing the frame over is what stops
+        -- a fill that nothing is advancing from freezing the carry with it.
+        if self.heal then
+          vanillaUpdate(self, dt)
+          return
+        end
+        -- the engine's icon animation keeps running under the flash, on the
+        -- engine's own counter
+        self.blink = ((self.blink or 0) + 1) % ICON_TICKS
+        self.moveTick = (self.moveTick or 0) + 1
+        carryUpdate(self)
+        return
+      end
+
+      vanillaUpdate(self, dt)
+
+      if not C.option("live_move", true) then return end
+
+      if self.swapFrom and not self.softboiledFrom then
+        self.moveFrom = self.swapFrom
+        -- The carry's one invariant: index is the row the lifted member is
+        -- ACTUALLY in, because that is the row every step takes it out of.
+        -- The engine has just set swapFrom from index, so this is a no-op on
+        -- the way in -- it is here for the swap that was already pending when
+        -- the option was turned on, whose cursor is somewhere else entirely.
+        self.index = self.swapFrom
+        self.game.partyMenuSavedIndex = self.index
+        self.moveTick = 0                 -- picked up lit
+      end
+
+      if self.submenu and type(self.subItems) == "table" then
+        local word = Strings(MOVE_LABEL)
+        for _, entry in ipairs(self.subItems) do
+          if type(entry) == "table" and entry.action == "switch" then
+            entry.label = word
+          end
+        end
+      end
+    end
+  end
+
   -- ------- the screen
   --
-  -- Built by the vanilla constructor, then re-dressed.  Every mode, every key
-  -- and every callback is still the engine's.
+  -- Built by the vanilla constructor, then re-dressed.  Every mode and every
+  -- callback is still the engine's, and so is every key it reads -- bar the
+  -- four this screen reads for itself with a POKeMON in hand.
   local Party = {}
 
   function Party.new(game, opts)
@@ -491,6 +755,7 @@ return function(mod, C)
     local vanillaSgb = PartyMenu.sgbPalettes
     menu.draw = draw
     menu.sgbPalettes = palettesFor(vanillaSgb)
+    menu.update = updateFor(PartyMenu.update)
     return menu
   end
 
@@ -505,6 +770,8 @@ return function(mod, C)
     HEADER_TH = C.HEADER_TH, HEADER_TEXT_Y = C.HEADER_TEXT_Y,
     FOOTER_TY = C.FOOTER_TY, FOOTER_TEXT_Y = C.FOOTER_TEXT_Y,
     LINE_W = C.LINE_W, TITLE = TITLE,
+    FLASH_PERIOD = FLASH_PERIOD, FLASH_ON = FLASH_ON,
+    MOVE_LABEL = MOVE_LABEL,
   }
   Party.entryY = entryY
   Party.promptFor = promptFor

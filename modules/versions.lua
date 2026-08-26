@@ -9,6 +9,6 @@ return {
   ["Gen1MenuManager"] = "0.2.6",
   ["Gen1ModMenu"] = "0.8.1",
   ["Gen1ModernBag"] = "1.9.4",
-  ["Gen1Party"] = "1.3.0",
+  ["Gen1Party"] = "1.4.0",
   ["WidescreenBattleIntro"] = "maintained",
 }

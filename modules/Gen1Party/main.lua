@@ -67,6 +67,14 @@ return function(mod)
     -- full-width name column, and the icons touch the names again.
     { key = "ruled_icons", type = "toggle", label = "RULED ICONS",
       default = true },
+    -- The popup's SWITCH row, and what pressing it does.  On: the row says
+    -- MOVE, and A lifts that member -- it flashes, UP and DOWN carry it
+    -- through the list a row at a time, and the party is reordered under it
+    -- as it goes, which is how Gen1BillsBox moves one.  Off restores the
+    -- engine's own SWITCH: two picks over a list that does not move, and one
+    -- exchange when the second lands.
+    { key = "live_move", type = "toggle", label = "MOVE NOT SWITCH",
+      default = true },
   })
 
   local makeChrome = loadSibling(mod, "chrome.lua")
