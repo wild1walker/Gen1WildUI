@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.0
+
+Follows [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) to **1.2.0**
+(from 1.1.1). Everything else here is already on its newest release.
+
+1.2.0 publishes an `actions` provider registry on the box popup, which is what
+lets another mod hang a row there. `REMEMBER MOVES`, over in
+[Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL) 1.4.0, is the first
+thing to use it — so its `BOX REMEMBER` row needs this version of this bundle.
+
+### Fixed
+
+- **`mod.find` handed back the wrong shape, and cross-mod integrations went
+  quietly dead.** The engine's own returns a handle — `{ id, version, exports }`
+  — and mods read it that way. The bundle's registry answered with the exports
+  table itself, so `box.exports` was nil and the integration simply did nothing
+  rather than failing. Handles now match the engine's, `tools/build.py` writes
+  the version map they carry, and the shape is pinned by a test.
+- `tools/check.py` crashed instead of reporting when a Lua file's bytecode
+  listing carried a non-UTF-8 byte.
+
 ## 1.2.5
 
 **BATTLE MENUS** (Gen1BattleUI 1.2.2 → 1.3.0) — the **XP bar moves into this

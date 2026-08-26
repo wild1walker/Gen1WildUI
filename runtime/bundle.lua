@@ -40,7 +40,10 @@ function Bundle.install(mod, spec, features)
 
   local loader = Loader.new(mod)
   local optionset = OptionSet.new()
-  local registry = Registry.new(mod, spec)
+  -- Optional: absent on a tree built before build.py wrote it, in which case
+  -- handles simply carry no version.
+  local versions = loader.run("modules/versions.lua")
+  local registry = Registry.new(mod, spec, type(versions) == "table" and versions or nil)
 
   optionset.resolveGame = function()
     return (mod.world and mod.world.game) or mod.game

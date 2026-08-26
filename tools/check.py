@@ -68,10 +68,15 @@ def check_lua_syntax(problems: Problems, quiet: bool) -> int:
     for path in sorted(ROOT.rglob("*.lua")):
         if any(part in {".git", "upstream", ".build-check"} for part in path.parts):
             continue
+        # errors="replace": `luajit -bl` dumps a bytecode listing, and a
+        # constant carrying a non-UTF-8 byte -- Gen1Remember's POKeMON glyph
+        # is one -- comes through raw. Decoding that strictly crashed the
+        # whole check on a file that compiles perfectly well. Only the exit
+        # code and the first line of any error are read from this.
         result = subprocess.run(
             [binary, flag, str(path)] if binary == "luajit"
             else ["luac", "-p", str(path)],
-            capture_output=True, text=True, check=False,
+            capture_output=True, text=True, errors="replace", check=False,
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip().splitlines()

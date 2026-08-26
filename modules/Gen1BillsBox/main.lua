@@ -328,6 +328,25 @@ return function(mod)
     battle:sayNext(overflowNote(open, landed, switched))
   end)
 
+  -- The per-mon popup's extension point: another mod hands it rows for a
+  -- POKeMON and this screen puts them between its own verbs and CANCEL.
+  -- Published whether or not anything registers, because provide() is how a
+  -- mod adds a row and a caller that finds nothing to register with has no
+  -- way to tell "absent" from "broken".
+  --
+  --   local box = mod.find("Gen1BillsBox")
+  --   if box and box.exports.actions then
+  --     box.exports.actions.provide(function(game, mon, pane)
+  --       return { { label = "REMEMBER", onSelect = function() ... end } }
+  --     end, mod.id)
+  --   end
+  if type(screen.actions) == "table" then
+    mod.exports.actions = {
+      provide = screen.actions.provide,
+      rows = screen.actions.rows,
+    }
+  end
+
   -- exported so the suite can drive the rename without a booted game, and so
   -- a companion mod can ask whether the rename has run yet
   mod.exports.renameStorageText = renameStorageText

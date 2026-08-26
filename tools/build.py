@@ -229,6 +229,7 @@ def build(destination: Path) -> list[str]:
 
     lines: list[str] = []
     missing: list[str] = []
+    versions_seen: dict[str, str] = {}
 
     for directory, entries in sorted(wanted.items()):
         repo_dir = tracked.get(directory)
@@ -247,6 +248,7 @@ def build(destination: Path) -> list[str]:
                 shutil.rmtree(target)
             count = copy_tree(owned_dir, target)
             names = ", ".join(sorted(e.get("label", e["id"]) for e in entries))
+            versions_seen[directory] = upstream_version(owned_dir) or "maintained"
             lines.append(
                 f"{directory:<18} {'maintained':>10}  {'':<9} "
                 f"{count:>3} files              {names}"
@@ -269,6 +271,7 @@ def build(destination: Path) -> list[str]:
             overlaid = copy_tree(overlay, target)
 
         version = upstream_version(repo_dir) or "?"
+        versions_seen[directory] = version
         revision = git_revision(repo_dir)
         names = ", ".join(sorted(e.get("label", e["id"]) for e in entries))
         lines.append(
@@ -279,6 +282,20 @@ def build(destination: Path) -> list[str]:
     for stray in destination.rglob(".git"):
         fail(f"{stray} was copied into the build; git would record a gitlink "
              "instead of the files. This is a bug in should_copy().")
+
+    # A dir -> version map for the runtime. mod.find hands back a handle
+    # shaped like the engine's, and the engine's carries the found mod's
+    # version; without this the bundle could not fill that field in, and a
+    # mod that logs it (Gen151 does, when Gen1Dex is too old to have the
+    # surface it wants) would print nil.
+    lines_out = ["-- Written by tools/build.py. The version of the mod in each",
+                 "-- modules/<dir>, for the handles runtime/registry.lua hands to",
+                 "-- mod.find. Do not edit; rebuild.", "return {"]
+    for directory in sorted(versions_seen):
+        lines_out.append('  ["%s"] = %s,' % (directory, json.dumps(versions_seen[directory])))
+    lines_out.append("}")
+    (destination / "versions.lua").write_text("\n".join(lines_out) + "\n",
+                                              encoding="utf-8")
 
     if missing:
         fail(

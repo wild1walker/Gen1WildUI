@@ -408,17 +408,31 @@ do
   local gen151Facade = Facade.new(gen151, { mod = mod, optionset = optionset,
                                             registry = registry, shared = {} })
 
+  -- What comes back must be a HANDLE, not the exports table. The engine's own
+  -- mod.find returns { id, version, exports }, and mods read it that way:
+  -- Gen151 asks for `dex.exports.area` and logs `dex.version`. A registry
+  -- that answered with the exports table would hand back something whose
+  -- `.exports` is nil, and every cross-mod integration would go quietly dead
+  -- instead of failing. That is exactly what happened until it was fixed, so
+  -- the shape is pinned here.
+  local handle = gen151Facade.find("Gen1Sprint")
+  eq(type(handle), "table", "a lookup returns a table")
+  eq(handle.exports, sprintFacade.exports, "with the exports under .exports")
+  eq(type(handle.exports.active), "function", "reachable the way a mod reads it")
+  ok(handle.id, "carrying an id")
+  eq(handle.exports.exports, nil, "and not the exports table wearing itself")
+
   -- 1. a sibling in this bundle, by every name it goes by
   ok(gen151Facade.find("Gen1Sprint"), "a sibling resolves by its repository name")
   ok(gen151Facade.find("gen1_sprint"), "and by its upstream manifest id")
   ok(gen151Facade.find("sprint"), "and by its bundle feature id")
-  eq(gen151Facade.find("Gen1Sprint"), sprintFacade.exports,
-     "and what comes back is that feature's exports")
+  eq(gen151Facade.find("Gen1Sprint").exports, sprintFacade.exports,
+     "and what comes back carries that feature's exports")
 
   -- 2. a feature in the paired bundle
   local dexExports = { dexForSpecies = function() end }
   mod.found["gen1_wild_qol"] = { features = { ["gen1dex"] = dexExports } }
-  eq(gen151Facade.find("Gen1Dex"), dexExports,
+  eq(gen151Facade.find("Gen1Dex").exports, dexExports,
      "a feature in the other half of the split is reached through it")
 
   -- 3. a genuinely external mod
@@ -429,8 +443,15 @@ do
 
   eq(gen151Facade.find("nothing_at_all"), nil, "an unknown name is nil, not an error")
 
+  -- A paired bundle released before handles existed publishes the exports
+  -- table itself; it is wrapped so the caller sees one shape either way.
+  mod.found["gen1_wild_qol"] = { features = { ["gen1party"] = { colours = true } } }
+  local wrapped = gen151Facade.find("Gen1Party")
+  eq(type(wrapped), "table", "an older paired bundle still resolves")
+  eq(wrapped.exports.colours, true, "and its exports are reachable the same way")
+
   -- the colon-style call Gen1Follower makes
-  eq(gen151Facade.find(gen151Facade, "Gen1Sprint"), sprintFacade.exports,
+  eq(gen151Facade.find(gen151Facade, "Gen1Sprint").exports, sprintFacade.exports,
      "find(mod, name) works as well as find(name)")
 end
 

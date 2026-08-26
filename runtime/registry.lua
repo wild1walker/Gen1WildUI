@@ -20,11 +20,15 @@
 
 local Registry = {}
 
-function Registry.new(mod, spec)
+-- `versions` maps a module directory to the version of the mod in it, written
+-- by tools/build.py.  It is optional: without it a handle simply reports no
+-- version, which is what a mod that only logs it will print.
+function Registry.new(mod, spec, versions)
   local self = {
-    exports = {},     -- alias (lowercased) -> that feature's exports table
+    exports = {},     -- alias (lowercased) -> a handle, shaped like the engine's
     pairedId = spec.paired_bundle,
   }
+  versions = versions or {}
 
   local function normalize(name)
     return tostring(name):lower()
@@ -33,12 +37,26 @@ function Registry.new(mod, spec)
   -- A feature answers to every name it ever went by: its folder, its upstream
   -- manifest id and its display title.  Gen1ModernBag alone is reachable as
   -- "Gen1ModernBag" and "gen1_modern_bag" depending on who is asking.
+  -- What comes back is a HANDLE, not the exports table, because that is what
+  -- the engine's own mod.find returns: { id, version, exports } (Loader.lua's
+  -- api.find). Mods read it that way -- Gen151 asks for `dex.exports.area`
+  -- and logs `dex.version` -- so a registry that answered with the exports
+  -- table directly would hand back something whose `.exports` is nil, and
+  -- every cross-mod integration would go quietly dead rather than fail. It
+  -- did: Gen151's Pokedex catch hints never registered inside the bundle
+  -- until this was fixed.
   function self.register(feature, exports)
+    local handle = {
+      id = (feature.aliases and feature.aliases[1]) or feature.dir or feature.id,
+      version = versions[feature.dir],
+      exports = exports,
+    }
     for _, alias in ipairs(feature.aliases or {}) do
-      self.exports[normalize(alias)] = exports
+      self.exports[normalize(alias)] = handle
     end
-    self.exports[normalize(feature.id)] = exports
-    self.exports[normalize(feature.dir)] = exports
+    self.exports[normalize(feature.id)] = handle
+    self.exports[normalize(feature.dir)] = handle
+    return handle
   end
 
   function self.exportsOf(name)
@@ -60,7 +78,14 @@ function Registry.new(mod, spec)
     if type(handle) ~= "table" then return nil end
     local features = handle.features or (handle.exports and handle.exports.features)
     if type(features) ~= "table" then return nil end
-    return features[normalize(name)]
+
+    local found = features[normalize(name)]
+    if found == nil then return nil end
+    -- A bundle released before handles were introduced publishes the exports
+    -- table itself. Wrap it so a caller gets the same shape either way rather
+    -- than having its integration depend on which half was updated first.
+    if type(found) == "table" and found.exports ~= nil then return found end
+    return { id = name, version = nil, exports = found }
   end
 
   -- Published on the bundle's own exports so the other half can do the same

@@ -1204,6 +1204,98 @@ return function(mod)
     }))
   end
 
+  -- ------- what another mod gets to put in the popup
+  --
+  -- The per-mon popup is the one place in this screen where another mod has
+  -- something to say that this one cannot know.  A mod that can do something
+  -- TO a POKeMON -- teach it a move it forgot, rename it, read it out to a
+  -- companion app -- wants the row where the player already goes looking for
+  -- verbs, and the alternative is that it reaches in and patches this file's
+  -- internals from the outside.  So it is asked instead:
+  --
+  --   local box = mod.find("Gen1BillsBox")
+  --   if box then
+  --     box.exports.actions.provide(function(game, mon, pane)
+  --       return { { label = "REMEMBER",
+  --                  onSelect = function() ... end } }   -- add these rows
+  --       -- or nil                                      -- nothing to add
+  --     end, mod.id)
+  --   end
+  --
+  -- Providers are asked in the order they registered and every one of them
+  -- contributes: unlike a caption, where one answer wins, a popup is a list
+  -- and two mods with a row each should both get one.  Rows land between
+  -- this screen's own verbs and CANCEL, so CANCEL stays last -- it is where
+  -- the player's thumb expects the way out to be, and a mod's row must not
+  -- be able to move it.
+  --
+  -- `pane` is "party" or "box", so a provider can offer a row on one side
+  -- and not the other.  A provider that throws is dropped and reported
+  -- rather than taking the popup down with it: a mod that cannot build a row
+  -- is a missing row, not a box you cannot open.
+  local providers = {}
+
+  -- Tolerates actions:provide(fn) as well as the documented
+  -- actions.provide(fn), the way the loader's own mod.find does -- the caller
+  -- is another mod's code and the colon is an easy slip to make.  Hands back
+  -- a function that unregisters it again.
+  --
+  -- `owner` is optional and should be the calling mod's id.  A mod's entry
+  -- chunk runs again on every hot reload and every profile switch, and this
+  -- registry outlives that: without an owner the second load stacks a second
+  -- provider closed over the FIRST load's tables, and the stale one answers.
+  -- With it, the new registration replaces the old.
+  local function provide(first, second, third)
+    local fn, owner = first, second
+    if type(first) == "table" then fn, owner = second, third end
+    if type(fn) ~= "function" then
+      mod.log:warn("an action provider that is not a function was ignored")
+      return function() end
+    end
+    local entry = { fn = fn, owner = owner }
+    if owner ~= nil then
+      for i, candidate in ipairs(providers) do
+        if candidate.owner == owner then table.remove(providers, i) break end
+      end
+    end
+    providers[#providers + 1] = entry
+    return function()
+      for i, candidate in ipairs(providers) do
+        if candidate == entry then table.remove(providers, i) return end
+      end
+    end
+  end
+
+  -- Every registered provider's rows for this POKeMON, flattened, in
+  -- registration order.  Exported alongside provide() so the suite can ask
+  -- what the popup would grow without opening one.
+  local function providedRows(game, mon, pane)
+    local rows = {}
+    local i = 1
+    while i <= #providers do
+      local entry = providers[i]
+      local ok, answer = pcall(entry.fn, game, mon, pane)
+      if not ok then
+        mod.log:warn("the action provider from %s failed (%s); it is dropped "
+          .. "rather than asked again", tostring(entry.owner or "a mod"),
+          tostring(answer))
+        table.remove(providers, i)
+      else
+        i = i + 1
+        if type(answer) == "table" then
+          for _, entry2 in ipairs(answer) do
+            -- a row with no label would draw as a blank the cursor can still
+            -- land on, which reads as a broken popup rather than a missing row
+            if type(entry2) == "table" and entry2.label then
+              rows[#rows + 1] = entry2
+            end
+          end
+        end
+      end
+    end
+    return rows
+  end
+
   -- START over a POKeMON.  The vanilla PC's own per-mon rows
   -- (bills_pc.asm DisplayDepositWithdrawMenu) minus the verbs the cursor has
   -- taken over: WITHDRAW and DEPOSIT are what A already does.
@@ -1220,9 +1312,22 @@ return function(mod)
       items[#items + 1] = { label = Strings("RELEASE"),
         onSelect = function() self:release() end }
     end
+    -- another mod's rows, between this screen's verbs and the way out
+    for _, row in ipairs(providedRows(self.game, mon, pane)) do
+      items[#items + 1] = row
+    end
     items[#items + 1] = { label = Strings("CANCEL") }
+    -- The vanilla three rows put the box's bottom edge exactly on the last
+    -- tile row (ty 10 + th 8 = 18), so a fourth row from a provider would
+    -- have run it off the bottom of the screen.  It hangs from the bottom
+    -- edge instead, the way CHANGE BOX does, which keeps the POKeMON the
+    -- popup is about visible above it however many rows it grows to.  Menu
+    -- widens itself to the widest label already, so a long row needs nothing
+    -- here.
+    local th = #items * 2 + 2
     self.game.stack:push(Menu.new(self.game, items,
-      { tx = 9, ty = 10, tw = 11, th = #items * 2 + 2, noSound = true }))
+      { tx = 9, ty = math.max(0, 18 - th), tw = 11, th = th,
+        noSound = true }))
   end
 
   -- A on the header.  The vanilla CHANGE BOX list, without its save prompt:
@@ -1524,5 +1629,8 @@ return function(mod)
   -- the arrangement was never where the POKeMON live.
   mod.exports.forgetGrid = function() mod.save:set("cells", {}) end
 
-  return { new = Screen.new }
+  -- `actions` is the popup's extension point (see provide, above); main.lua
+  -- puts it on mod.exports so another mod can reach it through mod.find.
+  return { new = Screen.new,
+           actions = { provide = provide, rows = providedRows } }
 end
