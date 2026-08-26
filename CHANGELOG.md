@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.1
+
+Follows two upstream fixes, both to things a player hits in a battle.
+
+**BAG** (Gen1ModernBag 1.9.2 → 1.9.3) — `Hold Scroll Speed` defaults to
+`NORMAL` rather than `FAST`. `FAST` starts repeating after 10 frames held and
+then moves a row every 2, so a press about a sixth of a second long stopped
+being one step and became thirty rows a second; whether a press crossed that
+threshold was a matter of how long a finger rested, which is why it read as
+the Bag scrolling by itself. `NORMAL` is Gen1Recomp's own `ListMenu` cadence.
+A saved choice is untouched — this moves only players who never set one.
+
+**BATTLE MENUS** (Gen1BattleUI 1.1.0 → 1.1.1) — the move panel no longer
+covers the player's own HP. It was drawn twenty tiles wide across rows 8–11,
+and `DrawPlayerHUDAndHPBar` puts the name, level, HP bar, HP numbers and
+underline across rows 7–11 from x=72 rightwards. It now keeps the footprint of
+the vanilla `TYPE/PP` box it stands in for, which is also what keeps anything
+else drawn on that side of the screen clear of it.
+
 ## 1.2.0
 
 Adds **BATTLE MENUS**, from

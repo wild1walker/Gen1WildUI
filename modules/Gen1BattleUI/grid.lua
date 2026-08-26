@@ -45,13 +45,13 @@
 --
 -- Two by two inside 160 pixels costs move names their width: a classic cell
 -- has seven glyphs of label where the vanilla list had fourteen, so
--- THUNDERBOLT arrives as THUNDER.  That is the real price of the layout and
--- it is not worth hiding, so it is paid back where it matters -- the panel
--- above the grid carries the highlighted move's FULL name, its type and its
--- PP, which the vanilla list never showed all at once either.  The wide
--- layout's cells are twelve glyphs and need none of this; it gets the panel
--- anyway, because a mod that reads differently on the other layout is two
--- mods.
+-- THUNDERBOLT arrives as THUNDER.  The panel above the grid buys some of that
+-- back -- nine glyphs, plus the type and the PP, which the vanilla list never
+-- showed at once -- and it buys only some, because it keeps the footprint of
+-- the vanilla box it replaces and the player's own HUD is what lives in the
+-- pixels either side of it.  See PANEL.  The wide layout's cells are twelve
+-- glyphs and need none of this; it gets the panel anyway, because a mod that
+-- reads differently on the other layout is two mods.
 
 return function(mod, C)
   local Font = require("src.render.Font")
@@ -299,43 +299,66 @@ return function(mod, C)
   -- while it is up -- so a panel starting on the same row covers exactly what
   -- vanilla covered, which is why these two are one row apart.
 
-  local function classicPanelRow(battle)
-    return battle.phase == "mimicSelect" and 7 or 8
-  end
+  -- The panel keeps the footprint of the vanilla box it stands in for, and
+  -- that is not a style choice.  The player's own HUD is drawn across rows
+  -- 7-11 from x=72 rightwards -- name, level, HP bar, HP numbers and the
+  -- underline, all of DrawPlayerHUDAndHPBar -- so a panel any wider than the
+  -- box vanilla put there covers the player's HP while they are choosing a
+  -- move, which is the one thing that screen exists to inform.  1.1.0's
+  -- full-width panel did exactly that.
+  --
+  -- Matching the vanilla box is also what keeps everything ELSE clear:
+  -- anything another mod draws on that side of the screen -- an EXP bar, for
+  -- one -- was laid out around the vanilla box, not around this one.
+  --
+  --   moveSelect   (0,8) 11x5, PrintMenuItem's TYPE/PP box.  Its bottom
+  --                border lands on row 12 and merges into the buttons' top
+  --                exactly as it merged into the vanilla move list's.
+  --   mimicSelect  (0,7) 18x6, two tiles wider than MoveSelectionMenu's own
+  --                .mimicmenu box.  That box already covers the HP bar and
+  --                the HP numbers in vanilla, so the rule above is one this
+  --                screen never kept; the two tiles buy WHICH TECHNIQUE? its
+  --                sixteenth glyph, which at 16 wide it loses.
+  local PANEL = {
+    moveSelect = { tx = 0, ty = 8, tw = 11, th = 5 },
+    mimicSelect = { tx = 0, ty = 7, tw = 18, th = 6 },
+  }
 
   local function drawClassicPanel(battle, moves, selected)
-    local mimic = battle.phase == "mimicSelect"
-    local top = classicPanelRow(battle)
-    C.box(0, top, 20, mimic and 5 or 4)
+    local spec = PANEL[battle.phase]
+    if not spec then return end
+    C.box(spec.tx, spec.ty, spec.tw, spec.th)
 
+    local x, width = (spec.tx + 1) * 8, (spec.tw - 2) * 8
     local rows = {}
-    for i = 1, (mimic and 3 or 2) do rows[i] = (top + i) * 8 end
+    for i = 1, spec.th - 2 do rows[i] = (spec.ty + i) * 8 end
+
+    -- Lines are filled top-down and a line with nothing to say is skipped
+    -- rather than left blank, so a move with no type behind it (a mod's, or
+    -- an id with no definition) closes the gap instead of printing a hole.
+    local line = 1
+    local function put(text)
+      if not text or not rows[line] then return end
+      C.black()
+      Font.draw(C.shorten(text, width), x, rows[line])
+      line = line + 1
+    end
 
     local move = moves and moves[selected]
     local def = moveDef(battle, move)
-    local name = def and def.name or (move and tostring(move.id)) or "-"
 
-    if mimic then
-      C.black()
-      Font.draw(Strings("WHICH TECHNIQUE?"), 8, rows[1])
-      Font.draw(C.shorten(name, 144), 8, rows[2])
-    else
-      C.black()
-      Font.draw(C.shorten(name, 144), 8, rows[1])
-    end
+    if battle.phase == "mimicSelect" then put(Strings("WHICH TECHNIQUE?")) end
+    put(def and def.name or (move and tostring(move.id)) or "-")
 
-    local detail = rows[mimic and 3 or 2]
     -- A disabled slot says so instead of showing what it would have cost:
     -- the vanilla panel does the same (engine/battle/core.asm, PrintMenuItem).
-    if not mimic and battle.player and battle.player.disabledSlot == selected then
-      C.black()
-      Font.draw(Strings("disabled!"), 8, detail)
+    if battle.phase ~= "mimicSelect" and battle.player
+       and battle.player.disabledSlot == selected then
+      put(Strings("disabled!"))
       return
     end
-    local type_, pp = typeText(def), ppText(def, move)
-    C.black()
-    if type_ then Font.draw(C.shorten(type_, 64), 8, detail) end
-    if pp then Font.draw(pp, C.rightAlign(pp, 152), detail) end
+    put(typeText(def))
+    put(ppText(def, move))
   end
 
   -- Wide: the panel the wide layout already had, in the place it already
@@ -463,7 +486,9 @@ return function(mod, C)
     classic = {
       boxes = CLASSIC_BOXES, boxW = 10, boxH = 3,
       handTiles = 1, labelTiles = 7,
-      panelRow = { moveSelect = 8, mimicSelect = 7 },
+      -- the vanilla box each panel stands in for, in tile coordinates
+      panel = { moveSelect = { tx = 0, ty = 8, tw = 11, th = 5 },
+                mimicSelect = { tx = 0, ty = 7, tw = 18, th = 6 } },
     },
     wide = {
       row = 13, th = 5,
