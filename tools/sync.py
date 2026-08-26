@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Bring the bundle up to date with the mods it is made of.
+"""Bring the bundle up to date with the mods it tracks.
 
-This is the whole update story.  Each feature lives in its own repository,
-pinned here as a submodule; this moves those pins to the newest release each
-mod has published, rebuilds modules/, and reports what moved so the diff can be
-read before it is committed.
+This is the whole update story for the tracked half of the bundle.  Those
+features live in their own repositories, pinned here as submodules; this moves
+the pins to the newest release each mod has published, rebuilds modules/, and
+reports what moved so the diff can be read before it is committed.
+
+Features under maintained/ are not tracked and are not touched: this repository
+looks after their source itself, so there is nothing to sync them from.  They
+are listed at the end of a run so a `sync` that reports fewer repositories than
+features.lua has is not a surprise.
 
     python3 tools/sync.py                  every feature, to its latest release
     python3 tools/sync.py Gen1Sprint       just that one
@@ -28,6 +33,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 UPSTREAM = ROOT / "upstream"
+MAINTAINED = ROOT / "maintained"
 
 SEMVER_TAG = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 
@@ -48,6 +54,13 @@ def submodules() -> list[Path]:
     if not UPSTREAM.exists():
         raise SystemExit("error: upstream/ not found; run git submodule update --init")
     return [p for p in sorted(UPSTREAM.iterdir()) if (p / ".git").exists()]
+
+
+def maintained() -> list[str]:
+    """Directory names this repository looks after itself."""
+    if not MAINTAINED.exists():
+        return []
+    return [p.name for p in sorted(MAINTAINED.iterdir()) if p.is_dir()]
 
 
 def latest_release_tag(repo: Path) -> str | None:
@@ -97,12 +110,25 @@ def main() -> int:
     args = parser.parse_args()
 
     repos = submodules()
+    owned = maintained()
+
     if args.only:
         wanted = set(args.only)
         repos = [r for r in repos if r.name in wanted]
         unknown = wanted - {r.name for r in repos}
-        if unknown:
-            raise SystemExit(f"error: no such submodule: {', '.join(sorted(unknown))}")
+        # Naming a maintained feature is a reasonable mistake to make, so say
+        # what it actually is rather than "no such submodule".
+        asked_for_owned = sorted(unknown & set(owned))
+        if asked_for_owned:
+            raise SystemExit(
+                "error: " + ", ".join(asked_for_owned) + " "
+                + ("is" if len(asked_for_owned) == 1 else "are")
+                + " maintained in this repository, not tracked; there is "
+                  "nothing to sync it from. Edit maintained/"
+                + asked_for_owned[0] + "/ directly.")
+        if unknown - set(owned):
+            raise SystemExit(
+                f"error: no such submodule: {', '.join(sorted(unknown - set(owned)))}")
     if not repos:
         raise SystemExit("error: nothing to sync")
 
@@ -110,8 +136,13 @@ def main() -> int:
     unchanged: list[str] = []
 
     for repo in repos:
-        before = describe(repo)
+        # Fetch before describing: a fresh shallow clone has no tags, so
+        # describing it first labels a repository that is exactly on its
+        # release with a bare SHA and the run reads as though everything
+        # moved.
         git("fetch", "--quiet", "origin", cwd=repo, check=False)
+        git("fetch", "--tags", "--quiet", "origin", cwd=repo, check=False)
+        before = describe(repo)
 
         if args.to_main:
             branch = default_branch(repo)
@@ -152,6 +183,11 @@ def main() -> int:
         print(f"  = {name}")
     for name, before, after in moved:
         print(f"  > {name:<18} {before} -> {after}")
+
+    if owned and not args.only:
+        print("\nmaintained here, not tracked (nothing to sync):")
+        for name in owned:
+            print(f"  ~ {name}")
 
     if not moved:
         print("\nnothing to do.")

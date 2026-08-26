@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
-"""Assemble modules/ from the pinned submodules under upstream/.
+"""Assemble modules/ from upstream/ and maintained/.
 
-The bundle is not a fork.  Every feature's source stays in its own repository,
-pinned here as a submodule, and this script is the only thing that copies it
-into the shape the game loads:
+A feature's source lives in one of two places, and which one says who looks
+after it:
 
-    upstream/<Repo>/            the submodule, exactly as published
-    overlays/<Dir>/             this bundle's own additions for that feature
-    modules/<Dir>/              what the game reads
+    upstream/<Repo>/     a submodule pinned to a release.  Somebody else's
+                         mod, tracked, never edited here.  tools/sync.py moves
+                         the pin; the source is whatever they published.
+    maintained/<Dir>/    source this repository looks after itself.  Edited
+                         here, and nothing syncs it from anywhere.
+    modules/<Dir>/       what the game reads, written by this script.
+
+Most features are the first kind.  The two that are not were originally other
+people's mods and are now maintained here -- see `maintained` in features.lua,
+and the credits in README.md, which stay either way.
+
+modules/ is committed rather than generated at install time, because a mod is
+installed by copying a folder or importing a .zip and neither runs a build.
+Committing it also means an upstream bump shows up as a reviewable diff in this
+repo rather than as a submodule pointer nobody can read.
 
 modules/ is committed rather than generated at install time, because a mod is
 installed by copying a folder or importing a .zip and neither runs a build.
@@ -35,6 +46,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 UPSTREAM = ROOT / "upstream"
+MAINTAINED = ROOT / "maintained"
 OVERLAYS = ROOT / "overlays"
 MODULES = ROOT / "modules"
 FEATURES = ROOT / "features.lua"
@@ -125,6 +137,13 @@ def submodule_paths() -> dict[str, Path]:
     return {p.name: p for p in sorted(UPSTREAM.iterdir()) if p.is_dir()}
 
 
+def maintained_paths() -> dict[str, Path]:
+    """Map a maintained feature's directory name to its path on disk."""
+    if not MAINTAINED.exists():
+        return {}
+    return {p.name: p for p in sorted(MAINTAINED.iterdir()) if p.is_dir()}
+
+
 def should_copy(path: Path, relative: Path) -> bool:
     for part in relative.parts[:-1]:
         if part in EXCLUDE_DIRS:
@@ -201,7 +220,8 @@ def git_revision(path: Path) -> str:
 
 def build(destination: Path) -> list[str]:
     features = read_registry()
-    available = submodule_paths()
+    tracked = submodule_paths()
+    owned = maintained_paths()
 
     wanted: dict[str, list[dict]] = {}
     for feature in features:
@@ -211,7 +231,28 @@ def build(destination: Path) -> list[str]:
     missing: list[str] = []
 
     for directory, entries in sorted(wanted.items()):
-        repo_dir = available.get(directory)
+        repo_dir = tracked.get(directory)
+        owned_dir = owned.get(directory)
+
+        if repo_dir is not None and owned_dir is not None:
+            fail(f"{directory} is both a submodule under upstream/ and a "
+                 "directory under maintained/; it can only be one. Delete "
+                 "whichever is not the source of truth.")
+
+        if owned_dir is not None:
+            # Maintained here: the source is the source, no overlay step and
+            # no version to read off a manifest that is not there.
+            target = destination / directory
+            if target.exists():
+                shutil.rmtree(target)
+            count = copy_tree(owned_dir, target)
+            names = ", ".join(sorted(e.get("label", e["id"]) for e in entries))
+            lines.append(
+                f"{directory:<18} {'maintained':>10}  {'':<9} "
+                f"{count:>3} files              {names}"
+            )
+            continue
+
         if repo_dir is None or not any(repo_dir.iterdir()):
             missing.append(directory)
             continue
@@ -231,7 +272,7 @@ def build(destination: Path) -> list[str]:
         revision = git_revision(repo_dir)
         names = ", ".join(sorted(e.get("label", e["id"]) for e in entries))
         lines.append(
-            f"{directory:<18} {version:>8}  {revision:<9} "
+            f"{directory:<18} {version:>10}  {revision:<9} "
             f"{count:>3} files +{overlaid} overlay   {names}"
         )
 
@@ -241,9 +282,11 @@ def build(destination: Path) -> list[str]:
 
     if missing:
         fail(
-            "submodules not checked out: "
+            "no source for: "
             + ", ".join(sorted(missing))
-            + "\nrun: git submodule update --init --recursive"
+            + "\neither the submodule is not checked out (run: git submodule "
+              "update --init --recursive) or features.lua names a `dir` that "
+              "exists under neither upstream/ nor maintained/"
         )
     return lines
 
@@ -302,7 +345,7 @@ def main() -> int:
         shutil.rmtree(MODULES)
     MODULES.mkdir()
     lines = build(MODULES)
-    print(f"built modules/ from {len(lines)} upstream repositories\n")
+    print(f"built modules/ from {len(lines)} sources\n")
     for line in lines:
         print("  " + line)
     return 0

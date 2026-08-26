@@ -116,8 +116,10 @@ not carry over: they are stored under this bundle's id.
 
 ## How it stays up to date
 
-Each feature is a git submodule under `upstream/`, pinned to a release. Nothing
-is forked and nothing is hand-copied.
+Each feature here is a git submodule under `upstream/`, pinned to a release.
+Nothing in this bundle is forked and nothing is hand-copied. (Gen1WildQOL also
+has a `maintained/` tree for two features it looks after itself; the same
+tooling handles both.)
 
 ```sh
 git submodule update --init --recursive   # first time
@@ -154,8 +156,8 @@ runtime/              how a bundle hosts a mod written to be standalone
   menu.lua              the OPTION screens
   bundle.lua            the order all of the above happens in
 adapters/             per-feature bundle glue, run after a feature installs
-overlays/<Dir>/       this bundle's own files, laid over an upstream's
-upstream/<Repo>/      submodules; the source of truth, never edited here
+upstream/<Repo>/      submodules; tracked, never edited here
+maintained/<Dir>/     source a bundle looks after itself (none here yet)
 modules/<Dir>/        built by tools/build.py; what the game loads
 tools/                build.py, sync.py, check.py
 tests/                headless coverage of the runtime seam

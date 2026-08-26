@@ -27,6 +27,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MODULES = ROOT / "modules"
+UPSTREAM = ROOT / "upstream"
+MAINTAINED = ROOT / "maintained"
 ADAPTERS = ROOT / "adapters"
 OVERLAYS = ROOT / "overlays"
 FEATURES = ROOT / "features.lua"
@@ -129,6 +131,8 @@ def _parse(path: Path, problems: Problems) -> list[dict]:
                 match = re.search(r'enabledKey\s*=\s*"([^"]+)"', stripped)
                 if match:
                     current["enabledKey"] = match.group(1)
+            if re.search(r"maintained\s*=\s*true", stripped):
+                current["maintained"] = True
             for field in ("claim", "storage", "owner"):
                 match = re.search(field + r'\s*=\s*"([^"]+)"', stripped)
                 if match:
@@ -242,6 +246,55 @@ def check_option_keys(problems: Problems, features: list[dict], quiet: bool) -> 
 
     if not quiet:
         print(f"  option keys: {total} scanned, {len(owners)} distinct after prefixing")
+
+
+def check_sources(problems: Problems, features: list[dict], quiet: bool) -> None:
+    """Every feature's source is tracked or maintained, and exactly one.
+
+    The distinction is who looks after the code. A `dir` under upstream/ is a
+    submodule -- somebody else's mod, pinned to a release, never edited here.
+    A `dir` under maintained/ is source this repository owns. Both at once is
+    ambiguous and neither means the build has nothing to copy, so both are
+    errors rather than something build.py discovers later.
+    """
+    tracked, owned = 0, 0
+
+    for feature in sorted(features, key=lambda f: f["id"]):
+        label = feature.get("label", feature["id"])
+        directory = feature.get("dir")
+        if not directory:
+            continue
+
+        in_upstream = (UPSTREAM / directory).is_dir()
+        in_maintained = (MAINTAINED / directory).is_dir()
+        declared = feature.get("maintained") is True
+
+        if in_upstream and in_maintained:
+            problems.error(
+                f"{label}: {directory!r} is both a submodule under upstream/ "
+                "and a directory under maintained/; it can only be one")
+        elif not in_upstream and not in_maintained:
+            problems.error(
+                f"{label}: {directory!r} is under neither upstream/ nor "
+                "maintained/ (a submodule that is not checked out? run "
+                "git submodule update --init --recursive)")
+        elif in_maintained:
+            owned += 1
+            if not declared:
+                problems.error(
+                    f"{label}: source is under maintained/ but features.lua "
+                    "does not say `maintained = true`; sync.py and the README "
+                    "read that flag, not the directory")
+        else:
+            tracked += 1
+            if declared:
+                problems.error(
+                    f"{label}: features.lua says `maintained = true` but the "
+                    f"source is the submodule upstream/{directory}, which "
+                    "sync.py will keep moving")
+
+    if not quiet:
+        print(f"  sources:    {tracked} tracked, {owned} maintained here")
 
 
 def check_shared(problems: Problems, features: list[dict], quiet: bool) -> None:
@@ -366,6 +419,7 @@ def main() -> int:
     features = parse_features(problems)
     check_features(problems, features, args.quiet)
     check_option_keys(problems, features, args.quiet)
+    check_sources(problems, features, args.quiet)
     check_shared(problems, features, args.quiet)
     check_manifest(problems, args.quiet)
 

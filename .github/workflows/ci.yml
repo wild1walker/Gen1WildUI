@@ -75,11 +75,12 @@ jobs:
           set -euo pipefail
           rm -rf "engine/mods/$MOD_ID"
           mkdir -p "engine/mods/$MOD_ID"
-          # Only what ships: upstream/ is the submodule checkout modules/ was
-          # built from, and the engine has no use for it.
+          # Only what ships. upstream/ and maintained/ are the sources
+          # modules/ was built from; the engine reads modules/.
           (cd mod && tar -c \
-             --exclude=.git --exclude=upstream --exclude=.github \
-             --exclude=tools --exclude=tests --exclude=overlays .) \
+             --exclude=.git --exclude=upstream --exclude=maintained \
+             --exclude=.github --exclude=tools --exclude=tests \
+             --exclude=overlays .) \
             | tar -x -C "engine/mods/$MOD_ID"
 
       - name: modkit validate

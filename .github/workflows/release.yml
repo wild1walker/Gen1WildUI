@@ -5,8 +5,8 @@ name: Release
 #
 # Archive layout: every shipped file at the archive root, manifest.json
 # included -- one of the two shapes MODS > Import mod .zip accepts. upstream/
-# is excluded: it is the submodule checkout modules/ was built from, and
-# shipping both would double the download for no gain.
+# and maintained/ are excluded: they are the sources modules/ was built from,
+# and shipping both would double the download for no gain.
 #
 # Versioning, first rule that applies wins:
 #   1. the "version" input of a manual run,
@@ -143,7 +143,8 @@ jobs:
 
           rm -rf "$staging/.github" "$staging/.gitignore" \
                  "$staging/.gitmodules" "$staging/tools" \
-                 "$staging/tests" "$staging/overlays" "$staging/upstream"
+                 "$staging/tests" "$staging/overlays" \
+                 "$staging/upstream" "$staging/maintained"
 
           python3 - "$staging/manifest.json" "$VERSION" <<'PY'
           import json, sys
