@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.6.0
+
+Follows one of its mods; everything else here is already on its newest release.
+Its three new rows appear in the menu on their own — the bundle reads every
+feature's schema at load — so nothing here needed the edit. No key was renamed
+or removed.
+
+- **BATTLE MENUS** → [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI)
+  1.5.0. **The ball you throw is coloured as itself.** Under `COLORS =
+  ADVANCED` every battle sprite took its colour from the SGB zone underneath
+  it, so a GREAT BALL and an ULTRA BALL came out the same colour as each other
+  and as the grass behind them. The toss, the wobbles and the ball resting
+  through the caught text are now each ball's own — red, blue, gold, purple,
+  olive — and the Pokémon Center's heal machine lights each ball in the colours
+  of the ball that POKéMON was *caught* in rather than painting all six the
+  same. The mono colour modes have no per-sprite colour to give and are passed
+  straight through, so this is off in them whatever the rows say.
+  New rows: `BALL COLOUR`, `BALL BAND` and `CENTER BALLS`, all on.
+
+### Worth knowing before you turn CENTER BALLS on
+
+It is the one thing in either bundle that writes to your save. Gen 1 records
+nothing about what caught a POKéMON — the party struct has no ball in it, and
+neither does Gen 2's — so the machine can only be told by a field the mod
+invents: `mon.caughtBall`, written onto the POKéMON at catch time, only when
+that field is empty and never over a value already there. It goes where the
+POKéMON goes, through the box and through a trade, and it stays in the save
+after an uninstall. It maps to no byte in the real Gen 1 format, so an export
+to a `.sav` drops it and a round trip lights every ball red until the party
+turns over. Anything caught before this installed heals as a POKE BALL.
+
+Only-if-absent is the rule Pokeball Colors set for that field, which the
+feature is ported from and can share a save with.
+
 ## 1.5.0
 
 Follows one of its mods; everything else here is already on its newest release.

@@ -37,6 +37,14 @@
 --                              queued come back re-marked as the one screen
 --                              pokered prints.  See levelup.lua.
 --
+-- The one thing here that is not a hook is the ball colouring, because there
+-- is no hook to ask for it: the colour of an animation sprite is decided
+-- inside BattleState:animSpriteColors, and the heal machine's balls are drawn
+-- from a closure inside OverworldState:drawWorld.  Those two are wrapped
+-- directly, under the engine_internals permission the manifest declares, and
+-- both wraps call the original and hand its answer back untouched for
+-- everything that is not a ball.  See pokeballs.lua.
+--
 -- What this file does not do is swallow a LOAD-time failure.  Nothing is at
 -- risk while the game boots -- a mod that cannot draw leaves vanilla battles
 -- exactly as they were -- and the only question left is whether the player is
@@ -47,7 +55,7 @@
 -- and marks the row enabled-but-broken in MODS, which is where a player
 -- looks.
 --
--- The two sibling files are loaded rather than required because a mod cannot
+-- The sibling files are loaded rather than required because a mod cannot
 -- put itself on package.path: mod:read hands back the file's source from
 -- wherever the mod actually lives (an installed directory, or inside an
 -- imported .zip), and load() names the chunk after that path so a syntax
@@ -128,12 +136,31 @@ return function(mod)
     -- the engine's own two screens.  See levelup.lua.
     { key = "levelup_box", type = "toggle", label = "LEVEL-UP BOX",
       default = true },
+    -- The ball you threw, in its own colours: the toss, the wobbles and the
+    -- resting caught ball.  Under COLORS = ADVANCED only -- the mono modes
+    -- have no per-sprite colour to give and are passed straight through, so
+    -- this is off in them whatever it is set to here.  Ported from Pokeball
+    -- Colors, cut to the five balls Red, Blue and Yellow ship with.  See
+    -- pokeballs.lua.
+    { key = "ball_colour", type = "toggle", label = "BALL COLOUR",
+      default = true },
+    -- The black band along a thrown ball's seam, which needs re-indexed art
+    -- to have a third region to paint.  Off is the two-tone ball on the
+    -- game's own tiles, which is what the ball looked like before it.
+    { key = "ball_band", type = "toggle", label = "BALL BAND",
+      default = true },
+    -- The Pokemon Center heal machine, lighting each ball in the colours of
+    -- the ball that Pokemon was caught in.  Off is the machine's own one
+    -- palette for all six.
+    { key = "center_balls", type = "toggle", label = "CENTER BALLS",
+      default = true },
   })
 
   local makeChrome = loadSibling(mod, "chrome.lua")
   local makeGrid = loadSibling(mod, "grid.lua")
   local makeXP = loadSibling(mod, "xpbar.lua")
   local makeLevelUp = loadSibling(mod, "levelup.lua")
+  local makeBalls = loadSibling(mod, "pokeballs.lua")
 
   local C = makeChrome(mod)
   if type(C) ~= "table" then
@@ -154,6 +181,11 @@ return function(mod)
   local LevelUp = makeLevelUp(mod, C)
   if not (type(LevelUp) == "table" and type(LevelUp.retime) == "function") then
     error("levelup.lua did not build the level-up retiming", 0)
+  end
+
+  local Balls = makeBalls(mod, C)
+  if not (type(Balls) == "table" and type(Balls.install) == "function") then
+    error("pokeballs.lua did not build the ball colouring", 0)
   end
 
   if not (type(mod.hooks) == "table" and type(mod.hooks.wrap) == "function") then
@@ -275,6 +307,25 @@ return function(mod)
     return result
   end)
 
+  -- ------- the balls, in their own colours
+  --
+  -- Not a hook: there is none to ask for.  The colour of an animation sprite
+  -- is decided inside BattleState:animSpriteColors and the heal machine's
+  -- balls are drawn from a closure inside OverworldState:drawWorld, so this
+  -- is the one part of the mod that wraps engine functions directly, under
+  -- the engine_internals permission the manifest already declares.  See
+  -- pokeballs.lua.
+  --
+  -- A failure here is a warning and not a raise, unlike the four loads above.
+  -- Those are the mod: a battle menu that cannot draw is a mod that changes
+  -- nothing and should say so on the boot feed.  This is a coat of paint on
+  -- five sprites, and an engine with no seam for it is a vanilla-coloured
+  -- ball in a menu that still works.
+  local okBalls, ballProblem = Balls.install()
+  if not okBalls then
+    warn("Gen1BattleUI is not colouring the balls: %s", tostring(ballProblem))
+  end
+
   -- Published so a mod that wants to sit beside these buttons can find out
   -- where they are, and so the suite can assert against the numbers this mod
   -- draws from rather than against a screenshot.  Decorated rather than
@@ -294,4 +345,10 @@ return function(mod)
   -- and lets it clip.
   mod.exports.panelRect = Grid.panelRect
   mod.exports.expPixels = XP.pixels
+  -- The ball colours, by item id, so "which mod coloured this ball" is
+  -- answerable without an experiment.  Read freely; this mod writes
+  -- mon.caughtBall at catch time and never overwrites a value already there,
+  -- which is the rule Pokeball Colors set for that field and the reason the
+  -- two can share a save.
+  mod.exports.ballColors = Balls.colors
 end
