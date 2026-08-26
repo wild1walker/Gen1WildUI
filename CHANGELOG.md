@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.4
+
+**BATTLE MENUS** (Gen1BattleUI 1.2.1 → 1.2.2) — the type colour is in the
+letters now instead of on a chip behind them, and the move names on the
+buttons are coloured by their own type as well, so the grid reads as four
+types at a glance and the panel says which one the cursor is on. A tile glyph
+is black on transparent and `setColor` cannot reach one; a shader throws each
+glyph's RGB away and keeps only its alpha, which turns the glyph into a
+stencil to fill with the type's colour — the game's own font throughout, in a
+different ink. The palette is darker than the familiar type colours because
+these are letters on a white box rather than a field behind them. `TYPE
+COLOUR` turns it off, and a host with no shaders draws them black.
+
 ## 1.2.3
 
 **BATTLE MENUS** (Gen1BattleUI 1.2.0 → 1.2.1) — the move panel reads the name

@@ -94,11 +94,13 @@ return function(mod)
     -- as a fault rather than a choice.
     { key = "full_names", type = "toggle", label = "FULL NAMES",
       default = false },
-    -- The move's type on a chip in that type's own colour, in the panel.
-    -- Behind the word rather than in it: a tile glyph is black on
-    -- transparent and comes out black whatever colour is set, so the only
-    -- way to tint the letters would be to stop drawing them in the game's
-    -- own font.  Off leaves the type as plain black text.
+    -- Type colour, in the letters themselves: the move NAME on each button,
+    -- and the TYPE in the panel above them.  A tile glyph is black on
+    -- transparent and setColor cannot reach it, so the letters are
+    -- stencilled by a shader that keeps each glyph's alpha and supplies the
+    -- RGB itself -- the game's own font throughout, in a different ink.  A
+    -- host with no shaders, and a type this mod has no colour for, both draw
+    -- plain black.  Off is plain black everywhere.
     { key = "type_colour", type = "toggle", label = "TYPE COLOUR",
       default = true },
   })

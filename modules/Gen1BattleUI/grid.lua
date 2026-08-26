@@ -180,7 +180,9 @@ return function(mod, C)
       local move = moves and moves[i]
       if move then
         local def = battle.data and battle.data.moves and battle.data.moves[move.id]
-        out[i] = { text = def and def.name or tostring(move.id) }
+        out[i] = { text = def and def.name or tostring(move.id),
+                   ink = C.option("type_colour", true)
+                         and C.typeInk(def and def.type) or nil }
       else
         out[i] = { text = "-" }
       end
@@ -393,17 +395,13 @@ return function(mod, C)
       put(Strings("disabled!"))
       return
     end
-    -- The type sits on a chip in its own colour.  The word stays black and
-    -- stays in the game's font -- see C.typeChip for why it has to.
+    -- The type is printed in its own colour -- the letters, not a field
+    -- behind them.  See C.inked for how a tile glyph is coloured at all.
     local type_ = typeText(def)
     if type_ and rows[line] then
-      local text = C.shorten(type_, width)
-      local chip = C.option("type_colour", true) and C.typeChip(def and def.type)
-      -- exactly the glyph row, so the chip cannot bleed into the line above
-      -- or below: the interior rows are eight pixels apart and this is eight
-      if chip then C.fill(chip, x, rows[line], C.width(text) + 1, 8) end
-      C.black()
-      Font.draw(text, x, rows[line])
+      local text, ty = C.shorten(type_, width), rows[line]
+      local ink = C.option("type_colour", true) and C.typeInk(def and def.type)
+      C.inked(ink, function() Font.draw(text, x, ty) end)
       line = line + 1
     end
     put(ppText(def, move))
@@ -427,10 +425,8 @@ return function(mod, C)
     if pp then Font.draw(C.shorten(pp, 64), 232, 112) end
     if type_ then
       local text = C.shorten(type_, 64)
-      local chip = C.option("type_colour", true) and C.typeChip(def.type)
-      if chip then C.fill(chip, 232, 128, C.width(text) + 1, 8) end
-      C.black()
-      Font.draw(text, 232, 128)
+      local ink = C.option("type_colour", true) and C.typeInk(def.type)
+      C.inked(ink, function() Font.draw(text, 232, 128) end)
     end
   end
 
