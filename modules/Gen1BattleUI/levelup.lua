@@ -142,7 +142,8 @@ return function(mod, C)
     if not lines or not enabled() then return 0 end
     local queue = battle.queue
     if type(queue) ~= "table" then return 0 end
-    local joined = 0
+    local joined, expected = 0, 0
+    for _, n in pairs(lines) do expected = expected + n end
     for i = 1, #queue - 1 do
       local line, box = queue[i], queue[i + 1]
       if isLine(line) and (lines[line.text] or 0) > 0 and isBox(box) then
@@ -150,6 +151,27 @@ return function(mod, C)
         holdLineUnder(line, box)
         joined = joined + 1
       end
+    end
+    -- A miss here used to be silent, and silence is how the one failure this
+    -- has actually had reached a player: with another mod's EXP SHARE
+    -- awarding the exp and never calling through, this function was not
+    -- reached at all, nothing was re-marked, and what came out was the
+    -- engine's own two screens -- indistinguishable from the option being
+    -- off.  Being reached and finding nothing is a different fault with the
+    -- same picture, so it says which one happened and what it was looking
+    -- for.
+    if joined < expected and mod.log and type(mod.log.warn) == "function" then
+      local missing = {}
+      for text, n in pairs(lines) do
+        if n > 0 then
+          missing[#missing + 1] =
+            string.format("%dx %q", n, (text:gsub("\n", "\\n")))
+        end
+      end
+      table.sort(missing)
+      mod.log:warn("Gen1BattleUI joined %d of %d level-up lines to their stat "
+        .. "boxes; the queue had no match for %s, so those keep the engine's "
+        .. "two screens", joined, expected, table.concat(missing, ", "))
     end
     return joined
   end

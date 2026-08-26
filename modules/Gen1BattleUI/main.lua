@@ -294,6 +294,29 @@ return function(mod)
          .. "keeps the engine's timing")
   end
 
+  -- The priority is the second one in this file that means something, and it
+  -- means the opposite of the overlay's.  This link calls next() and then
+  -- READS what the chain queued, so it has to be the link the chain starts
+  -- at -- the OUTERMOST one -- or it does not run at all when something
+  -- inside it declines to call through.
+  --
+  -- Which is not hypothetical.  Gen1WildQOL's EXP SHARE wraps this same hook
+  -- at priority 90 and, in every mode except OFF, awards the exp itself and
+  -- returns WITHOUT calling nextFn.  Hooks sorts a chain highest-first and
+  -- runs the first link outermost (src/mods/Hooks.lua:26), and an unprioritised
+  -- link is `priority or 0` -- so with both mods installed, 90 ran outermost,
+  -- never called through, and this link never ran.  The level-up rows were
+  -- queued exactly as before and never re-marked: the line prompted, cleared,
+  -- and the stat box came up over an empty text box.  Reported from device,
+  -- with EXP SHARE on.
+  --
+  -- Outermost is the fix and it costs that mod nothing: next(ctx) is still
+  -- what awards the exp -- theirs, when they are the ones doing it -- and its
+  -- result is handed straight back.  This link only reads the queue
+  -- afterwards, so whoever built it, the rows are there to be found.
+  --
+  -- 5000 to match the overlay, and for the same practical reason: high enough
+  -- that a neighbour arriving later has to mean it to sit outside this.
   mod.hooks:wrap("battle.exp_award", function(next, ctx)
     local result = next(ctx)
     -- After the award, never instead of it: a throw here is a level-up with
@@ -305,7 +328,7 @@ return function(mod)
            tostring(problem))
     end
     return result
-  end)
+  end, 5000)
 
   -- ------- the balls, in their own colours
   --

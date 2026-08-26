@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.6.3
+
+Follows [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI) to 1.5.2,
+which fixes a bug that only appears when **both bundles are installed**.
+
+- **The level-up stat box came up over a blank text box again if
+  [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL)'s `EXP SHARE` was
+  on** — the exact picture 1.4.0 of that mod was written to fix, back for
+  anyone running the pair. It was a hook priority rather than the retiming.
+  `EXP SHARE` wraps `battle.exp_award` at priority 90 and, in every mode but
+  `OFF`, awards the exp itself and returns *without calling through*. The
+  engine runs the highest-priority link outermost, so `BATTLE MENUS` sat inside
+  it and never ran: the rows were queued exactly as vanilla queues them and
+  never re-marked, which is the engine's own two screens — the line prompts, it
+  clears, and the stat box arrives over an empty box.
+- `BATTLE MENUS` is now the outermost link on that hook. It has to be: it calls
+  through and then *reads* what the chain queued, and an inner link cannot read
+  a queue built by an outer one that never called through. It costs `EXP SHARE`
+  nothing — the award is still theirs, through the engine's own `applyShare`,
+  so the rows are the same rows and the retiming finds them.
+- A miss no longer fails silently: it logs how many level-up lines were joined,
+  how many were expected, and the text it could not match. "Reached and found
+  nothing" and "never reached at all" produced the same blank box and neither
+  said which.
+
 ## 1.6.2
 
 Follows [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI) to 1.5.1,
