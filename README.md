@@ -241,7 +241,9 @@ Everything here is somebody's work, and mostly not mine:
   **[pret](https://github.com/pret)** — the engine and the disassemblies all of
   it stands on.
 
-Each vendored mod keeps its own licence file under `modules/<Feature>/`.
+The bundling is MIT -- see [LICENSE](LICENSE), which says what that does
+and does not cover. Each vendored mod keeps its own licence file under
+`modules/<Feature>/`, and those are the terms for that feature.
 
 Contributions belong in the mod's own repository, behind its link above. Fixes
 to the bundling itself belong here.

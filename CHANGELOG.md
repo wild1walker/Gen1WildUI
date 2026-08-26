@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.6.1
+
+Adds the `LICENSE` this repository never had. Every standalone mod in the suite
+ships one and both bundles did not, while the index entry claimed MIT on their
+behalf -- so the claim is now in the repository making it, and in the zip.
+
+It is scoped rather than blanket: MIT over the bundling -- the loader, the
+feature registry, the runtime, the adapters, the tools, the suites -- and no
+claim at all over the mods carried under `modules/`, each of which keeps its
+own licence file where the build put it. `BATTLE INTRO` is maintained here and
+its original states no terms, so the file says that plainly and leaves them to
+its author rather than assigning any.
+
+No code changed.
+
 ## 1.6.0
 
 Follows one of its mods; everything else here is already on its newest release.
