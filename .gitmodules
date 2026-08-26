@@ -19,3 +19,6 @@
 [submodule "upstream/Gen1ModMenu"]
 	path = upstream/Gen1ModMenu
 	url = https://github.com/wild1walker/Gen1ModMenu
+[submodule "upstream/Gen1BattleUI"]
+	path = upstream/Gen1BattleUI
+	url = https://github.com/wild1walker/Gen1BattleUI

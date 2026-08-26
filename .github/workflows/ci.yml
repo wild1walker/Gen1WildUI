@@ -110,18 +110,36 @@ jobs:
           # own CI runs them. They are run here too, against the submodule
           # checkout, so a sync that pins a broken upstream fails here rather
           # than in somebody's save file.
-          total=0
-          for suite in ../mod/upstream/*/tests/*.lua; do
-            echo "--- $suite"
-            # Run from the suite's own directory. These are the mods' own
-            # tests and several reach their subject with a relative
-            # loadfile("../main.lua"), so invoked from anywhere else they
-            # fail on a nil call and every run reports warnings that say
-            # nothing about the mod.
-            if (cd "$(dirname "$suite")" && luajit "$(basename "$suite")"); then
-              total=$((total + 1))
-            else
-              echo "::warning::$suite failed against this engine revision"
-            fi
+          # Each vendored mod's own tests, run the way that mod's own CI runs
+          # them: staged at mods/<its own id>, not read out of the bundle's
+          # tree. They are written against their own repository's layout --
+          # some load their subject by that path, some require tests.modkit
+          # off the engine's package path, some want their own directory --
+          # and run from anywhere else they fail on something that says
+          # nothing about the mod. This step used to do exactly that and its
+          # warnings were noise.
+          #
+          # Gen151's placements and roll suites still warn: they want the pret
+          # disassembly fixtures its own CI checks out beside the engine.
+          pass=0; failed=0
+          for dir in ../mod/upstream/*/; do
+            manifest="$(find "$dir" -maxdepth 2 -name manifest.json | head -1)"
+            [ -n "$manifest" ] || continue
+            suites=("$dir"tests/*.lua)
+            [ ${#suites[@]} -gt 0 ] || continue
+            id="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['id'])" "$manifest")"
+            rm -rf "mods/$id"; mkdir -p "mods/$id"
+            (cd "$(dirname "$manifest")" && tar -c --exclude=.git .) | tar -x -C "mods/$id"
+            for suite in "${suites[@]}"; do
+              name="$(basename "$suite")"
+              echo "--- $id/$name"
+              if luajit "mods/$id/tests/$name" \
+                 || ( cd "mods/$id/tests" && luajit "$name" ); then
+                pass=$((pass + 1))
+              else
+                failed=$((failed + 1))
+                echo "::warning::$id/$name failed against this engine revision"
+              fi
+            done
           done
-          echo "ran $total upstream suites"
+          echo "ran $pass upstream suites, $failed failing"

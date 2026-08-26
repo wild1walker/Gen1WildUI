@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.0
+
+Adds **BATTLE MENUS**, from
+[Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI) — the battle command
+and move menus as four buttons in a 2x2 grid instead of a list. Tracked as a
+submodule pinned to 1.1.0, like the other seven Wild mods here. It ships on.
+
+It was the one mod in the index that was in neither bundle, which is why
+installing it alongside Gen1WildUI raised no conflict: there was nothing to
+conflict with. Now that the bundle carries it, `Gen1BattleUI` is in the
+manifest's `conflicts` and the two are mutually exclusive, the same way the
+other eight features are.
+
+| Row | Ships |
+|---|---|
+| `MOVE PANEL` — the highlighted move's full name, type and PP above the grid | on |
+
+`BATTLE MENUS` takes a relaunch to switch. The mod has no off switch of its own
+to donate — `MOVE PANEL` is a setting within the grid, not a switch for it — so
+the bundle gates it at load and the menu marks the row.
+
 ## 1.1.0
 
 Adds **BATTLE INTRO**, from

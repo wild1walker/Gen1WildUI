@@ -1,9 +1,9 @@
 # Gen1WildUI
 
 **The visual half of the [Gen1Wild](https://github.com/wild1walker/Gen1Wild)
-suite, as one mod.** Eight features from eight sources. Seven are still their
-own mods with their own releases, tracked here and not forked; `BATTLE INTRO`
-began as somebody else's mod and is maintained in this repository now.
+suite, as one mod.** Nine features from nine sources. Eight are still their own
+mods with their own releases, tracked here and not forked; `BATTLE INTRO` began
+as somebody else's mod and is maintained in this repository now.
 
 Its other half is [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL),
 which carries the quality-of-life features. The two know about each other: a
@@ -17,6 +17,7 @@ itself. Nothing is all-or-nothing.
 | Feature | From |
 |---|---|
 | **BACKDROPS** | [Gen1Arena](https://github.com/wild1walker/Gen1Arena) — 2D backdrops behind battles, picked by map, tileset and how the encounter started |
+| **BATTLE MENUS** | [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI) — the battle command and move menus as four buttons in a 2x2 grid instead of a list |
 | **BATTLE INTRO** ‡ | originally [widescreen-battle-intro](https://github.com/ShaneMcGovernIE/gen1recomp-widescreen-battle-intro) — the intro flash across the whole window instead of a centred 4:3 square, plus flashless intros and a fade to black |
 | **POKEDEX** | [Gen1Dex](https://github.com/wild1walker/Gen1Dex) — a Pokémon beside every entry, base stats, evolutions, the full movelist, and an AREA screen |
 | **POKEMON BOX** | [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) — Bill's PC as the box it stood in for: party left, twenty slots right |
@@ -25,7 +26,7 @@ itself. Nothing is all-or-nothing.
 | **MENU LAYOUT** † | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) — reorder the START and PC menus, hide rows, pin field moves |
 | **MOD MANAGER** † | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) — the mod manager redrawn in the game's own OPTION-screen idiom |
 
-All eight ship on.
+All nine ship on.
 
 † Also in [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL). These two
 are not really visual overhauls — they are the furniture everything else is
@@ -137,7 +138,7 @@ Source lives in one of two places, and which one says who looks after it:
 the game reads. `tools/check.py` fails if a feature is in both, in neither, or
 declared as one and sitting in the other.
 
-For the tracked seven:
+For the tracked eight:
 
 ```sh
 git submodule update --init --recursive   # first time

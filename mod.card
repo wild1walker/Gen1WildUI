@@ -2,9 +2,9 @@
 -- by the loader's merge.
 return {
   summary = "The visual half of the Gen1Wild suite in one mod: battle "
-    .. "backdrops, the battle intro, the Pokedex, the box, the party menu, "
-    .. "the bag, menu layout and the mod manager. Every feature switches on "
-    .. "and off by itself.",
+    .. "backdrops, the battle intro, the battle menus, the Pokedex, the box, "
+    .. "the party menu, the bag, menu layout and the mod manager. Every "
+    .. "feature switches on and off by itself.",
   author = "wild1walker",
   contact = "https://github.com/wild1walker/Gen1WildUI",
   tags = { "ui", "bundle", "pokedex", "party", "bag", "storage", "battle",

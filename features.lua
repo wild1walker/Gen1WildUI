@@ -82,6 +82,21 @@ return {
       suppress_hooks = { ["ui.options.rows"] = true },
     },
 
+    {
+      id = "battlemenus",
+      priority = 1100,
+      dir = "Gen1BattleUI",
+      entry = "main.lua",
+      label = "BATTLE MENUS",
+      description = "THE BATTLE COMMAND AND MOVE MENUS AS FOUR BUTTONS IN A 2X2 GRID INSTEAD OF A LIST.",
+      -- No master row of its own to donate: MOVE PANEL is a setting within
+      -- the grid, not a switch for it, and the mod is the grid. So the
+      -- bundle synthesizes one and gates installation with it, which is why
+      -- this row takes a relaunch and carries the menu's asterisk.
+      default = true,
+      aliases = { "Gen1BattleUI" },
+    },
+
     -- ---- the menus a player lives in
     --
     -- These three share priority 1100 upstream, so they install in the order
