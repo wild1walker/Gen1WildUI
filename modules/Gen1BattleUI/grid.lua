@@ -216,6 +216,14 @@ return function(mod, C)
   -- Reserving the column whether or not the hand is there is what stops the
   -- three unselected labels from sliding sideways as the cursor moves.
 
+  -- What a cell leaves for its label: its interior tiles less the one kept
+  -- for the hand.  Named because faceFor needs them BEFORE the cells are
+  -- built -- classicGrid draws its boxes as it goes, and the panel has to be
+  -- drawn under them with the face already decided.
+  local CLASSIC_LABEL_W = 7 * 8        -- a 10-tile box: 8 interior, 1 hand
+  local WIDE_LABEL_W = 12 * 8          -- the 29-tile move box
+  local WIDE_FULL_LABEL_W = 16 * 8     -- the 38-tile one, narrower column
+
   local function cell(firstTile, lastTile, tileRow)
     return {
       handX = firstTile * 8,
@@ -258,11 +266,32 @@ return function(mod, C)
 
   -- ------- filling them in
 
-  local function fill(cells, labels, selected, swap)
+  -- The small face is chosen for the WHOLE grid or for none of it.  Deciding
+  -- per label would leave GUST in the game's own font beside THUNDERSHOCK in
+  -- another one, in the same four boxes -- which reads as a rendering fault
+  -- rather than as a choice.  So: if every name fits the tile font, nothing
+  -- changes and the grid is vanilla to the pixel; if any name does not, they
+  -- all move together.
+  local function faceFor(width, labels)
+    if not C.option("full_names", true) then return nil end
+    if not width then return nil end
+    local needed = false
+    for i = 1, 4 do
+      local label = labels[i]
+      if label and label.text and C.width(label.text) > width then
+        needed = true
+        break
+      end
+    end
+    if not needed then return nil end
+    return C.small(width)
+  end
+
+  local function fill(cells, labels, selected, swap, small)
     for i = 1, 4 do
       local c, label = cells[i], labels[i]
       if c and label then
-        C.drawLabel(label, c.labelX, c.textY, c.labelW)
+        C.drawLabel(label, c.labelX, c.textY, c.labelW, small)
       end
     end
     -- The filled hand replaces the hollow swap marker when they share a cell:
@@ -324,7 +353,7 @@ return function(mod, C)
     mimicSelect = { tx = 0, ty = 7, tw = 18, th = 6 },
   }
 
-  local function drawClassicPanel(battle, moves, selected)
+  local function drawClassicPanel(battle, moves, selected, small)
     local spec = PANEL[battle.phase]
     if not spec then return end
     C.box(spec.tx, spec.ty, spec.tw, spec.th)
@@ -337,10 +366,16 @@ return function(mod, C)
     -- rather than left blank, so a move with no type behind it (a mod's, or
     -- an id with no definition) closes the gap instead of printing a hole.
     local line = 1
-    local function put(text)
+    local function put(text, small)
       if not text or not rows[line] then return end
-      C.black()
-      Font.draw(C.shorten(text, width), x, rows[line])
+      if small then
+        C.drawSmall(small,
+          C.shortenWith(function(t) return C.smallWidth(small, t) end,
+                        text, width), x, rows[line])
+      else
+        C.black()
+        Font.draw(C.shorten(text, width), x, rows[line])
+      end
       line = line + 1
     end
 
@@ -348,7 +383,9 @@ return function(mod, C)
     local def = moveDef(battle, move)
 
     if battle.phase == "mimicSelect" then put(Strings("WHICH TECHNIQUE?")) end
-    put(def and def.name or (move and tostring(move.id)) or "-")
+    -- The name follows whatever the cells settled on, so the panel never
+    -- reads shorter than the button it is describing.
+    put(def and def.name or (move and tostring(move.id)) or "-", small)
 
     -- A disabled slot says so instead of showing what it would have cost:
     -- the vanilla panel does the same (engine/battle/core.asm, PrintMenuItem).
@@ -396,11 +433,16 @@ return function(mod, C)
     local mimic = battle.phase == "mimicSelect"
     local moves = mimic and battle.mimicMoves or battle.player.curMoves
     local selected = (mimic and battle.mimicIndex or battle.moveIndex) or 1
+    -- One face for the whole screen, and it is the CELLS' face: sized from
+    -- the panel instead, the same name would come out larger up there than
+    -- on the button it describes.
+    local labels = moveLabels(battle, moves)
+    local small = faceFor(CLASSIC_LABEL_W, labels)
     if C.option("move_panel", true) then
-      drawClassicPanel(battle, moves, selected)
+      drawClassicPanel(battle, moves, selected, small)
     end
-    fill(classicGrid(), moveLabels(battle, moves), selected,
-         not mimic and battle.moveSwapIndex or nil)
+    fill(classicGrid(), labels, selected,
+         not mimic and battle.moveSwapIndex or nil, small)
   end
 
   local function drawWide(battle, parked)
@@ -443,10 +485,14 @@ return function(mod, C)
     -- that stops short of the screen edge is a hole in the frame rather than
     -- a saving: the grid takes the whole width back instead.
     if not C.option("move_panel", true) then
-      fill(wideGrid(0, 13, 38, 18), moveLabels(battle, moves), selected, swap)
+      local labels = moveLabels(battle, moves)
+      local small = faceFor(WIDE_FULL_LABEL_W, labels)
+      fill(wideGrid(0, 13, 38, 18), labels, selected, swap, small)
       return
     end
-    fill(wideGrid(0, 13, 29, 14), moveLabels(battle, moves), selected, swap)
+    local labels = moveLabels(battle, moves)
+    fill(wideGrid(0, 13, 29, 14), labels, selected, swap,
+         faceFor(WIDE_LABEL_W, labels))
     drawWidePanel(battle, moves, selected)
   end
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.2
+
+**BAG** (Gen1ModernBag 1.9.3 → 1.9.4) — `Hold Scroll Speed` now defaults to
+`OFF`. 1.2.1 moved it from `FAST` to `NORMAL`, which halved the rate and kept
+the thing that made it feel wrong: a threshold. A press either crosses it or
+does not, so the same press is one row or a run of them depending on how long
+a finger rests — which reads as the list moving by itself rather than as a
+speed being too high. `OFF` means a press is a row; the three speeds are all
+still there.
+
+**BATTLE MENUS** (Gen1BattleUI 1.1.2 → 1.2.0) — move names print whole. The
+tile font is 8 pixels a glyph and a classic cell is seven of them, against
+Gen 1's twelve-glyph names, so a move menu that will not fit is drawn in Plain
+Pixel — the TTF the engine already ships for its translation mode — at the
+largest size whose twelve glyphs still fit the cell. A grid takes it for all
+four names or none, so a party whose names all fit is unchanged, and the wide
+layout never reaches for it. `FULL NAMES` turns it off.
+
 ## 1.2.1
 
 Follows two upstream fixes, both to things a player hits in a battle.

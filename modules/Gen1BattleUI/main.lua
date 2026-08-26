@@ -79,6 +79,20 @@ return function(mod)
     -- themselves.
     { key = "move_panel", type = "toggle", label = "MOVE PANEL",
       default = true },
+    -- The tile font is eight pixels a glyph, a classic cell is seven of
+    -- them, and Gen 1's longest move names are twelve -- so in the game's
+    -- own font a 2x2 grid cannot print SELFDESTRUCT whole, whatever the
+    -- layout does.  On, a move menu whose names do not all fit is drawn in
+    -- the engine's own Plain Pixel instead, which is narrower and does fit.
+    -- Off is the game's font always, and the names are cut to the cell.
+    --
+    -- A grid takes the small face for all four names or none: GUST in one
+    -- font beside THUNDERSHOCK in another, in the same four boxes, reads as
+    -- a fault rather than a choice.  So a party whose names all fit is
+    -- vanilla to the pixel either way, and the wide layout -- twelve glyphs
+    -- a cell -- never reaches for it at all.
+    { key = "full_names", type = "toggle", label = "FULL NAMES",
+      default = true },
   })
 
   local makeChrome = loadSibling(mod, "chrome.lua")

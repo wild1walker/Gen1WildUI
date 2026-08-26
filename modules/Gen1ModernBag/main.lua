@@ -63,9 +63,8 @@ local function openingPocketIndex(mod)
 end
 
 local function scrollConfig(mod)
-  local speed = tostring(optionValue(mod, "hold_scroll_speed", "normal")
-    or "normal")
-  return SCROLL_SPEEDS[speed] or SCROLL_SPEEDS.normal
+  local speed = tostring(optionValue(mod, "hold_scroll_speed", "off") or "off")
+  return SCROLL_SPEEDS[speed] or SCROLL_SPEEDS.off
 end
 
 -- Pocket header.
@@ -1926,13 +1925,14 @@ return function(mod)
         key = "hold_scroll_speed",
         type = "choice",
         label = "Hold Scroll Speed",
-        -- NORMAL, not FAST.  Fast repeats every 2 frames after only 10 held,
-        -- which is thirty rows a second off a press a sixth of a second long
-        -- -- so a press meant as one step overshoots by a pocketful, and the
-        -- shorter the press the more it looks like the Bag did it by itself.
-        -- Normal is the engine's own ListMenu cadence (16 then 4), and FAST
-        -- is still one row down the list for anyone who wants it.
-        default = "normal",
+        -- OFF, so a press is a row and nothing repeats on its own.  Any
+        -- hold-to-scroll setting has a threshold, and the threshold is the
+        -- problem: a press either crosses it or does not, so the same press
+        -- is one step or a run of them depending on how long a finger rests,
+        -- which reads as the list moving by itself rather than as a speed.
+        -- NORMAL, FAST and VERY FAST are all still here for anyone who wants
+        -- a hold to scroll; none of them is what an unconfigured Bag does.
+        default = "off",
         choices = {
           { "Off", "off" },
           { "Normal", "normal" },

@@ -89,20 +89,90 @@ return function(mod)
   -- fitName does, and on a GLYPH boundary rather than a byte one.  The
   -- trailing space or hyphen goes with the cut: THROW ROCK reading "THROW ."
   -- is a worse seven glyphs than "THROW.".
-  function C.shorten(text, pixels)
+  -- `measure` is how wide the face in question draws a string, so the same
+  -- cutting rule serves the tile font and the small one.
+  function C.shortenWith(measure, text, pixels)
     text = tostring(text or "")
-    if C.width(text) <= pixels then return text end
+    if measure(text) <= pixels then return text end
     local ok, spans = pcall(Font.split, text)
     if not ok or #spans == 0 then return text end
     for n = #spans - 1, 1, -1 do
       local cut = text:sub(1, spans[n].to):gsub("[%s%-]+$", "") .. "."
-      if C.width(cut) <= pixels then return cut end
+      if measure(cut) <= pixels then return cut end
     end
     return "."
   end
 
+  function C.shorten(text, pixels)
+    return C.shortenWith(C.width, text, pixels)
+  end
+
   function C.rightAlign(text, endX)
     return endX - C.width(text)
+  end
+
+  -- ------- the small face, for move names only
+  --
+  -- The tile font is eight pixels a glyph and cannot be anything else: it is
+  -- a tile sheet.  Two columns inside 160 pixels leave a cell seven of them
+  -- and Gen 1's longest move names are twelve, so in the game's own font a
+  -- 2x2 grid CANNOT print a move name whole.  That is arithmetic about an
+  -- 8x8 sheet, not a layout that could be tuned into fitting.
+  --
+  -- The engine ships exactly one other face: Plain Pixel, the TTF its
+  -- translation mode renders through (Font.PLAINPIXEL, CC-BY 4.0, Douglas
+  -- Vautour).  Its advance is narrower than eight, so the same cell holds
+  -- more of it.  Switching the engine's own TTF mode on is not on the table
+  -- -- that is a whole-game font swap, and a battle mod has no business
+  -- making one -- so the face is loaded here and used for move names alone.
+  --
+  -- The size is chosen rather than fixed: the largest one whose twelve
+  -- glyphs still fit wins.  A cell that changes width, a font whose metrics
+  -- differ, a host that measures differently -- each resizes it instead of
+  -- overflowing it.
+  local LONGEST = 12          -- SELFDESTRUCT, THUNDERSHOCK, QUICK ATTACK
+  local WIDEST = ("W"):rep(LONGEST)
+  local smallCache = {}
+
+  function C.small(width)
+    if smallCache[width] ~= nil then return smallCache[width] or nil end
+    smallCache[width] = false
+    local path = Font.PLAINPIXEL or "assets/fonts/plainpixel/PlainPixel-Regular.ttf"
+    for size = 15, 8, -1 do
+      -- the engine's own call: a pixel-exact 1x rasterization, so the face
+      -- lands on the same grid the rest of the frame is drawn on
+      local ok, obj = pcall(love.graphics.newFont, path, size, "mono", 1)
+      if ok and obj then
+        local measured, w = pcall(obj.getWidth, obj, WIDEST)
+        if measured and type(w) == "number" and w <= width then
+          pcall(function() obj:setFilter("nearest", "nearest") end)
+          -- The tile font's baseline sits on row 7 of its 8px cell, so
+          -- anchoring this one to the same row is what keeps a small label
+          -- and a tile label on one line (src/render/Font.lua's yOffset).
+          local base = obj.getBaseline and select(2, pcall(obj.getBaseline, obj))
+          local y = (type(base) == "number" and (7 - base))
+                    or (obj.getHeight and (8 - obj:getHeight())) or 0
+          smallCache[width] = { font = obj, yOffset = y, size = size }
+          break
+        end
+      end
+    end
+    return smallCache[width] or nil
+  end
+
+  function C.smallWidth(small, text)
+    local ok, w = pcall(small.font.getWidth, small.font, tostring(text or ""))
+    return ok and w or 0
+  end
+
+  -- Unlike a tile glyph, a TTF glyph really is drawn in the current colour,
+  -- so black is set here rather than assumed.
+  function C.drawSmall(small, text, x, y)
+    C.black()
+    local prev = love.graphics.getFont and love.graphics.getFont()
+    love.graphics.setFont(small.font)
+    love.graphics.print(tostring(text or ""), x, y + small.yOffset)
+    if prev then love.graphics.setFont(prev) end
   end
 
   -- ------- drawing
@@ -149,15 +219,32 @@ return function(mod)
 
   -- One button's label, centred in the pixels the cell has left after the
   -- hand's column.  `label` is { text = "FIGHT" } or { codes = C.PKMN }.
-  function C.drawLabel(label, x, y, width)
+  --
+  -- `small` is optional: the face from C.small, used when the caller has
+  -- decided this grid's labels do not fit the game's own.  A glyph-pair
+  -- label is never small -- <PK><MN> exists only as tiles.
+  function C.drawLabel(label, x, y, width, small)
     C.black()
     if label.codes then
       local w = C.codesWidth(label.codes)
       C.drawCodes(label.codes, x + math.max(0, math.floor((width - w) / 2)), y)
       return
     end
+    if small then
+      local text = C.shortenWith(function(t) return C.smallWidth(small, t) end,
+                                 label.text, width)
+      local w = C.smallWidth(small, text)
+      C.drawSmall(small, text, x + math.max(0, math.floor((width - w) / 2)), y)
+      return
+    end
     local text = C.shorten(label.text, width)
     Font.draw(text, x + math.max(0, math.floor((width - C.width(text)) / 2)), y)
+  end
+
+  -- True when this face would print `text` whole in `width`, which is the
+  -- question a grid asks before deciding to use it at all.
+  function C.smallFits(small, text, width)
+    return C.smallWidth(small, text) <= width
   end
 
   function C.drawHand(code, x, y)
