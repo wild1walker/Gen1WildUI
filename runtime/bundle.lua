@@ -126,18 +126,30 @@ function Bundle.install(mod, spec, features)
       local chunk, reason = loader.chunk(entry)
       local ok = false
       if chunk then
-        local ranOk, value = pcall(chunk)
+        -- The engine accepts two entry shapes and mods in this bundle use
+        -- both, so both are supported here rather than one being quietly
+        -- broken:
+        --
+        --   return function(mod) ... end   -- eleven of the twelve
+        --   local mod = ...                -- Gen1Arena, which installs at
+        --                                  -- chunk scope and returns a table
+        --
+        -- Passing the facade as the chunk argument satisfies the second and
+        -- is ignored by the first, so the only thing left to decide is
+        -- whether the return value is an installer or the mod's exports.
+        local ranOk, value = pcall(chunk, facade)
         if not ranOk then
           mod.log:error("[%s] entry chunk failed: %s", feature.label, tostring(value))
-        elseif type(value) ~= "function" then
-          mod.log:error("[%s] %s did not return an install function", feature.label, entry)
-        else
+        elseif type(value) == "function" then
           local installOk, installError = pcall(value, facade)
           if installOk then
             ok = true
           else
             mod.log:error("[%s] failed to install: %s", feature.label, tostring(installError))
           end
+        else
+          -- Nothing to call: the chunk installed itself on the way past.
+          ok = true
         end
       else
         mod.log:error("[%s] not loaded: %s", feature.label, tostring(reason))

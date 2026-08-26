@@ -60,7 +60,14 @@ local function fakeMod(id)
     found = {},
   }
 
-  function self:read(path) return readFile(path) end
+  -- Reads fall to a virtual filesystem first, so a test can hand the runtime
+  -- a module without one existing on disk, then to the repo, so runtime/*.lua
+  -- is the real thing under test.
+  self.files = {}
+  function self:read(path)
+    if self.files[path] then return self.files[path] end
+    return readFile(path)
+  end
 
   self.options = {
     define = function(_, schema) self.defined = schema end,
@@ -524,6 +531,99 @@ do
 
   -- And the menu is unaffected: it reads the declared list.
   eq(declared[1].id, "dex", "the menu still lists features as declared")
+end
+
+-- ------------------------------------------------------ end-to-end install
+
+do
+  io.write("bundle.install handles both entry shapes and gates what is off\n")
+
+  local Bundle = load_("runtime/bundle.lua", function(name)
+    return load_("runtime/" .. name .. ".lua")
+  end)
+
+  local mod = fakeMod()
+  local ran = {}
+
+  -- Shape one: `return function(mod) ... end`, which eleven of the twelve use.
+  mod.files["modules/Returner/main.lua"] = [[
+    return function(mod)
+      mod.options:define({
+        { key = "enabled", type = "toggle", label = "RETURNER", default = true },
+        { key = "flavour", type = "choice", label = "FLAVOUR", default = "a",
+          choices = { { "A", "a" }, { "B", "b" } } },
+      })
+      mod.exports.installed = true
+      _G.__test_ran = (_G.__test_ran or 0) + 1
+      _G.__test_returner = mod.options:get("flavour")
+    end
+  ]]
+
+  -- Shape two: `local mod = ...`, installing at chunk scope and returning a
+  -- table.  Gen1Arena is written this way, and calling its chunk with no
+  -- argument would leave `mod` nil and take the whole feature down.
+  mod.files["modules/ChunkArg/main.lua"] = [[
+    local mod = ...
+    mod.options:define({
+      { key = "enabled", type = "toggle", label = "CHUNKARG", default = true },
+    })
+    mod.exports.installed = true
+    _G.__test_ran = (_G.__test_ran or 0) + 1
+    _G.__test_chunkarg = mod.id
+    return {}
+  ]]
+
+  -- A feature switched off must not be run at all.
+  mod.files["modules/Skipped/main.lua"] = [[
+    return function(mod)
+      _G.__test_skipped_ran = true
+    end
+  ]]
+
+  _G.__test_ran = 0
+  mod.stored["skipped_enabled"] = false
+
+  local spec = { id = "gen1_wild_ui", menu_label = "GEN1WILD UI",
+                 screen_id = "Gen1WildUI", paired_bundle = "gen1_wild_qol" }
+  local features = {
+    { id = "returner", dir = "Returner", entry = "main.lua", label = "RETURNER",
+      enabledKey = "enabled", default = true, priority = 100 },
+    { id = "chunkarg", dir = "ChunkArg", entry = "main.lua", label = "CHUNKARG",
+      enabledKey = "enabled", default = true, priority = 50 },
+    { id = "skipped", dir = "Skipped", entry = "main.lua", label = "SKIPPED",
+      default = false, priority = 200 },
+  }
+
+  local result = Bundle.install(mod, spec, features)
+
+  eq(_G.__test_ran, 2, "both entry shapes ran")
+  eq(_G.__test_chunkarg, mod.id, "a chunk-argument mod received the facade")
+  eq(_G.__test_returner, "a", "and a returned installer read its own option")
+  eq(_G.__test_skipped_ran, nil, "a feature switched off was never run")
+  eq(mod.exports.installed.skipped, false, "and is reported as not installed")
+  eq(mod.exports.installed.returner, true, "the others are reported installed")
+
+  -- The merged schema reached the engine exactly once, prefixed.
+  ok(mod.defined, "the schema was defined")
+  local byKey = {}
+  for _, row in ipairs(mod.defined) do byKey[row.key] = row end
+  ok(byKey["returner_enabled"], "the returner's master is prefixed")
+  ok(byKey["returner_flavour"], "and so are its settings")
+  ok(byKey["chunkarg_enabled"], "the chunk-arg mod's master is prefixed")
+  ok(byKey["skipped_enabled"],
+     "a switched-off feature still has a master row, so it can be switched on")
+  eq(byKey["enabled"], nil, "no unprefixed key reached the engine")
+
+  -- The menu registered its screens.
+  ok(mod.screens["Gen1WildUI"], "the root screen is registered")
+  ok(mod.screens["Gen1WildUI_returner"], "and one per feature")
+
+  -- And the bundle published what the other half needs to find it.
+  ok(mod.exports.features, "the bundle publishes its feature table")
+  ok(mod.exports.features["returner"], "keyed by feature id")
+
+  _G.__test_ran, _G.__test_chunkarg, _G.__test_returner = nil, nil, nil
+  _G.__test_skipped_ran = nil
 end
 
 -- ------------------------------------------------------------------ done

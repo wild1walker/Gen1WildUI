@@ -162,6 +162,23 @@ def check_features(problems: Problems, features: list[dict], quiet: bool) -> Non
             problems.error(f"{label}: entry {path.relative_to(ROOT)} does not exist "
                            "(run tools/build.py, or check `dir`/`entry`)")
 
+        # The engine accepts two entry shapes and this bundle hosts both.
+        # A third one -- a chunk that returns something the runtime cannot
+        # use -- would install nothing and say so only in the log, so it is
+        # caught here instead.
+        try:
+            body = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            body = ""
+        if body:
+            returns_installer = re.search(r"^return function\s*\(", body, re.M)
+            takes_chunk_arg = re.search(r"^local\s+\w+\s*=\s*\.\.\.", body, re.M)
+            if not returns_installer and not takes_chunk_arg:
+                problems.warn(
+                    f"{label}: {entry} neither returns an install function nor "
+                    "reads its mod from `...`; the runtime will assume it "
+                    "installed itself at chunk scope")
+
         adapter = feature.get("adapter")
         if adapter:
             adapter_path = ADAPTERS / f"{adapter}.lua"
