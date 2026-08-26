@@ -1,6 +1,6 @@
 -- Gen1BattleUI: the battle command and move menus, as four buttons.
 --
--- Three hooks and no replaced engine function.  The battle still decides
+-- Five links and no replaced engine function.  The battle still decides
 -- everything it decided before -- what the menu means, what the cursor is on,
 -- what A does with it -- and this mod changes only where those four things
 -- are drawn and what they are drawn inside.
@@ -27,6 +27,15 @@
 --                              grid now, so LEFT and RIGHT cross it instead
 --                              of doing nothing.  The wide layout answers
 --                              this for itself and never asks.
+--
+--   battle.exp_award           and the battle.exp_gained event with it: the
+--                              level-up line and the stat box that follows
+--                              it are queued as two screens, so the box
+--                              arrives over a text box the engine has just
+--                              emptied.  The award is still the engine's --
+--                              next() runs it -- and two of the rows it
+--                              queued come back re-marked as the one screen
+--                              pokered prints.  See levelup.lua.
 --
 -- What this file does not do is swallow a LOAD-time failure.  Nothing is at
 -- risk while the game boots -- a mod that cannot draw leaves vanilla battles
@@ -110,11 +119,21 @@ return function(mod)
     -- panel.  See xpbar.lua.  On, which is what it was over there.
     { key = "xp_bar", type = "toggle", label = "XP BAR",
       default = true },
+    -- The level-up stat box, over the line that announced it.  pokered
+    -- prints "X grew to level N!" with a text_end tail and draws
+    -- PrintStatsBox into the screen that line is still on, so the stats and
+    -- the sentence they belong to are one screen dismissed once; the engine
+    -- queues them as two, with the line cleared before the box arrives and
+    -- the text box under it left empty.  On puts them back together.  Off is
+    -- the engine's own two screens.  See levelup.lua.
+    { key = "levelup_box", type = "toggle", label = "LEVEL-UP BOX",
+      default = true },
   })
 
   local makeChrome = loadSibling(mod, "chrome.lua")
   local makeGrid = loadSibling(mod, "grid.lua")
   local makeXP = loadSibling(mod, "xpbar.lua")
+  local makeLevelUp = loadSibling(mod, "levelup.lua")
 
   local C = makeChrome(mod)
   if type(C) ~= "table" then
@@ -130,6 +149,11 @@ return function(mod)
   local XP = makeXP(mod, C)
   if not (type(XP) == "table" and type(XP.draw) == "function") then
     error("xpbar.lua did not build the XP bar", 0)
+  end
+
+  local LevelUp = makeLevelUp(mod, C)
+  if not (type(LevelUp) == "table" and type(LevelUp.retime) == "function") then
+    error("levelup.lua did not build the level-up retiming", 0)
   end
 
   if not (type(mod.hooks) == "table" and type(mod.hooks.wrap) == "function") then
@@ -212,6 +236,44 @@ return function(mod)
       warn("Gen1BattleUI could not draw the battle menu: %s", tostring(problem))
     end
   end, 5000)
+
+  -- ------- the level-up line and its stat box are one screen
+  --
+  -- Draw order cannot fix this one: the empty text box under the stat box is
+  -- empty because the line was CLEARED before the box was pushed, two queue
+  -- rows earlier, and nothing this mod draws afterwards can put a message
+  -- back that the engine no longer has.  The join has to happen where the
+  -- rows are made, which is the exp award.
+  --
+  -- Two links, because the two halves of the answer arrive apart.
+  -- battle.exp_gained fires per mon with the levels it gained and fires
+  -- BEFORE the rows for them are queued, so it can only be recorded; the
+  -- award hook wraps the whole thing, so by the time next() has returned the
+  -- rows really are there to be read.  Neither replaces anything: the award
+  -- is the engine's own, run by next(), and what comes back is what a queue
+  -- with no mod on it would have held, with two of its rows re-marked.  See
+  -- levelup.lua.
+  if type(mod.events) == "table" and type(mod.events.on) == "function" then
+    mod.events:on("battle.exp_gained", function(payload)
+      LevelUp.expect(payload)
+    end)
+  else
+    warn("Gen1BattleUI has no event bus to hear level-ups on; the stat box "
+         .. "keeps the engine's timing")
+  end
+
+  mod.hooks:wrap("battle.exp_award", function(next, ctx)
+    local result = next(ctx)
+    -- After the award, never instead of it: a throw here is a level-up with
+    -- the engine's own two screens, not an award that never happened.
+    local ok, problem = pcall(LevelUp.retime,
+                              type(ctx) == "table" and ctx.battle or nil)
+    if not ok then
+      warn("Gen1BattleUI could not join the level-up line to its stat box: %s",
+           tostring(problem))
+    end
+    return result
+  end)
 
   -- Published so a mod that wants to sit beside these buttons can find out
   -- where they are, and so the suite can assert against the numbers this mod

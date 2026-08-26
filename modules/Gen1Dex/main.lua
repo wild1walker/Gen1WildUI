@@ -16,6 +16,12 @@
 -- through mod.find("Gen1Dex").exports.area.provide -- the dex owns the
 -- surface, and whoever placed the POKéMON owns the sentence.
 --
+-- and the nickname prompt after a catch (naming.lua): it is asked over the
+-- screen it interrupted -- the entry the game just showed you, or the field
+-- the POKéMON was caught on -- where AskName wipes to white.  The prompt is
+-- the engine's own and is left exactly as it built it; only what is behind it
+-- changes.
+--
 -- and the overworld START menu's dex row, renamed to DEX through the
 -- ui.start_menu.items hook rather than by touching the menu itself.
 --
@@ -88,6 +94,15 @@ return function(mod)
     -- turned them off.
     { key = "area_hints", type = "toggle", label = "AREA HINTS",
       default = true },
+    -- The nickname prompt after a catch keeps the screen it interrupted --
+    -- the dex entry for a species the dex has never held, the battle it was
+    -- caught on for anything else -- rather than the white field AskName
+    -- wipes to.  Off asks the question over the blank screen the cartridge
+    -- asked it over, for anyone who wants the 1996 moment back, and it takes
+    -- nothing else with it: the box, the words and the YES/NO are the
+    -- engine's own either way.
+    { key = "nickname_backdrop", type = "toggle", label = "NAME IN PLACE",
+      default = true },
   })
 
   local DexData = loadSibling(mod, "dexdata.lua")
@@ -95,6 +110,7 @@ return function(mod)
   local makeList = loadSibling(mod, "list.lua")
   local makeEntry = loadSibling(mod, "entry.lua")
   local makeArea = loadSibling(mod, "area.lua")
+  local makeNaming = loadSibling(mod, "naming.lua")
   if not DexData then return end
 
   -- The chrome is shared by both screens, so it is built once and handed to
@@ -158,12 +174,36 @@ return function(mod)
     end
   end
 
+  -- Narrowed to `new` on the way into the registry: the screens record is
+  -- typed as exactly that one field, and the entry factory hands back a
+  -- sibling seam beside it (Entry.recent, for the nickname backdrop below).
+  local Entry
   if type(makeEntry) == "function" then
     local ok, screen = pcall(makeEntry, mod, DexData, C)
     if ok and type(screen) == "table" and type(screen.new) == "function" then
-      mod.content.screens:register("DexEntryMenu", screen)
+      Entry = screen
+      mod.content.screens:register("DexEntryMenu", { new = screen.new })
     else
       mod.log:error("the dex entry did not build: %s", tostring(screen))
+    end
+  end
+
+  -- The nickname prompt after a catch, asked over the screen it interrupted
+  -- rather than over a blank white field.  Survivable in the same way the
+  -- AREA screen is and for the same reason: the prompt is the engine's own
+  -- either way, so a backdrop that will not install leaves the question the
+  -- cartridge asked, on the screen the cartridge asked it on.  It is built
+  -- with the entry screen because the page half of it keeps up the instance
+  -- that page was drawn from.
+  if Entry and type(makeNaming) == "function" then
+    local ok, naming = pcall(makeNaming, mod, C, Entry)
+    if ok and type(naming) == "table" then
+      local installed, err = pcall(naming.install)
+      if not installed then
+        mod.log:error("the nickname prompt was not wrapped: %s", tostring(err))
+      end
+    else
+      mod.log:error("the nickname backdrop did not build: %s", tostring(naming))
     end
   end
 

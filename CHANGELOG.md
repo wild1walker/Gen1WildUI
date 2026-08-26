@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0
+
+Follows two of its mods; everything else here is already on its newest release.
+Each brings one new row, and each appears in the menu on its own — the bundle
+reads every feature's schema at load, so an upstream that adds an option needs
+no change here. No key was renamed or removed.
+
+- **BATTLE MENUS** → [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI)
+  1.4.0. The level-up stat box no longer comes up over a blank chat box: the
+  line announcing the level was being dismissed and cleared before the window
+  was pushed, so the second screen had nothing on it saying what the numbers
+  belonged to. New row: `LEVEL-UP BOX`, on.
+- **POKEDEX** → [Gen1Dex](https://github.com/wild1walker/Gen1Dex) 1.5.0. A new
+  catch asks for its nickname over the dex entry rather than over a blank white
+  screen. New row: `NAME IN PLACE`, on.
+
 ## 1.3.0
 
 Follows [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) to **1.2.0**

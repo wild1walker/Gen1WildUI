@@ -3,9 +3,9 @@
 -- mod.find. Do not edit; rebuild.
 return {
   ["Gen1Arena"] = "0.18.3",
-  ["Gen1BattleUI"] = "1.3.0",
+  ["Gen1BattleUI"] = "1.4.0",
   ["Gen1BillsBox"] = "1.2.0",
-  ["Gen1Dex"] = "1.4.0",
+  ["Gen1Dex"] = "1.5.0",
   ["Gen1MenuManager"] = "0.2.6",
   ["Gen1ModMenu"] = "0.8.1",
   ["Gen1ModernBag"] = "1.9.4",

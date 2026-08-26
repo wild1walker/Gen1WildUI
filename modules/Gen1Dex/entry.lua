@@ -196,6 +196,15 @@ return function(mod, DexData, C)
   Entry.__index = Entry
   Entry.isOpaque = true
 
+  -- The instance the last open built.  Published because the nickname prompt
+  -- after a catch draws the page it just closed rather than the white field
+  -- (naming.lua), and drawing THE SAME SCREEN is what keeps that backdrop from
+  -- being a second dex entry built to look like the first: the page the player
+  -- left it on is the page that comes back, no cry plays twice, and no sprite
+  -- is loaded twice.  One screen is held, which is one sprite -- and it is the
+  -- screen that was on the display a frame ago either way.
+  local recent
+
   local function resolveArgs(arg)
     if type(arg) == "table" then
       return arg.species or arg[1], arg.forceOwned and true or false
@@ -213,6 +222,7 @@ return function(mod, DexData, C)
       crystalRoot = crystalRoot(),
     }, Entry)
     self:setSpecies(species, false)
+    recent = self
     -- the cry the vanilla page plays on the way in; the species stepper plays
     -- it again on every step, which is what makes stepping feel like opening
     Sound.playCry(game.data, species)
@@ -615,5 +625,8 @@ return function(mod, DexData, C)
   Entry.PAGES = PAGES
   Entry.PAGE_INDEX = PAGE_INDEX
 
-  return { new = Entry.new }
+  -- Only `new` is registered (main.lua narrows this table down to it): the
+  -- screens registry types its record as exactly that one field, and `recent`
+  -- is for this mod's own siblings rather than for the engine.
+  return { new = Entry.new, recent = function() return recent end }
 end
