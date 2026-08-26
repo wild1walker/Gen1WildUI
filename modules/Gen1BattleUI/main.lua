@@ -103,10 +103,18 @@ return function(mod)
     -- plain black.  Off is plain black everywhere.
     { key = "type_colour", type = "toggle", label = "TYPE COLOUR",
       default = true },
+    -- The XP bar under the player's Pokemon: Gen 2 has one in its own HUD and
+    -- Gen 1 does not.  It was Gen1WildQOL's until this release; it is here
+    -- because it is a battle UI feature and this is the battle UI mod, and
+    -- because over there it could not be stopped from drawing across the move
+    -- panel.  See xpbar.lua.  On, which is what it was over there.
+    { key = "xp_bar", type = "toggle", label = "XP BAR",
+      default = true },
   })
 
   local makeChrome = loadSibling(mod, "chrome.lua")
   local makeGrid = loadSibling(mod, "grid.lua")
+  local makeXP = loadSibling(mod, "xpbar.lua")
 
   local C = makeChrome(mod)
   if type(C) ~= "table" then
@@ -117,6 +125,11 @@ return function(mod)
   local Grid = makeGrid(mod, C)
   if not (type(Grid) == "table" and type(Grid.draw) == "function") then
     error("grid.lua did not build the button grid", 0)
+  end
+
+  local XP = makeXP(mod, C)
+  if not (type(XP) == "table" and type(XP.draw) == "function") then
+    error("xpbar.lua did not build the XP bar", 0)
   end
 
   if not (type(mod.hooks) == "table" and type(mod.hooks.wrap) == "function") then
@@ -179,8 +192,21 @@ return function(mod)
   --
   -- It is the ONLY hook here that insists on an order.  The other two answer
   -- questions and take the rest of the chain's answer with them.
+  --
+  -- The XP bar goes down FIRST and the grid second, and that order is the
+  -- whole of how the bar stops lying across the move panel.  While it lived
+  -- in another mod it was drawn by a wrapper around battle.draw, which runs
+  -- after every link on this hook however high a priority they carry, so it
+  -- could only clip itself -- to x=88, the vanilla panel's edge, while this
+  -- mod's panel ends at 112.  Two files in one function have nothing to
+  -- negotiate: the panel covers the bar because it is drawn after it, and a
+  -- panel that changes width takes the covering with it.
   mod.hooks:wrap("battle.overlay", function(next, battle)
     next(battle)
+    local okBar, barProblem = pcall(XP.draw, battle)
+    if not okBar then
+      warn("Gen1BattleUI could not draw the XP bar: %s", tostring(barProblem))
+    end
     local ok, problem = pcall(Grid.draw, battle)
     if not ok then
       warn("Gen1BattleUI could not draw the battle menu: %s", tostring(problem))
@@ -197,4 +223,13 @@ return function(mod)
   mod.exports.geometry = Grid.geometry
   mod.exports.owns = Grid.owns
   mod.exports.parked = Grid.parked
+  -- The one export that exists for another mod rather than for the suite.
+  -- battle.overlay is the last hook INSIDE BattleState:draw, so a mod that
+  -- wraps battle.draw itself draws after every link on it however high the
+  -- priority -- which is why the EXP bar sat on this panel through a whole
+  -- release that thought priority had settled it.  A neighbour in that
+  -- position cannot be out-drawn, only told, so this says where the panel is
+  -- and lets it clip.
+  mod.exports.panelRect = Grid.panelRect
+  mod.exports.expPixels = XP.pixels
 end

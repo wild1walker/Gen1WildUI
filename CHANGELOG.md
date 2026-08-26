@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.5
+
+**BATTLE MENUS** (Gen1BattleUI 1.2.2 → 1.3.0) — the **XP bar moves into this
+bundle**, from Gen1WildQOL. It is a battle UI feature and this is the battle
+UI half, and the move is what finally stops the bar lying across the move
+panel: over there it was drawn by a wrapper around `battle.draw`, which runs
+after every `battle.overlay` link whatever priority they carry, so it could
+not be drawn over and clipped itself to `x=88` — where the *vanilla* panel
+ends, while Gen1BattleUI's ends at 112. Now the bar and the grid are drawn by
+one function, bar first, so the panel covers it and keeps covering it if its
+width ever changes. Its row is `XP BAR`, on, under `BATTLE MENUS`.
+
+**Update Gen1WildQOL to 1.3.0 alongside this.** That is the release that drops
+its own copy; run 1.2.x of it with this and both bars draw, with the old one
+back on top of the panel.
+
+Also from that release: `panelRect` is published for anything that draws after
+the battle menus and must not be drawn over, and the mod's published tile
+geometry is now the table its drawing actually reads rather than a stale copy
+of it.
+
 ## 1.2.4
 
 **BATTLE MENUS** (Gen1BattleUI 1.2.1 → 1.2.2) — the type colour is in the

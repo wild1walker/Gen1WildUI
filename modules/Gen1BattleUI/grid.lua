@@ -340,11 +340,15 @@ return function(mod, C)
   -- thing this panel exists to prevent, so narrower is wrong however much
   -- tidier it looks.
   --
-  -- It is still 48 pixels short of the full width it used to run to, which is
-  -- what keeps the EXP bar another mod draws under the player's HUD -- from
-  -- about x=98 -- mostly beside the panel rather than across it.  The last
-  -- stretch of that bar does still cross the PP row, in white space to the
-  -- right of the numbers; closing that gap entirely would mean cutting names.
+  -- It is still 48 pixels short of the full width it used to run to, and for
+  -- a while that was offered here as what keeps another mod's EXP bar beside
+  -- the panel rather than across it.  It is not, and hoping was the bug:
+  -- Gen1WildQOL's bar clips itself to x=88 while a move menu is up, because
+  -- 88 is where the VANILLA panel ends, and this one ends at 112.  The
+  -- twenty-four pixels between are the blue line lying across the PP row.
+  --
+  -- Nothing this file can do about it from in here -- see Grid.panelRect for
+  -- why drawing later is not the answer, and for what is.
   --
   -- mimicSelect keeps its own wider box: WHICH TECHNIQUE? is sixteen glyphs
   -- and has to go somewhere.
@@ -545,9 +549,12 @@ return function(mod, C)
     classic = {
       boxes = CLASSIC_BOXES, boxW = 10, boxH = 3,
       handTiles = 1, labelTiles = 7,
-      -- the vanilla box each panel stands in for, in tile coordinates
-      panel = { moveSelect = { tx = 0, ty = 8, tw = 11, th = 5 },
-                mimicSelect = { tx = 0, ty = 7, tw = 18, th = 6 } },
+      -- the panel each move screen draws, in tile coordinates.  Read from
+      -- PANEL rather than written out again: a second copy of these numbers
+      -- is a second copy to forget, and this one WAS forgotten -- it still
+      -- said the eleven tiles of 1.1.1 after 1.2.1 made the box fourteen,
+      -- which is exactly the width a neighbour needs to be right about.
+      panel = PANEL,
     },
     wide = {
       row = 13, th = 5,
@@ -559,6 +566,38 @@ return function(mod, C)
       panel = { tx = 28, tw = 10 },
     },
   }
+
+  -- ------- where the panel is, for whoever draws after this mod
+  --
+  -- battle.overlay is the last hook inside BattleState:draw, and a mod that
+  -- wraps battle.draw itself -- Gen1WildQOL's XP bar does -- draws after ALL
+  -- of it, whatever priority anything on the hook carries.  So a neighbour
+  -- that must not be drawn over cannot be beaten by drawing later; it has to
+  -- be told, and this is the telling.
+  --
+  -- Game pixels, not tiles, because that is what a clip is done in.  nil
+  -- means nothing of this mod's is up there for this battle right now --
+  -- MOVE PANEL off, a phase with no panel, a state this mod does not own --
+  -- and a caller that gets nil should not clip at all rather than fall back
+  -- to the vanilla box, which this mod is not drawing either.
+  function Grid.panelRect(battle)
+    if type(battle) ~= "table" or not battle.isBattle then return nil end
+    if not (Grid.owns(battle) or Grid.parked(battle)) then return nil end
+    if upstream[battle] == false then return nil end
+    if not C.option("move_panel", true) then return nil end
+    if battle:wideLayout() then
+      -- the wide panel is the ten tiles on the right of the strip, which is
+      -- where that layout's own panel already was
+      if battle.phase ~= "moveSelect" and battle.phase ~= "mimicSelect" then
+        return nil
+      end
+      return { x = 28 * 8, y = 13 * 8, w = 10 * 8, h = 5 * 8 }
+    end
+    local spec = PANEL[battle.phase]
+    if not spec then return nil end
+    return { x = spec.tx * 8, y = spec.ty * 8,
+             w = spec.tw * 8, h = spec.th * 8 }
+  end
 
   return Grid
 end

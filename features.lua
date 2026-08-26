@@ -88,7 +88,7 @@ return {
       dir = "Gen1BattleUI",
       entry = "main.lua",
       label = "BATTLE MENUS",
-      description = "THE BATTLE COMMAND AND MOVE MENUS AS FOUR BUTTONS IN A 2X2 GRID INSTEAD OF A LIST.",
+      description = "THE BATTLE COMMAND AND MOVE MENUS AS FOUR BUTTONS IN A 2X2 GRID INSTEAD OF A LIST, PLUS THE BATTLE XP BAR.",
       -- No master row of its own to donate: MOVE PANEL is a setting within
       -- the grid, not a switch for it, and the mod is the grid. So the
       -- bundle synthesizes one and gates installation with it, which is why
