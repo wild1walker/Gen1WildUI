@@ -260,6 +260,7 @@ def check_shared(problems: Problems, features: list[dict], quiet: bool) -> None:
             print("  shared:     none declared")
         return
 
+    claimed_by: dict[str, str] = {}
     for fid, feature in sorted(shared.items()):
         declaration = feature["shared"]
         label = feature.get("label", fid)
@@ -270,6 +271,19 @@ def check_shared(problems: Problems, features: list[dict], quiet: bool) -> None:
                     "the two bundles cannot agree on "
                     + ("which of them installs it"
                        if field == "claim" else "where its settings live"))
+
+        # Two shared features sharing a claim key is a copy-paste bug that
+        # does not fail loudly: the first feature to claim it locks the
+        # second one out of the *other* bundle, so whichever bundle loses
+        # the race silently ships one feature short.
+        claim = declaration.get("claim")
+        if claim:
+            if claim in claimed_by and claimed_by[claim] != label:
+                problems.error(
+                    f"{label} and {claimed_by[claim]} both claim {claim!r}; "
+                    "each shared feature needs its own claim key or one of "
+                    "them will never install")
+            claimed_by[claim] = label
 
     # The paired bundle, if it is checked out beside this one.
     paired_name = "Gen1WildUI" if ROOT.name == "Gen1WildQOL" else "Gen1WildQOL"

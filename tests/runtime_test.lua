@@ -844,6 +844,58 @@ do
   _G.__test_shared_installs, _G.__test_shared_by = nil, nil
 end
 
+-- ------------------------------------- two shared features, claimed apart
+
+do
+  io.write("MENU LAYOUT and MOD MANAGER are claimed independently\n")
+
+  local Claims = load_("runtime/claims.lua")
+
+  -- The two real shared features, with the claim keys features.lua gives
+  -- them. They are both in both bundles, and each must be settled on its own:
+  -- a shared claim key would let one feature lock the other out.
+  local menus = {
+    id = "menus", label = "MENU LAYOUT", dir = "Gen1MenuManager",
+    shared = { claim = "gen1wild_menu_manager", storage = "gen1_wild_shared",
+               owner = "gen1_wild_ui" },
+  }
+  local modmenu = {
+    id = "modmenu", label = "MOD MANAGER", dir = "Gen1ModMenu",
+    shared = { claim = "gen1wild_mod_menu", storage = "gen1_wild_shared",
+               owner = "gen1_wild_ui" },
+  }
+
+  ok(menus.shared.claim ~= modmenu.shared.claim,
+     "the two features do not share a claim key")
+
+  local qol = fakeMod("gen1_wild_qol")
+  local ui = fakeMod("gen1_wild_ui")
+  local table_ = {}
+
+  -- QOL loads first and takes both, because it declares both.
+  ok(Claims.take(qol, menus, table_), "QOL claims MENU LAYOUT")
+  ok(Claims.take(qol, modmenu, table_), "and MOD MANAGER as well")
+
+  -- UI, loading second, defers both -- and neither claim interferes with the
+  -- other's answer.
+  local menusMine, menusHolder = Claims.take(ui, menus, table_)
+  local modMine, modHolder = Claims.take(ui, modmenu, table_)
+  eq(menusMine, false, "UI defers MENU LAYOUT")
+  eq(menusHolder, "gen1_wild_qol", "to whoever took it")
+  eq(modMine, false, "and defers MOD MANAGER")
+  eq(modHolder, "gen1_wild_qol", "likewise")
+
+  -- Claiming one must never settle the other. If the two shared a key, this
+  -- is the assertion that would fail: MOD MANAGER would come back already
+  -- held on a table where only MENU LAYOUT had been claimed.
+  local partial = {}
+  ok(Claims.take(qol, menus, partial), "claiming MENU LAYOUT on a fresh table")
+  ok(Claims.take(ui, modmenu, partial),
+     "leaves MOD MANAGER free for the other bundle to take")
+  eq(partial["gen1wild_menu_manager"], "gen1_wild_qol", "each key records its own holder")
+  eq(partial["gen1wild_mod_menu"], "gen1_wild_ui", "independently of the other")
+end
+
 -- ------------------------------------------------------------------ done
 
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))
