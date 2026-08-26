@@ -21,10 +21,16 @@ itself. Nothing is all-or-nothing.
 | **POKEMON BOX** | [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) — Bill's PC as the box it stood in for: party left, twenty slots right |
 | **PARTY MENU** | [Gen1Party](https://github.com/wild1walker/Gen1Party) — every Pokémon in its own species colours instead of six sharing one |
 | **BAG** | [Gen1ModernBag](https://github.com/wild1walker/Gen1ModernBag) — seven pockets, auto-sorting, favorites, search, no capacity limit |
-| **MENU LAYOUT** | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) — reorder the START and PC menus, hide rows, pin field moves |
-| **MOD MANAGER** | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) — the mod manager redrawn in the game's own OPTION-screen idiom |
+| **MENU LAYOUT** † | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) — reorder the START and PC menus, hide rows, pin field moves |
+| **MOD MANAGER** † | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) — the mod manager redrawn in the game's own OPTION-screen idiom |
 
 All seven ship on.
+
+† Also in [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL). These two
+are not really visual overhauls — they are the furniture everything else is
+reached through — so both halves carry them and neither loses them. Install
+both bundles and exactly one of them sets it up; see
+[Features in both bundles](#features-in-both-bundles).
 
 ## The menu
 
@@ -68,6 +74,35 @@ Two things are worth knowing:
   bundle's prefix. The runtime keeps both spellings in step, so those rows
   behave the same whether they are set from its own quick menu or from this
   bundle's.
+
+## Features in both bundles
+
+`MENU LAYOUT` and `MOD MANAGER` are in Gen1WildQOL too. They are how every
+other feature is reached — the START menu, the PC menu, the mod manager itself
+— so neither half is the right place to put them and neither half should go
+without.
+
+Both bundles would install them twice, and neither mod guards against that:
+Gen1ModMenu would wrap the manager screen around its own wrapper, and
+Gen1MenuManager would apply its row order to an order it had already applied.
+So the two bundles agree on who does it. The first to load claims the feature
+through a table parked on a shared engine module; the second sees the claim and
+stands down, and its menu row says where the settings are:
+
+```
+GEN1WILD UI
+  MOD MANAGER     ON (SET UP IN GEN1WILD QOL)
+```
+
+The switch on that row is still the real switch — settings for a shared feature
+are stored under `gen1_wild_shared` rather than under either bundle, so both
+menus read and write the same values, and installing the other half later does
+not reset anything.
+
+Which bundle wins does not matter and is not forced: both carry the same mod
+pinned at the same version. `tools/check.py` cross-checks the declaration
+against the other repo when it is checked out beside this one, because getting
+it wrong in one of them fails silently.
 
 ## Installing
 
@@ -115,6 +150,7 @@ runtime/              how a bundle hosts a mod written to be standalone
   facade.lua            the `mod` object each feature is handed instead
   optionset.lua         one options table for mods that each expected to own it
   registry.lua          mod.find, across features and across both bundles
+  claims.lua            who installs a feature that is in both bundles
   menu.lua              the OPTION screens
   bundle.lua            the order all of the above happens in
 adapters/             per-feature bundle glue, run after a feature installs

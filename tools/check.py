@@ -81,20 +81,24 @@ def check_lua_syntax(problems: Problems, quiet: bool) -> int:
 
 
 def parse_features(problems: Problems) -> list[dict]:
+    return _parse(FEATURES, problems)
+
+
+def _parse(path: Path, problems: Problems) -> list[dict]:
     """Scan features.lua for the fields this checker needs.
 
     Deliberately a scan and not a parser: the file is Lua and this is Python.
     A field it cannot see is a field it does not check, which is the right
     failure mode for a lint.
     """
-    if not FEATURES.exists():
-        problems.error("features.lua is missing")
+    if not path.exists():
+        problems.error(f"{path.name} is missing")
         return []
 
-    text = FEATURES.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
     start = text.find("features = {")
     if start < 0:
-        problems.error("features.lua has no `features = {` table")
+        problems.error(f"{path.name} has no `features = {{` table")
         return []
 
     features: list[dict] = []
@@ -125,6 +129,10 @@ def parse_features(problems: Problems) -> list[dict]:
                 match = re.search(r'enabledKey\s*=\s*"([^"]+)"', stripped)
                 if match:
                     current["enabledKey"] = match.group(1)
+            for field in ("claim", "storage", "owner"):
+                match = re.search(field + r'\s*=\s*"([^"]+)"', stripped)
+                if match:
+                    current.setdefault("shared", {})[field] = match.group(1)
 
             depth += opens - closes
             if depth <= 0:
@@ -134,7 +142,7 @@ def parse_features(problems: Problems) -> list[dict]:
                 depth = 0
 
     if not features:
-        problems.error("features.lua listed no features")
+        problems.error(f"{path.name} listed no features")
     return features
 
 
@@ -236,6 +244,70 @@ def check_option_keys(problems: Problems, features: list[dict], quiet: bool) -> 
         print(f"  option keys: {total} scanned, {len(owners)} distinct after prefixing")
 
 
+def check_shared(problems: Problems, features: list[dict], quiet: bool) -> None:
+    """A feature carried by both bundles has to be declared the same in both.
+
+    The claim key is what stops the two bundles installing it twice, and the
+    storage id is what stops its settings moving when the other bundle wins.
+    Get either wrong in one repo and the failure is silent: two mod managers
+    wrapped around each other, or a menu layout that resets when the player
+    installs the other half. So the declaration here is checked against the
+    paired bundle's, when that repo is a sibling on disk.
+    """
+    shared = {f["id"]: f for f in features if f.get("shared")}
+    if not shared:
+        if not quiet:
+            print("  shared:     none declared")
+        return
+
+    for fid, feature in sorted(shared.items()):
+        declaration = feature["shared"]
+        label = feature.get("label", fid)
+        for field in ("claim", "storage"):
+            if field not in declaration:
+                problems.error(
+                    f"{label}: shared features need a {field!r}; without it "
+                    "the two bundles cannot agree on "
+                    + ("which of them installs it"
+                       if field == "claim" else "where its settings live"))
+
+    # The paired bundle, if it is checked out beside this one.
+    paired_name = "Gen1WildUI" if ROOT.name == "Gen1WildQOL" else "Gen1WildQOL"
+    paired = ROOT.parent / paired_name / "features.lua"
+    if not paired.exists():
+        if not quiet:
+            print(f"  shared:     {len(shared)} declared "
+                  f"({paired_name} not on disk; cross-check skipped)")
+        return
+
+    other_problems = Problems()
+    other = {f["id"]: f for f in _parse(paired, other_problems) if f.get("shared")}
+
+    for fid, feature in sorted(shared.items()):
+        label = feature.get("label", fid)
+        twin = other.get(fid)
+        if twin is None:
+            problems.error(
+                f"{label}: declared shared here but {paired_name} has no "
+                f"feature {fid!r}; a shared feature must be in both bundles")
+            continue
+        for field in ("claim", "storage"):
+            mine = feature["shared"].get(field)
+            theirs = twin["shared"].get(field)
+            if mine != theirs:
+                problems.error(
+                    f"{label}: shared.{field} is {mine!r} here and "
+                    f"{theirs!r} in {paired_name}; they must match")
+        if feature.get("dir") != twin.get("dir"):
+            problems.error(
+                f"{label}: built from {feature.get('dir')!r} here and "
+                f"{twin.get('dir')!r} in {paired_name}")
+
+    if not quiet:
+        print(f"  shared:     {len(shared)} declared, cross-checked "
+              f"against {paired_name}")
+
+
 def check_manifest(problems: Problems, quiet: bool) -> None:
     if not MANIFEST.exists():
         problems.error("manifest.json is missing")
@@ -280,6 +352,7 @@ def main() -> int:
     features = parse_features(problems)
     check_features(problems, features, args.quiet)
     check_option_keys(problems, features, args.quiet)
+    check_shared(problems, features, args.quiet)
     check_manifest(problems, args.quiet)
 
     for warning in problems.warnings:

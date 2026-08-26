@@ -26,6 +26,10 @@
 --                the order these mods were built and tested against.  It is
 --                deliberately independent of the order they are written here,
 --                which is the order the menu reads them in.
+--   shared       this feature is carried by both bundles.  Exactly one may
+--                install it, so the first to load claims it and the other
+--                stands down; `storage` is the id its settings live under, so
+--                they do not move when the winner does.  See runtime/claims.lua.
 --   raw_option_keys  rows this feature writes by calling the engine's mod
 --                manager, which does not know about prefixes
 
@@ -105,7 +109,17 @@ return {
       aliases = { "Gen1ModernBag", "gen1_modern_bag" },
     },
 
-    -- ---- the menus around them
+    -- ---- the furniture
+    --
+    -- These two are in Gen1WildQOL as well, and deliberately.  They are not
+    -- really visual overhauls: they are how every other feature is reached.
+    -- A player who installs only the QOL half should not lose the mod manager
+    -- redraw, and one who installs only this half should not lose it either
+    -- -- so both carry them, and runtime/claims.lua makes sure only one of
+    -- them ever installs one.
+    --
+    -- Their settings are stored under `gen1_wild_shared` rather than under
+    -- either bundle, so which one won is invisible to the player.
 
     {
       id = "menus",
@@ -116,6 +130,11 @@ return {
       description = "REORDER THE START AND PC MENUS, HIDE ROWS YOU NEVER TOUCH, AND PIN FIELD MOVES TO ROWS OF THEIR OWN.",
       default = true,
       aliases = { "Gen1MenuManager" },
+      shared = {
+        claim = "gen1wild_menu_manager",
+        storage = "gen1_wild_shared",
+        owner = "gen1_wild_ui",
+      },
     },
 
     {
@@ -132,6 +151,11 @@ return {
       -- them unprefixed.  Naming them keeps both spellings in step; see
       -- runtime/optionset.lua.
       raw_option_keys = { "sort", "hide_disabled", "only_options" },
+      shared = {
+        claim = "gen1wild_mod_menu",
+        storage = "gen1_wild_shared",
+        owner = "gen1_wild_ui",
+      },
     },
   },
 }

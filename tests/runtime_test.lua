@@ -159,6 +159,11 @@ local function load_(path, ...)
   return chunk(...)
 end
 
+-- runtime/claims.lua parks its table on an engine module, and the engine is
+-- not here.  Stand one in, so the sharing tests exercise the real lookup
+-- rather than only its fallback.
+package.loaded["src.mods.ManagerState"] = { openOptions = function() end }
+
 local OptionSet = load_("runtime/optionset.lua")
 local Facade = load_("runtime/facade.lua")
 local Registry = load_("runtime/registry.lua")
@@ -635,6 +640,208 @@ do
 
   _G.__test_ran, _G.__test_chunkarg, _G.__test_returner = nil, nil, nil
   _G.__test_skipped_ran = nil
+end
+
+-- ------------------------------------------- features carried by both bundles
+
+do
+  io.write("a feature in both bundles is installed by exactly one of them\n")
+
+  local Claims = load_("runtime/claims.lua")
+
+  local claims, host = Claims.table()
+  ok(claims, "a shared claim table was found")
+  ok(host, "parked on an engine module (" .. tostring(host) .. ")")
+
+  -- Both bundles requiring the module get the same table; that is the whole
+  -- mechanism, so prove it rather than assume it.
+  local again = Claims.table()
+  eq(again, claims, "requiring it again returns the same table")
+
+  local feature = {
+    id = "modmenu", label = "MOD MANAGER", dir = "Gen1ModMenu",
+    shared = { claim = "gen1wild_mod_menu", storage = "gen1_wild_shared",
+               owner = "gen1_wild_ui" },
+  }
+
+  local qol = fakeMod("gen1_wild_qol")
+  local ui = fakeMod("gen1_wild_ui")
+
+  -- Whoever loads first takes it.
+  local firstMine, firstHolder = Claims.take(qol, feature, claims)
+  ok(firstMine, "the first bundle to load claims the feature")
+  eq(firstHolder, nil, "and is not told to stand down")
+
+  local secondMine, secondHolder = Claims.take(ui, feature, claims)
+  eq(secondMine, false, "the second bundle does not install it again")
+  eq(secondHolder, "gen1_wild_qol", "and is told who did")
+
+  -- Re-entering is idempotent: the holder claiming again still holds it.
+  local againMine = Claims.take(qol, feature, claims)
+  ok(againMine, "the holder re-claiming its own feature still installs")
+
+  -- The order is symmetric: whichever loads first wins.
+  local fresh = {}
+  ok(Claims.take(ui, feature, fresh), "loaded the other way round, UI claims it")
+  eq(Claims.take(qol, feature, fresh), false, "and QOL stands down")
+
+  -- With no shared table at all the two bundles cannot talk, so the declared
+  -- owner is the only one that installs.  A double install is the failure
+  -- worth avoiding; a missing feature is the lesser one.
+  ok(Claims.take(ui, feature, nil), "with no shared table the owner installs")
+  eq(Claims.take(qol, feature, nil), false, "and the non-owner stands down")
+
+  -- A feature with no owner declared falls back to installing, because
+  -- nothing else in the bundle is shared and there is nothing to collide with.
+  local solo = { id = "sprint", label = "SPRINT", dir = "Gen1Sprint",
+                 shared = { claim = "solo" } }
+  ok(Claims.take(qol, solo, nil), "an unowned shared feature installs anyway")
+end
+
+do
+  io.write("a shared feature's settings do not move when the winner does\n")
+
+  -- The point of `shared.storage`: install one bundle, set the row, install
+  -- the other, and the setting is still there even though a different bundle
+  -- is now the one hosting the feature.
+  local feature = {
+    id = "modmenu", label = "MOD MANAGER", dir = "Gen1ModMenu",
+    shared = { claim = "gen1wild_mod_menu", storage = "gen1_wild_shared" },
+  }
+
+  local game = { save = { options = { modOptions = {} } } }
+  function game:writeOptions() end
+
+  local function bundleFor(id)
+    local mod = fakeMod(id)
+    local optionset = OptionSet.new()
+    optionset.resolveGame = function() return game end
+    optionset.master(feature)
+    optionset.adopt(feature, {
+      { key = "sort", type = "choice", label = "SORT", default = "name",
+        choices = { { "NAME", "name" }, { "CATEGORY", "category" } } },
+    })
+    return mod, optionset
+  end
+
+  local qolMod, qolOptions = bundleFor("gen1_wild_qol")
+  qolOptions.write(qolMod, "modmenu_sort", "category", game)
+
+  eq(game.save.options.modOptions["gen1_wild_shared"]["modmenu_sort"], "category",
+     "the value is stored under the shared id, not the bundle's")
+  eq(game.save.options.modOptions["gen1_wild_qol"], nil,
+     "nothing was written to the bundle's own bucket")
+
+  -- The other bundle, loading later and hosting the feature this time.
+  local uiMod, uiOptions = bundleFor("gen1_wild_ui")
+  eq(uiOptions.read(uiMod, "modmenu_sort"), "category",
+     "the other bundle reads the same value back")
+
+  -- The master switch is shared too, so either menu's row is the same switch.
+  uiOptions.write(uiMod, "modmenu_enabled", false, game)
+  eq(qolOptions.read(qolMod, "modmenu_enabled"), false,
+     "switching it off in one bundle switches it off in the other")
+
+  -- A feature that is not shared keeps its own bundle's bucket.
+  local plain = { id = "sprint", label = "SPRINT", dir = "Gen1Sprint" }
+  qolOptions.master(plain)
+  qolOptions.adopt(plain, {
+    { key = "speed", type = "choice", label = "SPEED", default = "2",
+      choices = { { "2x", "2" }, { "3x", "3" } } },
+  })
+  qolOptions.write(qolMod, "sprint_speed", "3", game)
+  eq(game.save.options.modOptions["gen1_wild_qol"]["sprint_speed"], "3",
+     "an unshared row still lives under its own bundle")
+  eq(game.save.options.modOptions["gen1_wild_shared"]["sprint_speed"], nil,
+     "and not in the shared bucket")
+end
+
+-- ------------------------------- both bundles loading, as the player has them
+
+do
+  io.write("with both bundles installed the shared feature installs once\n")
+
+  local Bundle = load_("runtime/bundle.lua", function(name)
+    return load_("runtime/" .. name .. ".lua")
+  end)
+
+  local sharedFeatureSource = [[
+    return function(mod)
+      mod.options:define({
+        { key = "sort", type = "choice", label = "SORT", default = "name",
+          choices = { { "NAME", "name" }, { "CATEGORY", "category" } } },
+      })
+      _G.__test_shared_installs = (_G.__test_shared_installs or 0) + 1
+      _G.__test_shared_by = mod.id
+    end
+  ]]
+
+  local ownFeatureSource = [[
+    return function(mod)
+      mod.options:define({
+        { key = "flavour", type = "toggle", label = "FLAVOUR", default = true },
+      })
+    end
+  ]]
+
+  local function bundleOf(id, label, screen, paired, ownDir)
+    local mod = fakeMod(id)
+    mod.files["modules/Shared/main.lua"] = sharedFeatureSource
+    mod.files["modules/" .. ownDir .. "/main.lua"] = ownFeatureSource
+    local spec = { id = id, menu_label = label, screen_id = screen,
+                   paired_bundle = paired }
+    local features = {
+      { id = "own", dir = ownDir, entry = "main.lua", label = "OWN",
+        default = true, priority = 100 },
+      { id = "shared", dir = "Shared", entry = "main.lua", label = "SHARED",
+        default = true, priority = 500,
+        shared = { claim = "test_shared_feature",
+                   storage = "gen1_wild_shared",
+                   owner = "gen1_wild_ui" } },
+    }
+    return mod, spec, features
+  end
+
+  _G.__test_shared_installs = 0
+
+  -- The engine loads QOL first: its manifest priority is lower.
+  local qolMod, qolSpec, qolFeatures =
+    bundleOf("gen1_wild_qol", "GEN1WILD QOL", "Gen1WildQOL", "gen1_wild_ui", "Sprint")
+  Bundle.install(qolMod, qolSpec, qolFeatures)
+
+  local uiMod, uiSpec, uiFeatures =
+    bundleOf("gen1_wild_ui", "GEN1WILD UI", "Gen1WildUI", "gen1_wild_qol", "Arena")
+  Bundle.install(uiMod, uiSpec, uiFeatures)
+
+  eq(_G.__test_shared_installs, 1,
+     "the shared feature was installed exactly once across both bundles")
+  eq(_G.__test_shared_by, "gen1_wild_qol", "by whichever loaded first")
+
+  eq(qolMod.exports.installed.shared, true, "the winner reports it installed")
+  eq(uiMod.exports.installed.shared, false, "the other reports it did not")
+  eq(uiMod.exports.deferred.shared, "gen1_wild_qol",
+     "and names who did, so the menu can say so")
+  eq(qolMod.exports.deferred.shared, nil, "the winner defers nothing")
+
+  -- Each bundle's own features are unaffected by any of this.
+  eq(qolMod.exports.installed.own, true, "the QOL bundle's own feature installed")
+  eq(uiMod.exports.installed.own, true, "and so did the UI bundle's")
+
+  -- Both bundles still carry the master row, so the switch is reachable from
+  -- either menu -- and both point at the same stored value.
+  local function keys(defined)
+    local out = {}
+    for _, row in ipairs(defined) do out[row.key] = true end
+    return out
+  end
+  ok(keys(qolMod.defined)["shared_enabled"], "the winner defines the master row")
+  ok(keys(uiMod.defined)["shared_enabled"],
+     "and so does the bundle that stood down, so its menu has the switch")
+  ok(keys(qolMod.defined)["shared_sort"], "only the winner defines the settings")
+  eq(keys(uiMod.defined)["shared_sort"], nil,
+     "the other has no schema for them, having never run the feature")
+
+  _G.__test_shared_installs, _G.__test_shared_by = nil, nil
 end
 
 -- ------------------------------------------------------------------ done

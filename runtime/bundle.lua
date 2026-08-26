@@ -36,6 +36,7 @@ function Bundle.install(mod, spec, features)
   local Facade = assert(loadRuntime("facade"), "runtime/facade.lua did not load")
   local Registry = assert(loadRuntime("registry"), "runtime/registry.lua did not load")
   local Menu = assert(loadRuntime("menu"), "runtime/menu.lua did not load")
+  local Claims = assert(loadRuntime("claims"), "runtime/claims.lua did not load")
 
   local loader = Loader.new(mod)
   local optionset = OptionSet.new()
@@ -99,6 +100,26 @@ function Bundle.install(mod, spec, features)
     return a.index < b.index
   end)
 
+  -- ---- 1c. features carried by both bundles
+  --
+  -- Gen1ModMenu and Gen1MenuManager are in both halves, because they are the
+  -- furniture the rest is seen through and neither half should lose them.
+  -- Exactly one bundle may install one, and neither mod guards against being
+  -- installed twice, so the claim is taken here -- before anything runs --
+  -- and a bundle that loses it treats the feature as somebody else's.
+
+  local claims = Claims.table()
+  local deferred = {}
+  for _, feature in ipairs(active) do
+    if feature.shared then
+      local mine, holder = Claims.take(mod, feature, claims)
+      if not mine then
+        deferred[feature.id] = holder or "the other bundle"
+        feature.deferred_to = deferred[feature.id]
+      end
+    end
+  end
+
   -- ---- 2. run each feature
   --
   -- A feature whose switch is its own option row is always installed: its own
@@ -111,14 +132,21 @@ function Bundle.install(mod, spec, features)
   for _, ordered in ipairs(loadOrder) do
     local feature = ordered.feature
     local wanted = true
-    if not feature.live_toggle then
+    if deferred[feature.id] then
+      wanted = false
+    elseif not feature.live_toggle then
       local key = optionset.groups[feature.id].masterKey
       local stored = optionset.read(mod, key)
       wanted = stored ~= false
     end
 
     if not wanted then
-      mod.log:info("[%s] off; not installed", feature.label)
+      if deferred[feature.id] then
+        mod.log:info("[%s] installed by %s; not installing it twice",
+          feature.label, tostring(deferred[feature.id]))
+      else
+        mod.log:info("[%s] off; not installed", feature.label)
+      end
       installed[feature.id] = false
     else
       local facade = Facade.new(feature, context)
@@ -188,6 +216,7 @@ function Bundle.install(mod, spec, features)
     features = active,
     isGen2 = context.isGen2,
     customRows = context.customRows,
+    deferred = deferred,
   })
   for _, feature in ipairs(active) do
     menu.noteInstalled(feature, installed[feature.id] == true)
@@ -199,11 +228,18 @@ function Bundle.install(mod, spec, features)
   mod.exports.features = registry.table()
   mod.exports.bundle = spec.id
   mod.exports.installed = installed
+  mod.exports.deferred = deferred
   mod.exports.optionValue = function(key) return optionset.read(mod, key) end
 
-  local count = 0
+  local count, handedOver = 0, 0
   for _, ok in pairs(installed) do if ok then count = count + 1 end end
-  mod.log:info("%s: %d of %d features installed", spec.menu_label, count, #active)
+  for _ in pairs(deferred) do handedOver = handedOver + 1 end
+  if handedOver > 0 then
+    mod.log:info("%s: %d of %d features installed, %d left to the other bundle",
+      spec.menu_label, count, #active, handedOver)
+  else
+    mod.log:info("%s: %d of %d features installed", spec.menu_label, count, #active)
+  end
 
   return { optionset = optionset, registry = registry, menu = menu }
 end

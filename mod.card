@@ -16,6 +16,12 @@ return {
         .. "press of A away",
       "seven features drawn from seven mods, each of which remains its own "
         .. "repository and is pinned here as a submodule",
+      "MENU LAYOUT and MOD MANAGER, which Gen1WildQOL also carries. They "
+        .. "are the furniture every other feature is reached through, so "
+        .. "neither half goes without them. With both bundles installed the "
+        .. "first to load sets one up and the other stands down, and their "
+        .. "settings are stored under a shared id so they do not move when "
+        .. "the winner does",
     },
     changed = {
       "nothing about what any of these mods do. Each is vendored "

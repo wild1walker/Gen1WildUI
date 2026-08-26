@@ -211,6 +211,12 @@ function Menu.new(context)
           row = optionset.byKey[group.masterKey],
           label = feature.label,
           description = feature.description,
+          -- A feature the other bundle installed has no settings rows here:
+          -- its schema was never adopted, because it was never run. The
+          -- switch is still real -- it is stored under a shared id, so it is
+          -- the same switch the other bundle reads -- and that is what this
+          -- row offers.
+          deferredTo = context.deferred and context.deferred[feature.id],
           hasSettings = #(group.rows or {}) > 0
             or type(context.customRows and context.customRows[feature.id]) == "function",
         }
@@ -222,10 +228,20 @@ function Menu.new(context)
   -- A feature whose master switch only gates installation cannot come to life
   -- mid-session, so saying ON when nothing is installed would be a lie.  It
   -- reads ON* until the game is relaunched, and the footer says why.
+  local BUNDLE_NAMES = {
+    gen1_wild_qol = "GEN1WILD QOL",
+    gen1_wild_ui = "GEN1WILD UI",
+  }
+
   local function masterLabel(entry)
     local value = read(entry.key)
     local on = value ~= false
     local pending = restartPending[entry.feature.id]
+
+    if entry.deferredTo then
+      return (on and "ON" or "OFF") .. " (SET UP IN "
+        .. (BUNDLE_NAMES[entry.deferredTo] or "THE OTHER BUNDLE") .. ")"
+    end
 
     -- A feature whose master is one of its own rows and is not a plain toggle
     -- -- the area banner's master is its duration -- says what it is set to
@@ -293,7 +309,13 @@ function Menu.new(context)
 
       local function activate(entry)
         if entry.kind == "feature" then
-          if not entry.hasSettings then
+          if entry.deferredTo then
+            local where = BUNDLE_NAMES[entry.deferredTo] or "THE OTHER BUNDLE"
+            self.showText(screen.game,
+              entry.label .. " IS INSTALLED BY " .. where
+              .. ", WHICH IS ALSO INSTALLED. ITS SETTINGS ARE THERE. THE "
+              .. "SWITCH ON THIS ROW IS THE SAME SWITCH.")
+          elseif not entry.hasSettings then
             self.showText(screen.game, entry.description)
           elseif read(entry.key) ~= false then
             mod.ui.push(screen.game, featureScreenId(entry.feature))
@@ -389,6 +411,7 @@ function Menu.new(context)
 
       local function footerFor(entry)
         if entry.kind == "feature" then
+          if entry.deferredTo then return "A:INFO B:BACK" end
           if read(entry.key) ~= false and entry.hasSettings then
             return "A:CONFIGURE B:BACK"
           end
@@ -507,6 +530,10 @@ function Menu.new(context)
   -- the menu can tell a switch that needs a relaunch from one that does not.
   function self.noteInstalled(feature, installed)
     feature.installed = installed
+    -- A feature the other bundle owns is not pending anything here: this
+    -- bundle was never going to install it, so an asterisk would be
+    -- describing a relaunch that changes nothing on this side.
+    if context.deferred and context.deferred[feature.id] then return end
     if not feature.live_toggle then
       restartPending[feature.id] = installed
     end

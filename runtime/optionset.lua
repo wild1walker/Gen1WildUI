@@ -60,6 +60,11 @@ function OptionSet.new()
     -- writes through the engine's own mod manager rather than through
     -- mod.options.  See `raw_option_keys` in adopt().
     rawFallback = {},
+    -- prefixed key -> the id its value is stored under, when that is not the
+    -- bundle's own.  A feature carried by both bundles stores its settings
+    -- under a shared id so they stay put when the other bundle is the one
+    -- that installs it.  See `shared.storage` in features.lua.
+    storageId = {},
   }
 
   function self.prefixed(featureId, key)
@@ -89,6 +94,9 @@ function OptionSet.new()
     local key = self.prefixed(feature.id, feature.enabledKey or "enabled")
     g.masterKey = key
     g.masterIsLive = feature.enabledKey ~= nil
+    if feature.shared and feature.shared.storage then
+      self.storageId[key] = feature.shared.storage
+    end
 
     if not feature.enabledKey then
       local row = {
@@ -136,6 +144,9 @@ function OptionSet.new()
         -- fallback: a blanket one would undo the prefixing entirely for the
         -- five mods that all call a row `enabled`.
         if rawKeys[raw] then self.rawFallback[row.key] = raw end
+        if feature.shared and feature.shared.storage then
+          self.storageId[row.key] = feature.shared.storage
+        end
 
         -- `visible_if = { key = "enabled", equals = true }` means *this
         -- feature's* enabled, always.
@@ -210,12 +221,13 @@ function OptionSet.new()
   -- overworld.  Out-of-vocabulary reads fall back to the row default.
   function self.read(mod, key)
     local row = self.byKey[key]
+    local storedUnder = self.storageId[key] or mod.id
 
     local value
     local game = liveGame()
     local options = game and game.save and game.save.options
     if type(options) == "table" and type(options.modOptions) == "table" then
-      local bucket = options.modOptions[mod.id]
+      local bucket = options.modOptions[storedUnder]
       if type(bucket) == "table" then value = bucket[key] end
     end
     if value == nil and mod.options and type(mod.options.get) == "function" then
@@ -225,7 +237,7 @@ function OptionSet.new()
     local raw = self.rawFallback[key]
     if value == nil and raw then
       if type(options) == "table" and type(options.modOptions) == "table" then
-        local bucket = options.modOptions[mod.id]
+        local bucket = options.modOptions[storedUnder]
         if type(bucket) == "table" then value = bucket[raw] end
       end
       if value == nil and mod.options and type(mod.options.get) == "function" then
@@ -250,13 +262,14 @@ function OptionSet.new()
     game = game or liveGame()
     local options = game and game.save and game.save.options
     local raw = self.rawFallback[key]
-    local bucket = bucketOf(options, mod.id)
+    local storedUnder = self.storageId[key] or mod.id
+    local bucket = bucketOf(options, storedUnder)
     if bucket then
       bucket[key] = value
       if raw then bucket[raw] = value end
     end
     if game and type(game.mods) == "table" then
-      local mirror = bucketOf(game.mods, mod.id)
+      local mirror = bucketOf(game.mods, storedUnder)
       if mirror then mirror[key] = value end
     end
     if mod.options and type(mod.options.set) == "function" then

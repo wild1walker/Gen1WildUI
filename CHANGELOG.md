@@ -17,8 +17,12 @@ itself, with its own settings one press of A away:
 | POKEMON BOX | [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) | on |
 | PARTY MENU | [Gen1Party](https://github.com/wild1walker/Gen1Party) | on |
 | BAG | [Gen1ModernBag](https://github.com/wild1walker/Gen1ModernBag) | on |
-| MENU LAYOUT | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) | on |
-| MOD MANAGER | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) | on |
+| MENU LAYOUT † | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) | on |
+| MOD MANAGER † | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) | on |
+
+† Carried by Gen1WildQOL as well. With both bundles installed exactly one sets
+it up, and its settings live under a shared id so they do not move when the
+other bundle is the one that wins.
 
 ### Notes
 
