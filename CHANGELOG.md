@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0
+
+Adds **BATTLE INTRO**, from
+[gen1recomp-widescreen-battle-intro](https://github.com/ShaneMcGovernIE/gen1recomp-widescreen-battle-intro)
+by ShaneMcGovernIE — maintained in this repository from here on, like the two
+in Gen1WildQOL. It ships on.
+
+The battle intro's flash plays across the whole window instead of inside a
+centred 4:3 square, and the out-of-battle poison pulse with it. Two settings
+come with it, on the bundle's own screen rather than the engine's OPTIONS
+screen:
+
+| Row | Ships |
+|---|---|
+| `FLASHLESS INTROS` — every battle opens on the Champion fight's outward spiral | off |
+| `BLACK OUTRO` — a battle ends on a slow fade to black instead of the white flash | on |
+
+Both are the mod's own defaults, unchanged.
+
 ## 1.0.0
 
 First release. The visual half of the Gen1Wild index, consolidated into one

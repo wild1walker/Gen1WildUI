@@ -30,6 +30,9 @@
 --                install it, so the first to load claims it and the other
 --                stands down; `storage` is the id its settings live under, so
 --                they do not move when the winner does.  See runtime/claims.lua.
+--   adapter      a file under adapters/, run after the feature installs
+--   suppress_hooks  engine hooks the feature must not register, because the
+--                bundle surfaces that setting itself
 --   raw_option_keys  rows this feature writes by calling the engine's mod
 --                manager, which does not know about prefixes
 
@@ -56,6 +59,27 @@ return {
       enabledKey = "enabled",
       default = true,
       aliases = { "Gen1Arena", "gen1arena" },
+    },
+
+    {
+      id = "widescreen",
+      priority = 100,
+      dir = "WidescreenBattleIntro",
+      entry = "main.lua",
+      label = "BATTLE INTRO",
+      description = "THE BATTLE INTRO FLASH ACROSS THE WHOLE WINDOW INSTEAD OF A CENTRED 4:3 SQUARE, PLUS FLASHLESS INTROS AND A FADE TO BLACK.",
+      default = true,
+      aliases = { "widescreen_battle_intro", "WidescreenBattleIntro" },
+      -- Originally ShaneMcGovernIE's gen1recomp-widescreen-battle-intro,
+      -- maintained here now rather than tracked: the source is under
+      -- maintained/WidescreenBattleIntro and edits go straight in.
+      maintained = true,
+      -- It keeps its two settings in the save's own options rather than in a
+      -- mod.options schema, so the bundle does not try to move their storage
+      -- -- the adapter mirrors the rows onto the bundle's screen and the
+      -- upstream registration is suppressed, so each has one home.
+      adapter = "widescreen",
+      suppress_hooks = { ["ui.options.rows"] = true },
     },
 
     -- ---- the menus a player lives in

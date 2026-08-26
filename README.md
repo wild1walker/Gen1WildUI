@@ -1,9 +1,9 @@
 # Gen1WildUI
 
 **The visual half of the [Gen1Wild](https://github.com/wild1walker/Gen1Wild)
-suite, as one mod.** Seven features from seven repositories, each of which is
-still its own mod with its own releases — this bundles them, it does not fork
-them.
+suite, as one mod.** Eight features from eight sources. Seven are still their
+own mods with their own releases, tracked here and not forked; `BATTLE INTRO`
+began as somebody else's mod and is maintained in this repository now.
 
 Its other half is [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL),
 which carries the quality-of-life features. The two know about each other: a
@@ -17,6 +17,7 @@ itself. Nothing is all-or-nothing.
 | Feature | From |
 |---|---|
 | **BACKDROPS** | [Gen1Arena](https://github.com/wild1walker/Gen1Arena) — 2D backdrops behind battles, picked by map, tileset and how the encounter started |
+| **BATTLE INTRO** ‡ | originally [widescreen-battle-intro](https://github.com/ShaneMcGovernIE/gen1recomp-widescreen-battle-intro) — the intro flash across the whole window instead of a centred 4:3 square, plus flashless intros and a fade to black |
 | **POKEDEX** | [Gen1Dex](https://github.com/wild1walker/Gen1Dex) — a Pokémon beside every entry, base stats, evolutions, the full movelist, and an AREA screen |
 | **POKEMON BOX** | [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) — Bill's PC as the box it stood in for: party left, twenty slots right |
 | **PARTY MENU** | [Gen1Party](https://github.com/wild1walker/Gen1Party) — every Pokémon in its own species colours instead of six sharing one |
@@ -24,13 +25,18 @@ itself. Nothing is all-or-nothing.
 | **MENU LAYOUT** † | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) — reorder the START and PC menus, hide rows, pin field moves |
 | **MOD MANAGER** † | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) — the mod manager redrawn in the game's own OPTION-screen idiom |
 
-All seven ship on.
+All eight ship on.
 
 † Also in [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL). These two
 are not really visual overhauls — they are the furniture everything else is
 reached through — so both halves carry them and neither loses them. Install
 both bundles and exactly one of them sets it up; see
 [Features in both bundles](#features-in-both-bundles).
+
+‡ Maintained in this repository rather than tracked. The source is under
+`maintained/`, edits go straight in, and nothing syncs it from anywhere. The
+credit for what it does still belongs to the person named in
+[Credits](#credits).
 
 ## The menu
 
@@ -69,6 +75,10 @@ Two things are worth knowing:
 - **`PARTY MENU` reads `POKEDEX` and `POKEMON BOX`** when they are on, the same
   way it does when the three are installed separately. Switching either off
   changes what it can show.
+- **`BATTLE INTRO` is configured here.** It keeps `FLASHLESS INTROS` and
+  `BLACK OUTRO` in the save's own options and used to add them to the engine's
+  OPTIONS screen; the bundle rebuilds those two rows on its own screen instead,
+  so each setting has one home. Their defaults are the mod's own, unchanged.
 - **`MOD MANAGER` sets three of its own rows** (`SORT`, `HIDE OFF`,
   `W/OPTIONS`) through the engine's mod manager, which writes them without the
   bundle's prefix. The runtime keeps both spellings in step, so those rows
@@ -116,10 +126,18 @@ not carry over: they are stored under this bundle's id.
 
 ## How it stays up to date
 
-Each feature here is a git submodule under `upstream/`, pinned to a release.
-Nothing in this bundle is forked and nothing is hand-copied. (Gen1WildQOL also
-has a `maintained/` tree for two features it looks after itself; the same
-tooling handles both.)
+Source lives in one of two places, and which one says who looks after it:
+
+| | |
+|---|---|
+| `upstream/<Repo>/` | A submodule pinned to a release. Somebody else's mod, tracked, never edited here. |
+| `maintained/<Dir>/` | Source this repository looks after itself. Edited here; nothing syncs it. |
+
+`tools/build.py` copies from whichever applies into `modules/`, which is what
+the game reads. `tools/check.py` fails if a feature is in both, in neither, or
+declared as one and sitting in the other.
+
+For the tracked seven:
 
 ```sh
 git submodule update --init --recursive   # first time
@@ -157,7 +175,7 @@ runtime/              how a bundle hosts a mod written to be standalone
   bundle.lua            the order all of the above happens in
 adapters/             per-feature bundle glue, run after a feature installs
 upstream/<Repo>/      submodules; tracked, never edited here
-maintained/<Dir>/     source a bundle looks after itself (none here yet)
+maintained/<Dir>/     source this repository looks after itself
 modules/<Dir>/        built by tools/build.py; what the game loads
 tools/                build.py, sync.py, check.py
 tests/                headless coverage of the runtime seam
@@ -215,6 +233,9 @@ Everything here is somebody's work, and mostly not mine:
   kWharever, worldslayer608** and **knizz** — the *Battle Backgrounds Patch FR*
   art `BACKDROPS` draws. None of it was made for this mod, and its authors ask
   that the names travel with it.
+- **[ShaneMcGovernIE](https://github.com/ShaneMcGovernIE/gen1recomp-widescreen-battle-intro)**
+  — *Widescreen Battle Intro*, essentially whole. `BATTLE INTRO` is their mod
+  with the bundle's menu around it. Maintained here now, theirs by origin.
 - **[Gen1Recomp](https://github.com/bryanthaboi/gen1recomp)** and
   **[pret](https://github.com/pret)** — the engine and the disassemblies all of
   it stands on.

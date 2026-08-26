@@ -2,9 +2,9 @@
 -- by the loader's merge.
 return {
   summary = "The visual half of the Gen1Wild suite in one mod: battle "
-    .. "backdrops, the Pokedex, the box, the party menu, the bag, menu "
-    .. "layout and the mod manager. Every feature switches on and off by "
-    .. "itself.",
+    .. "backdrops, the battle intro, the Pokedex, the box, the party menu, "
+    .. "the bag, menu layout and the mod manager. Every feature switches on "
+    .. "and off by itself.",
   author = "wild1walker",
   contact = "https://github.com/wild1walker/Gen1WildUI",
   tags = { "ui", "bundle", "pokedex", "party", "bag", "storage", "battle",
@@ -24,9 +24,10 @@ return {
         .. "the winner does",
     },
     changed = {
-      "nothing about what any of these mods do. Each is vendored "
-        .. "unmodified from its own repository; the bundle only decides "
-        .. "which of them load and where they are configured",
+      "nothing about what any of these mods do. The bundle only decides "
+        .. "which of them load and where they are configured -- BATTLE "
+        .. "INTRO's two rows move onto the bundle's own screen from the "
+        .. "engine's OPTIONS screen, at their own defaults",
     },
     known = {
       "a feature whose upstream mod has no off switch of its own -- every "
@@ -49,6 +50,9 @@ return {
     { who = "LibertyTwins, princess-phoenix, carchagui, aveontrainer, "
       .. "WesleyFG, kWharever, worldslayer608 and knizz", for_ = "the "
       .. "Battle Backgrounds Patch FR art Gen1Arena draws" },
+    { who = "ShaneMcGovernIE", for_ = "Widescreen Battle Intro, essentially "
+      .. "whole -- the bundle's menu around it. Maintained here now, theirs "
+      .. "by origin" },
     { who = "Gen1Recomp", for_ = "the mod API every one of these is built on" },
     { who = "pret", for_ = "the disassemblies underneath all of it" },
   },
