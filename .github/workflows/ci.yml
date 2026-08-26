@@ -1,0 +1,103 @@
+name: CI
+
+# Everything that has to be true before this bundle is worth releasing.
+#
+# The interesting check is `build.py --check`: modules/ is committed (a mod is
+# installed by copying a folder, and nothing runs a build), so it can drift
+# from the submodules it was generated from. This rebuilds it and fails if the
+# result differs, which makes that drift impossible to commit.
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  ENGINE_REPO: ${{ vars.ENGINE_REPO || 'bryanthaboi/gen1recomp' }}
+  ENGINE_REF: ${{ vars.ENGINE_REF || 'dev' }}
+  MOD_ID: gen1_wild_ui
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout the bundle
+        uses: actions/checkout@v4
+        with:
+          path: mod
+          submodules: recursive
+
+      - name: Install LuaJIT
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y luajit
+
+      - name: modules/ is what the submodules build
+        working-directory: mod
+        run: python3 tools/build.py --check
+
+      - name: Bundle checks
+        working-directory: mod
+        run: python3 tools/check.py
+
+      - name: Runtime test suite
+        working-directory: mod
+        run: luajit tests/runtime_test.lua
+
+      - name: Checkout the engine
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ENGINE_REPO }}
+          ref: ${{ env.ENGINE_REF }}
+          path: engine
+
+      - name: Place the bundle in the engine tree
+        run: |
+          set -euo pipefail
+          rm -rf "engine/mods/$MOD_ID"
+          mkdir -p "engine/mods/$MOD_ID"
+          # Only what ships: upstream/ is the submodule checkout modules/ was
+          # built from, and the engine has no use for it.
+          (cd mod && tar -c \
+             --exclude=.git --exclude=upstream --exclude=.github \
+             --exclude=tools --exclude=tests --exclude=overlays .) \
+            | tar -x -C "engine/mods/$MOD_ID"
+
+      - name: modkit validate
+        working-directory: engine
+        run: python3 tools/modkit.py validate "$MOD_ID"
+
+      - name: modkit lint
+        working-directory: engine
+        run: python3 tools/modkit.py lint "$MOD_ID"
+
+      - name: modkit gen2check
+        working-directory: engine
+        run: python3 tools/modkit.py gen2check "mods/$MOD_ID"
+
+      - name: Vendored mods' own test suites
+        working-directory: engine
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # Each vendored mod keeps its tests in its own repository, where its
+          # own CI runs them. They are run here too, against the submodule
+          # checkout, so a sync that pins a broken upstream fails here rather
+          # than in somebody's save file.
+          total=0
+          for suite in ../mod/upstream/*/tests/*.lua; do
+            echo "--- $suite"
+            if luajit "$suite"; then
+              total=$((total + 1))
+            else
+              echo "::warning::$suite failed against this engine revision"
+            fi
+          done
+          echo "ran $total upstream suites"

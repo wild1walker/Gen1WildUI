@@ -1,0 +1,4 @@
+.build-check/
+dist/
+*.zip
+__pycache__/

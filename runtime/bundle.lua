@@ -1,0 +1,172 @@
+-- Turning a list of features into one loaded mod.
+--
+-- The order matters and is not obvious, so it is spelled out:
+--
+--   1. every feature's master switch is registered, before anything is run.
+--      The switch has to exist before it can be consulted, and it is
+--      consulted to decide whether to run the feature at all.
+--   2. features are run, in registry order, each against its own facade.
+--      Running a feature is what makes it define its options and install its
+--      hooks -- upstream mains do both in one call and cannot be split.
+--   3. the merged schema is handed to the engine, once.
+--   4. the menu is built from whatever ended up in the schema.
+--
+-- A feature that fails at any point is logged, marked, and skipped.  Eleven
+-- working features and one that says why it is missing beats twelve that do
+-- not load.
+
+-- The one thing this file cannot do for itself is load its own siblings: a
+-- mod's `require` does not reach into its own folder.  main.lua passes in the
+-- function that does.
+local loadRuntime = ...
+
+local Bundle = {}
+
+local function detectGen2()
+  local ok, GameVersion = pcall(require, "src.core.GameVersion")
+  if not ok or type(GameVersion) ~= "table" then return false end
+  if type(GameVersion.generation) ~= "function" then return false end
+  local okCall, generation = pcall(GameVersion.generation)
+  return okCall and generation == 2
+end
+
+function Bundle.install(mod, spec, features)
+  local Loader = assert(loadRuntime("loader"), "runtime/loader.lua did not load")
+  local OptionSet = assert(loadRuntime("optionset"), "runtime/optionset.lua did not load")
+  local Facade = assert(loadRuntime("facade"), "runtime/facade.lua did not load")
+  local Registry = assert(loadRuntime("registry"), "runtime/registry.lua did not load")
+  local Menu = assert(loadRuntime("menu"), "runtime/menu.lua did not load")
+
+  local loader = Loader.new(mod)
+  local optionset = OptionSet.new()
+  local registry = Registry.new(mod, spec)
+
+  optionset.resolveGame = function()
+    return (mod.world and mod.world.game) or mod.game
+  end
+
+  local context = {
+    mod = mod,
+    spec = spec,
+    optionset = optionset,
+    registry = registry,
+    loader = loader,
+    isGen2 = detectGen2(),
+    shared = {},
+    -- feature id -> function returning rows an adapter wants on that
+    -- feature's screen, for settings that do not live in the option schema.
+    customRows = {},
+  }
+
+  -- ---- 1. master switches first
+
+  local active = {}
+  for _, feature in ipairs(features) do
+    if feature.gen2_only and not context.isGen2 then
+      -- nothing
+    elseif feature.gen1_only and context.isGen2 then
+      -- nothing
+    else
+      optionset.master(feature)
+      feature.live_toggle = feature.enabledKey ~= nil
+      active[#active + 1] = feature
+    end
+  end
+
+  -- ---- 2. run each feature
+  --
+  -- A feature whose switch is its own option row is always installed: its own
+  -- code reads that row every time it acts, so the switch is live and turning
+  -- it off is the untouched game.  A feature without one is gated here
+  -- instead, and turning it on takes a relaunch -- which is what the menu's
+  -- asterisk is telling the player.
+
+  local installed = {}
+  for _, feature in ipairs(active) do
+    local wanted = true
+    if not feature.live_toggle then
+      local key = optionset.groups[feature.id].masterKey
+      local stored = optionset.read(mod, key)
+      wanted = stored ~= false
+    end
+
+    if not wanted then
+      mod.log:info("[%s] off; not installed", feature.label)
+      installed[feature.id] = false
+    else
+      local facade = Facade.new(feature, context)
+      local entry = "modules/" .. feature.dir .. "/" .. (feature.entry or "main.lua")
+      local chunk, reason = loader.chunk(entry)
+      local ok = false
+      if chunk then
+        local ranOk, value = pcall(chunk)
+        if not ranOk then
+          mod.log:error("[%s] entry chunk failed: %s", feature.label, tostring(value))
+        elseif type(value) ~= "function" then
+          mod.log:error("[%s] %s did not return an install function", feature.label, entry)
+        else
+          local installOk, installError = pcall(value, facade)
+          if installOk then
+            ok = true
+          else
+            mod.log:error("[%s] failed to install: %s", feature.label, tostring(installError))
+          end
+        end
+      else
+        mod.log:error("[%s] not loaded: %s", feature.label, tostring(reason))
+      end
+
+      if ok then
+        -- An adapter is this bundle's own code, run after the upstream
+        -- feature and against the same facade: it is where a bundle-specific
+        -- default is seeded or a screen is rewired, without editing vendored
+        -- source.
+        if feature.adapter then
+          local adapter = loader.run("adapters/" .. feature.adapter .. ".lua")
+          if type(adapter) == "table" and type(adapter.install) == "function" then
+            local adapterOk, adapterError = pcall(adapter.install, facade, context, feature)
+            if not adapterOk then
+              mod.log:error("[%s] adapter failed: %s", feature.label, tostring(adapterError))
+            end
+          end
+        end
+        registry.register(feature, facade.exports)
+      end
+      installed[feature.id] = ok
+    end
+  end
+
+  -- ---- 3. one schema, once
+
+  optionset.define(mod)
+
+  -- ---- 4. the menu
+
+  local menu = Menu.new({
+    mod = mod,
+    spec = spec,
+    optionset = optionset,
+    features = active,
+    isGen2 = context.isGen2,
+    customRows = context.customRows,
+  })
+  for _, feature in ipairs(active) do
+    menu.noteInstalled(feature, installed[feature.id] == true)
+  end
+  menu.install()
+
+  -- ---- what the other half of the pair can see
+
+  mod.exports.features = registry.table()
+  mod.exports.bundle = spec.id
+  mod.exports.installed = installed
+  mod.exports.optionValue = function(key) return optionset.read(mod, key) end
+
+  local count = 0
+  for _, ok in pairs(installed) do if ok then count = count + 1 end end
+  mod.log:info("%s: %d of %d features installed", spec.menu_label, count, #active)
+
+  return { optionset = optionset, registry = registry, menu = menu }
+end
+
+return Bundle

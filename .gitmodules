@@ -1,0 +1,21 @@
+[submodule "upstream/Gen1Arena"]
+	path = upstream/Gen1Arena
+	url = https://github.com/wild1walker/Gen1Arena
+[submodule "upstream/Gen1Dex"]
+	path = upstream/Gen1Dex
+	url = https://github.com/wild1walker/Gen1Dex
+[submodule "upstream/Gen1BillsBox"]
+	path = upstream/Gen1BillsBox
+	url = https://github.com/wild1walker/Gen1BillsBox
+[submodule "upstream/Gen1Party"]
+	path = upstream/Gen1Party
+	url = https://github.com/wild1walker/Gen1Party
+[submodule "upstream/Gen1ModernBag"]
+	path = upstream/Gen1ModernBag
+	url = https://github.com/wild1walker/Gen1ModernBag
+[submodule "upstream/Gen1MenuManager"]
+	path = upstream/Gen1MenuManager
+	url = https://github.com/wild1walker/Gen1MenuManager
+[submodule "upstream/Gen1ModMenu"]
+	path = upstream/Gen1ModMenu
+	url = https://github.com/wild1walker/Gen1ModMenu
