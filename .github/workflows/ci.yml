@@ -113,7 +113,12 @@ jobs:
           total=0
           for suite in ../mod/upstream/*/tests/*.lua; do
             echo "--- $suite"
-            if luajit "$suite"; then
+            # Run from the suite's own directory. These are the mods' own
+            # tests and several reach their subject with a relative
+            # loadfile("../main.lua"), so invoked from anywhere else they
+            # fail on a nil call and every run reports warnings that say
+            # nothing about the mod.
+            if (cd "$(dirname "$suite")" && luajit "$(basename "$suite")"); then
               total=$((total + 1))
             else
               echo "::warning::$suite failed against this engine revision"
