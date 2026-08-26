@@ -2,6 +2,16 @@ name: CI
 
 # Everything that has to be true before this bundle is worth releasing.
 #
+# There is no `modkit gen2check` step, and its absence is deliberate. This
+# bundle is Gen 1: it carries mods that are Gen 1 only -- Gen151 and
+# Gen1AutoContinue here, Gen1Arena, Gen1Dex, Gen1BillsBox, Gen1ModernBag and
+# Gen1Party in the other half -- so its manifest declares games: ["gen1"] and
+# a Gen 2 boot skips it. gen2check reports on what a mod *would* hit if it
+# claimed Gen 2, and fails a mod that has not, which is why every Gen 1-only
+# mod in this suite omits the step: Gen1Arena runs no CI workflow at all and
+# Gen151's lists every other check but this one. Gen1Sprint keeps it because
+# Gen1Sprint really is games: ["all"] and really is clean on Gold.
+#
 # The interesting check is `build.py --check`: modules/ is committed (a mod is
 # installed by copying a folder, and nothing runs a build), so it can drift
 # from the submodules it was generated from. This rebuilds it and fails if the
@@ -90,10 +100,6 @@ jobs:
       - name: modkit lint
         working-directory: engine
         run: python3 tools/modkit.py lint "$MOD_ID"
-
-      - name: modkit gen2check
-        working-directory: engine
-        run: python3 tools/modkit.py gen2check "mods/$MOD_ID"
 
       - name: Vendored mods' own test suites
         working-directory: engine

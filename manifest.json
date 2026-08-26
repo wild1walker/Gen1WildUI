@@ -37,9 +37,13 @@
     "pokedex_plus"
   ],
   "incompatible": [],
-  "games": ["all"],
+  "games": [
+    "gen1"
+  ],
   "experimental": false,
-  "permissions": ["engine_internals"],
+  "permissions": [
+    "engine_internals"
+  ],
   "github": "wild1walker/Gen1WildUI",
   "description": "The visual half of the Gen1Wild suite in one mod: battle backdrops, the Pokedex, the box, the party menu, the bag, menu layout and the mod manager. Every feature switches on and off by itself."
 }
