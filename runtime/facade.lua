@@ -92,11 +92,17 @@ function Facade.new(feature, context)
   end
 
   facade.options = {
+    -- Returns the schema it was handed, which is what the engine does and
+    -- what Gen151 relies on: it iterates the return value to build its own
+    -- key -> row map for validating stored values, and would silently get an
+    -- empty map -- and skip that validation -- if handed anything else.  The
+    -- rows come back with their *original* keys, because that is the
+    -- vocabulary the feature reads and writes in.
     define = function(selfOrSchema, maybeSchema)
       local schema = maybeSchema
       if schema == nil then schema = selfOrSchema end
       optionset.adopt(feature, schema)
-      return facade.options
+      return schema
     end,
     get = function(selfOrKey, maybeKey)
       local key = maybeKey

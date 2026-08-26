@@ -279,6 +279,17 @@ do
   })
   eq(facade.options:get("opening_pocket"), "medicine",
      "the feature reads its own raw key")
+
+  -- Gen151 iterates what define() hands back to build its own validation
+  -- table, so the return value has to be the schema, in the feature's own
+  -- unprefixed vocabulary.
+  local returned = facade.options:define({
+    { key = "placeCry", type = "toggle", label = "PLACE CRY", default = true },
+  })
+  eq(type(returned), "table", "define returns a table")
+  eq(#returned, 1, "with the rows in it")
+  eq(returned[1].key, "placeCry", "still under the key the feature wrote")
+  ok(optionset.byKey["bag_placeCry"], "while the engine got the prefixed one")
   ok(optionset.byKey["bag_opening_pocket"], "the engine sees the prefixed key")
   eq(optionset.byKey["opening_pocket"], nil, "the raw key is never registered")
 
