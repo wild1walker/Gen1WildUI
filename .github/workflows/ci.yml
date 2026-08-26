@@ -47,9 +47,21 @@ jobs:
         working-directory: mod
         run: python3 tools/check.py
 
-      - name: Runtime test suite
+      - name: Bundle test suites
         working-directory: mod
-        run: luajit tests/runtime_test.lua
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          suites=(tests/*.lua)
+          if [ ${#suites[@]} -eq 0 ]; then
+            echo "::error::no test suite under tests/"
+            exit 1
+          fi
+          # Every file, so adding a suite does not require editing this job.
+          for suite in "${suites[@]}"; do
+            echo "--- $suite"
+            luajit "$suite"
+          done
 
       - name: Checkout the engine
         uses: actions/checkout@v4
