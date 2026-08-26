@@ -111,6 +111,43 @@ return function(mod)
     return endX - C.width(text)
   end
 
+  -- ------- the type's colour
+  --
+  -- Behind the word, not in it.  A tile glyph is black on transparent and
+  -- comes out black whatever colour is set (src/render/Font.lua:532), so the
+  -- type CANNOT be printed in its own colour while it is the game's own font
+  -- -- the only way to tint the letters is to stop using that font for them.
+  -- A filled chip under the black word colours the same information, keeps
+  -- the tile font, and is the shape a type badge has anyway.
+  --
+  -- These are the familiar type colours rather than darker ones, because the
+  -- word on top is black: mid-light is what black reads on.
+  local TYPE_CHIP = {
+    NORMAL   = { 0xA8, 0xA8, 0x78 }, FIRE     = { 0xF0, 0x80, 0x30 },
+    WATER    = { 0x68, 0x90, 0xF0 }, ELECTRIC = { 0xF8, 0xD0, 0x30 },
+    GRASS    = { 0x78, 0xC8, 0x50 }, ICE      = { 0x98, 0xD8, 0xD8 },
+    FIGHTING = { 0xC0, 0x70, 0x60 }, POISON   = { 0xA0, 0x40, 0xA0 },
+    GROUND   = { 0xE0, 0xC0, 0x68 }, FLYING   = { 0xA8, 0x90, 0xF0 },
+    PSYCHIC  = { 0xF8, 0x58, 0x88 }, BUG      = { 0xA8, 0xB8, 0x20 },
+    ROCK     = { 0xB8, 0xA0, 0x38 }, GHOST    = { 0xA0, 0x90, 0xC0 },
+    DRAGON   = { 0xA0, 0x80, 0xF8 },
+  }
+
+  -- The id, not the printed name: PSYCHIC_TYPE prints PSYCHIC, and a
+  -- translation prints something else again, so keying on what is drawn would
+  -- lose the colour in every language but this one.  A type this does not
+  -- know -- a mod's -- simply has no chip, and the word stays as it was.
+  function C.typeChip(id)
+    if type(id) ~= "string" then return nil end
+    return TYPE_CHIP[(id:upper():gsub("_TYPE$", ""))]
+  end
+
+  function C.fill(shade, x, y, w, h)
+    love.graphics.setColor(shade[1] / 255, shade[2] / 255, shade[3] / 255, 1)
+    love.graphics.rectangle("fill", x, y, w, h)
+    C.black()
+  end
+
   -- ------- the small face, for move names only
   --
   -- The tile font is eight pixels a glyph and cannot be anything else: it is

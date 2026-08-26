@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.3
+
+**BATTLE MENUS** (Gen1BattleUI 1.2.0 → 1.2.1) — the move panel reads the name
+whole again and is three rows: name, type, PP. Fourteen tiles wide, which is
+the narrowest that never cuts a Gen 1 move name, and 48 pixels short of the
+full width it used to run to. The EXP bar no longer lies across it: the
+overlay hook now carries a priority that draws this mod's layer last. The
+move's type sits on a chip in that type's own colour, and `FULL NAMES`
+defaults off, so the buttons are the game's own font as before.
+
 ## 1.2.2
 
 **BAG** (Gen1ModernBag 1.9.3 → 1.9.4) — `Hold Scroll Speed` now defaults to

@@ -79,19 +79,27 @@ return function(mod)
     -- themselves.
     { key = "move_panel", type = "toggle", label = "MOVE PANEL",
       default = true },
-    -- The tile font is eight pixels a glyph, a classic cell is seven of
-    -- them, and Gen 1's longest move names are twelve -- so in the game's
-    -- own font a 2x2 grid cannot print SELFDESTRUCT whole, whatever the
-    -- layout does.  On, a move menu whose names do not all fit is drawn in
-    -- the engine's own Plain Pixel instead, which is narrower and does fit.
-    -- Off is the game's font always, and the names are cut to the cell.
+    -- The BUTTONS, in the engine's own Plain Pixel, so a name too long for
+    -- the seven glyphs a cell has prints whole instead of being cut.  Off --
+    -- the default -- is the game's own font in the buttons, cut to the cell,
+    -- which is what the 2x2 has always looked like.
     --
-    -- A grid takes the small face for all four names or none: GUST in one
-    -- font beside THUNDERSHOCK in another, in the same four boxes, reads as
-    -- a fault rather than a choice.  So a party whose names all fit is
-    -- vanilla to the pixel either way, and the wide layout -- twelve glyphs
-    -- a cell -- never reaches for it at all.
+    -- Off by default because the panel above already reads the whole name,
+    -- and it does that in the game's own font whenever the name fits.  The
+    -- buttons are a grid to point at; the panel is the thing that answers
+    -- what you are pointing at.
+    --
+    -- On, a grid takes the small face for all four names or none: GUST in
+    -- one font beside THUNDERSHOCK in another, in the same four boxes, reads
+    -- as a fault rather than a choice.
     { key = "full_names", type = "toggle", label = "FULL NAMES",
+      default = false },
+    -- The move's type on a chip in that type's own colour, in the panel.
+    -- Behind the word rather than in it: a tile glyph is black on
+    -- transparent and comes out black whatever colour is set, so the only
+    -- way to tint the letters would be to stop drawing them in the game's
+    -- own font.  Off leaves the type as plain black text.
+    { key = "type_colour", type = "toggle", label = "TYPE COLOUR",
       default = true },
   })
 
@@ -155,13 +163,27 @@ return function(mod)
   -- than a crash into the boot feed, so unlike the load above it is caught:
   -- there is no version of "the battle stops" that is better than "the
   -- buttons are missing and the log says why".
+  --
+  -- The priority is draw order and nothing else.  Hooks sorts a chain
+  -- highest-first and runs the first link outermost (src/mods/Hooks.lua), and
+  -- this link calls next() BEFORE it draws -- so the highest priority is the
+  -- one drawn LAST, on top of everything else on the overlay.
+  --
+  -- Which is the point.  Another mod draws an EXP bar under the player's HUD
+  -- and drew it after this panel, so it came out as a blue line lying across
+  -- the panel's own border.  Being last means the panel covers what it
+  -- overlaps instead of being covered by it -- and while a move menu is up,
+  -- the strip is this mod's to own.
+  --
+  -- It is the ONLY hook here that insists on an order.  The other two answer
+  -- questions and take the rest of the chain's answer with them.
   mod.hooks:wrap("battle.overlay", function(next, battle)
     next(battle)
     local ok, problem = pcall(Grid.draw, battle)
     if not ok then
       warn("Gen1BattleUI could not draw the battle menu: %s", tostring(problem))
     end
-  end)
+  end, 5000)
 
   -- Published so a mod that wants to sit beside these buttons can find out
   -- where they are, and so the suite can assert against the numbers this mod

@@ -328,28 +328,26 @@ return function(mod, C)
   -- while it is up -- so a panel starting on the same row covers exactly what
   -- vanilla covered, which is why these two are one row apart.
 
-  -- The panel keeps the footprint of the vanilla box it stands in for, and
-  -- that is not a style choice.  The player's own HUD is drawn across rows
-  -- 7-11 from x=72 rightwards -- name, level, HP bar, HP numbers and the
-  -- underline, all of DrawPlayerHUDAndHPBar -- so a panel any wider than the
-  -- box vanilla put there covers the player's HP while they are choosing a
-  -- move, which is the one thing that screen exists to inform.  1.1.0's
-  -- full-width panel did exactly that.
+  -- The panel is three rows -- name, type, PP, each on its own line -- and
+  -- stops fourteen tiles in, at x=111.
   --
-  -- Matching the vanilla box is also what keeps everything ELSE clear:
-  -- anything another mod draws on that side of the screen -- an EXP bar, for
-  -- one -- was laid out around the vanilla box, not around this one.
+  -- Fourteen is the smallest width that still prints a move name whole.
+  -- Twelve interior tiles is twelve glyphs of the game's own font, and Gen 1's
+  -- longest names -- THUNDERSHOCK, QUICK ATTACK, SELFDESTRUCT -- are exactly
+  -- twelve.  Narrower reads better and cuts names, and a cut name is the one
+  -- thing this panel exists to prevent, so narrower is wrong however much
+  -- tidier it looks.
   --
-  --   moveSelect   (0,8) 11x5, PrintMenuItem's TYPE/PP box.  Its bottom
-  --                border lands on row 12 and merges into the buttons' top
-  --                exactly as it merged into the vanilla move list's.
-  --   mimicSelect  (0,7) 18x6, two tiles wider than MoveSelectionMenu's own
-  --                .mimicmenu box.  That box already covers the HP bar and
-  --                the HP numbers in vanilla, so the rule above is one this
-  --                screen never kept; the two tiles buy WHICH TECHNIQUE? its
-  --                sixteenth glyph, which at 16 wide it loses.
+  -- It is still 48 pixels short of the full width it used to run to, which is
+  -- what keeps the EXP bar another mod draws under the player's HUD -- from
+  -- about x=98 -- mostly beside the panel rather than across it.  The last
+  -- stretch of that bar does still cross the PP row, in white space to the
+  -- right of the numbers; closing that gap entirely would mean cutting names.
+  --
+  -- mimicSelect keeps its own wider box: WHICH TECHNIQUE? is sixteen glyphs
+  -- and has to go somewhere.
   local PANEL = {
-    moveSelect = { tx = 0, ty = 8, tw = 11, th = 5 },
+    moveSelect = { tx = 0, ty = 8, tw = 14, th = 5 },
     mimicSelect = { tx = 0, ty = 7, tw = 18, th = 6 },
   }
 
@@ -383,8 +381,9 @@ return function(mod, C)
     local def = moveDef(battle, move)
 
     if battle.phase == "mimicSelect" then put(Strings("WHICH TECHNIQUE?")) end
-    -- The name follows whatever the cells settled on, so the panel never
-    -- reads shorter than the button it is describing.
+    -- The panel reads the name whole, in the game's own font.  That is what
+    -- the twelve interior tiles are for -- see PANEL -- so nothing here
+    -- shortens and nothing here changes face.
     put(def and def.name or (move and tostring(move.id)) or "-", small)
 
     -- A disabled slot says so instead of showing what it would have cost:
@@ -394,7 +393,19 @@ return function(mod, C)
       put(Strings("disabled!"))
       return
     end
-    put(typeText(def))
+    -- The type sits on a chip in its own colour.  The word stays black and
+    -- stays in the game's font -- see C.typeChip for why it has to.
+    local type_ = typeText(def)
+    if type_ and rows[line] then
+      local text = C.shorten(type_, width)
+      local chip = C.option("type_colour", true) and C.typeChip(def and def.type)
+      -- exactly the glyph row, so the chip cannot bleed into the line above
+      -- or below: the interior rows are eight pixels apart and this is eight
+      if chip then C.fill(chip, x, rows[line], C.width(text) + 1, 8) end
+      C.black()
+      Font.draw(text, x, rows[line])
+      line = line + 1
+    end
     put(ppText(def, move))
   end
 
@@ -414,7 +425,13 @@ return function(mod, C)
     local pp, type_ = ppText(def, move), typeText(def)
     C.black()
     if pp then Font.draw(C.shorten(pp, 64), 232, 112) end
-    if type_ then Font.draw(C.shorten(type_, 64), 232, 128) end
+    if type_ then
+      local text = C.shorten(type_, 64)
+      local chip = C.option("type_colour", true) and C.typeChip(def.type)
+      if chip then C.fill(chip, 232, 128, C.width(text) + 1, 8) end
+      C.black()
+      Font.draw(text, 232, 128)
+    end
   end
 
   -- ------- the two layouts
