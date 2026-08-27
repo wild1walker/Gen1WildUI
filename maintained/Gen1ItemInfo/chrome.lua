@@ -75,6 +75,27 @@ return function(mod)
   C.ICON_LABEL_X = 40
   C.RIGHT_SUB_Y = 8
 
+  -- And four pixels up, so the picture is centred on the NAME rather than on
+  -- the row.
+  --
+  -- A row is sixteen pixels and so is an icon, so an icon drawn at the row's
+  -- own y fills it exactly -- and looks wrong, which is the thing worth
+  -- writing down.  The row holds two lines: the name on the top eight pixels
+  -- and the number underneath.  A glyph inks rows 0 to 6 of its cell, so the
+  -- name's ink is centred on y + 3 while the icon's is centred on y + 7.5,
+  -- and the word reads as floating above its own picture.
+  --
+  -- What a reader pairs is the name and the icon, not the whole cell and the
+  -- icon, so the icon is centred on the name: four pixels up puts the two
+  -- centres within half a pixel of each other.  Four and not five, which
+  -- would be the exact half: the top row of the mart's list starts at
+  -- BODY_TOP + 4 and five would put its icon on BODY_TOP - 1, which is the
+  -- header box's bottom border.
+  --
+  -- Icons stay sixteen apart, so the column shifts as a whole and no two of
+  -- them come any closer together.
+  C.ICON_DY = -4
+
   -- Four rows of 16 pixels in the 72 the body has, centred in it: the same
   -- four the vanilla mart and PC lists show, at the same pitch, so a player
   -- who knows where the fourth row is still finds it there.

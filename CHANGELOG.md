@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.11.1
+
+**The item icons line up with the words now.**
+
+A list row is sixteen pixels and so is an icon, so 1.11.0 drew each one at its
+row's own y and filled the row exactly. But a row holds two lines — the item's
+name on its top eight pixels and its price or count underneath — and a Gen 1
+glyph inks rows 0 to 6 of its cell, so the name's ink was centred on `y + 3`
+and the icon's on `y + 7.5`. Every item read as floating above its own picture.
+
+What a reader pairs is the name and the icon, not the whole cell and the icon,
+so the icon is centred on the name: four pixels up puts the two centres within
+half a pixel of each other. Four rather than the exact five, because five
+would put the mart list's top icon on the header box's bottom border.
+
+Icons are still sixteen apart, so the column shifts as a whole and no two of
+them come any closer together. `BAG` follows Gen1ModernBag to 1.10.1 for the
+same fix in the bag's own window.
+
+---
+
 ## 1.11.0
 
 **Every item has a picture now — in the bag, at the mart, and in the item PC.**

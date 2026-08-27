@@ -112,9 +112,24 @@ local LAYOUTS = {
   -- is twelve glyphs to the right margin at 152 and no name trimmed
   icons = {
     tx = 3, ty = 2, tw = 17, th = 11,
-    cursorX = 32, iconX = 40, nameX = 56,
+    cursorX = 32, iconX = 40, nameX = 56, iconY = -4,
   },
 }
+
+-- iconY, and why it is not zero.
+--
+-- A row is sixteen pixels and so is an icon, so an icon drawn at the row's
+-- own y fills it exactly -- and looks wrong. The row holds two lines: the
+-- item's name on the top eight pixels and its count underneath. A Gen 1
+-- glyph inks rows 0 to 6 of its cell, so the name's ink is centred on y + 3
+-- while the icon's is centred on y + 7.5, and the word reads as floating
+-- above its own picture.
+--
+-- What a reader pairs is the name and the icon, not the whole cell and the
+-- icon, so the icon is centred on the name: four pixels up puts the two
+-- centres within half a pixel of each other. Icons stay sixteen apart, so the
+-- column shifts as a whole and no two of them come any closer together; the
+-- top one lands on y = 28, four clear of the window's own interior.
 local HEADER_Y = LAYOUTS.plain.ty * 8
 
 -- Which of the two a Bag is drawing in. The icons are a setting and the
@@ -1309,7 +1324,7 @@ local function drawItemWindow(list, icons)
     if item.cancel then sawCancel = true end
     local y = ITEM_ROW_TOP_Y + (row - 1) * ITEM_ROW_H
     if box.iconX and icons then
-      icons.drawFor(list.game, item.value, box.iconX, y)
+      icons.drawFor(list.game, item.value, box.iconX, y + (box.iconY or 0))
     end
     Font.draw(fitLabel(Font, tostring(item.label or ""), budget), box.nameX, y)
     if item.sub then
