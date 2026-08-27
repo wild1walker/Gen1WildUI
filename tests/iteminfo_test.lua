@@ -709,11 +709,24 @@ do
   eq(#drawn.images, 2, "one icon per row")
   for i, image in ipairs(drawn.images) do
     eq(image.x, C.ICON_X, "icon " .. i .. " is in the icon column")
-    eq(image.y, C.rowY(i), "icon " .. i .. " is on its own row")
+    eq(image.y, C.rowY(i) + C.ICON_DY, "icon " .. i .. " is on its own row")
   end
-  -- The last row's icon has to clear the text box: rows are sixteen apart and
-  -- so is an icon, so the fourth one ends where the body does.
-  ok(C.rowY(C.ROWS) + icons.H - 1 <= C.BODY_BOTTOM,
+  -- Centred on the NAME, not on the row: a row is two lines and the name is
+  -- the top one, so an icon filling all sixteen pixels sits four below the
+  -- word it belongs to.  A glyph inks rows 0-6 of its cell, so the name's ink
+  -- is centred on y+3 and a shifted icon's on y+3.5.
+  eq(C.ICON_DY, -4, "the icon is raised to meet its name")
+  for i = 1, C.ROWS do
+    local nameCentre = C.rowY(i) + 3
+    local iconCentre = C.rowY(i) + C.ICON_DY + icons.H / 2
+    ok(math.abs(iconCentre - nameCentre) <= 1,
+       "row " .. i .. " has its icon and its name on the same centre line")
+  end
+  -- Neither end may leave the body: the top row's icon has to clear the
+  -- header box and the bottom row's the text box.
+  ok(C.rowY(1) + C.ICON_DY >= C.BODY_TOP,
+     "the top row's icon stays clear of the header box")
+  ok(C.rowY(C.ROWS) + C.ICON_DY + icons.H - 1 <= C.BODY_BOTTOM,
      "the bottom row's icon stays clear of the text box")
   -- And the icon column has to clear the cursor on one side and the label on
   -- the other.

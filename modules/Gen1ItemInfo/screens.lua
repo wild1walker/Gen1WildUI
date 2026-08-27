@@ -155,7 +155,10 @@ return function(mod, C, describe, wants, icons)
         -- inked and the label is a tile clear of it either way, but a row
         -- whose art arrives late would flicker over its own name on the
         -- frame a pocket changes under it.
-        icons.drawFor(self.game, item.value, C.ICON_X, y)
+        --
+        -- ICON_DY is what lines the picture up with the word beside it; see
+        -- chrome.lua.
+        icons.drawFor(self.game, item.value, C.ICON_X, y + C.ICON_DY)
       end
       Font.draw(C.fit(item.label, budget), labelX, y)
       if right then
