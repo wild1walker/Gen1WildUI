@@ -362,11 +362,17 @@ return function(mod)
   mod.hooks:wrap("ui.options.rows", function(next, game, rows)
     local built = next(game, rows)
     if type(built) ~= "table" then return built end
-    built[#built + 1] = {
+    -- Anchored on MODS rather than appended.  The engine groups this screen
+    -- after the hook runs: the rows it names in its own ORDER are laid out
+    -- first and everything else -- a mod's row, CONTROLS, DATE FORMAT, the
+    -- platform rows -- follows in the order the flat list had it.  Appending
+    -- put this row last of all, past the platform rows, while every other mod
+    -- row sat together under MODS.  Anchoring here joins them, and a missing
+    -- anchor still appends, which is where this row used to be anyway.
+    return mod.ui.insertBefore(built, "MODS", {
       id = "Gen1MenuManager",
       label = "MENU MANAGER",
       activate = function(g) openEditor(g, contexts.start, "start", nil) end,
-    }
-    return built
+    })
   end)
 end

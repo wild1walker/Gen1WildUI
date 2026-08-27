@@ -53,7 +53,13 @@ function Menus.installOptionsScreen(mod, Skin, opt)
           local before = self.index
           local result = Builtin.update(self, dt)
           if not on() then return result end
-          local rows = self.rows or {}
+          -- `view`, not `rows`.  Since the engine grouped this screen, `rows`
+          -- is the flat list the ui.options.rows hook built and `view` is what
+          -- is actually on screen -- group openers standing in for their
+          -- members -- and the cursor indexes `view`.  Measuring the flat list
+          -- here made `n` the wrong number: the clamp below never fired,
+          -- because an index into a 17-row view is never past a 34-row list.
+          local rows = self.view or self.rows or {}
           local n = #rows
           -- CANCEL is index n+1 and is no longer drawn, so the cursor is put
           -- back on a row that is: wrapping to the top if it arrived going
@@ -68,8 +74,14 @@ function Menus.installOptionsScreen(mod, Skin, opt)
 
         state.draw = function(self)
           if not on() then return Builtin.draw(self) end
+          -- `view` again, and for the visible half of the same reason: the
+          -- engine draws `self.view or self.rows`, so drawing `rows` here put
+          -- the flat list under a cursor counting the grouped one.  Every row
+          -- on screen was then somebody else's -- the arrow on RULESET while
+          -- the press edited whatever view[9] happened to be -- and MODS,
+          -- ninth in the view, sat thirtieth in the list nobody could reach.
           local drew, drawErr = pcall(Skin.drawPlainRows, mod.ui, self.game,
-            self.rows or {}, self.index, self.scroll or 0)
+            self.view or self.rows or {}, self.index, self.scroll or 0)
           if drew then return end
           broken = true
           mod.log:error("the OPTION screen failed to draw (%s) -- the "

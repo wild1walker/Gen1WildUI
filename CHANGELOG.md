@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.6.4
+
+Fixes the OPTION screen. Both of the shared menu features moved.
+
+- **MOD MANAGER** -> [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu)
+  0.8.2. **The screen was showing the wrong rows.** With `STYLE = MODERN` and
+  `HIDE CANCEL` on -- both defaults, so this was everyone -- the arrow sat on
+  one row while the press edited another, and `MODS` looked like it had been
+  taken off the screen entirely. The engine grouped that screen and now keeps
+  two lists: the flat one the `ui.options.rows` hook builds, and the one on
+  screen, where a group's members collapse into a single opener. The cursor
+  counts the second; this mod's `CANCEL`-hiding decoration drew the first, so
+  the two disagreed from the top row down. `MODS` is ninth in the view and
+  thirtieth in the flat list, which is where it was being drawn. Both halves
+  read the view now.
+- **MENU LAYOUT** ->
+  [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) 0.2.7. Its
+  `MENU MANAGER` row is anchored to `MODS` rather than appended, so it sits
+  with the other mod rows instead of last of all, behind `CONTROLS`, `DATE
+  FORMAT` and the platform rows. Grouping runs after the hook and appends
+  whatever the engine's own order does not name, which is what stranded it.
+
+The top level now reads `SPEED`, `VIDEO`, `GRAPHICS`, `AUDIO`, `PERFORMANCE`,
+`RULESET`, `BATTLE OPTIONS`, `EXTRAS`, `MODS`, and then the mod rows together:
+`Gen1WildUI`, `Gen1WildQOL`, `MENU MANAGER`.
+
 ## 1.6.3
 
 Follows [Gen1BattleUI](https://github.com/wild1walker/Gen1BattleUI) to 1.5.2,
