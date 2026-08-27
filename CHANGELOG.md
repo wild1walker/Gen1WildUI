@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.7.0
+
+**This bundle no longer puts a row on the game's OPTION screen.** Its settings
+live where a mod's settings live: `MODS` > `Gen1WildUI` > `OPTIONS`, which lands
+on the same nested screens it always did -- every feature, each with its own
+page. Nothing was removed from the menu and nothing moved inside it; only the
+way in changed, and there is now one of them instead of two.
+
+The OPTION screen is the game's own, and a bundle of a dozen mods was spending
+a line of it on something the mod manager already lists.
+
+Also follows both shared menu features:
+
+- **MENU LAYOUT** ->
+  [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) 0.2.8. Its
+  `MENU MANAGER` row now sits at the **top** of the OPTION screen, above
+  `SPEED`.
+- **MOD MANAGER** -> [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu)
+  0.9.0, which is what makes that possible. Since the engine grouped the OPTION
+  screen it lays out the rows its own order names first and appends everything
+  else behind them, so no mod could reach the front however it anchored itself.
+  A row may now ask by carrying `top`, and rows that ask are lifted. It
+  reorders what is drawn, never the flat list the hook built, and it runs
+  whatever `STYLE` and `HIDE CANCEL` are set to.
+
+The OPTION screen now reads `MENU MANAGER`, `SPEED`, `VIDEO`, `GRAPHICS`,
+`AUDIO`, `PERFORMANCE`, `RULESET`, `BATTLE OPTIONS`, `EXTRAS`, `MODS`, then the
+platform rows.
+
 ## 1.6.4
 
 Fixes the OPTION screen. Both of the shared menu features moved.

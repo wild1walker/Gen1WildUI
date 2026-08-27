@@ -380,6 +380,36 @@ def check_shared(problems: Problems, features: list[dict], quiet: bool) -> None:
               f"against {paired_name}")
 
 
+def check_options_screen(problems: Problems, quiet: bool) -> None:
+    """The bundle must not put a row on the game's own OPTION screen.
+
+    Its settings live where a mod's settings live: MODS > <bundle> >
+    OPTIONS, which runtime/menu.lua routes onto the same screens by
+    patching ManagerState.openOptions.  A `ui.options.rows` wrap here
+    would put them in two places at once, and the game's OPTION screen is
+    not this mod's to spend a line of.
+
+    A feature it carries may still register its own row -- that is the
+    upstream mod's business, and `suppress_hooks` is how a feature whose
+    rows the bundle draws itself stands down.  This looks only at the
+    bundle's own runtime.
+    """
+    menu = ROOT / "runtime" / "menu.lua"
+    if not menu.exists():
+        problems.error("runtime/menu.lua is missing")
+        return
+    body = menu.read_text(encoding="utf-8", errors="replace")
+    code = "\n".join(line.split("--", 1)[0] for line in body.splitlines())
+    if "ui.options.rows" in code:
+        problems.error("runtime/menu.lua wraps ui.options.rows: the bundle "
+                       "belongs under MODS, not on the OPTION screen")
+    if "ManagerState" not in code or "openOptions" not in code:
+        problems.error("runtime/menu.lua no longer routes MODS > this bundle "
+                       "> OPTIONS, which is now the only way into its menu")
+    if not quiet:
+        print("  options:    no row on the OPTION screen; MODS route intact")
+
+
 def check_manifest(problems: Problems, quiet: bool) -> None:
     if not MANIFEST.exists():
         problems.error("manifest.json is missing")
@@ -426,6 +456,7 @@ def main() -> int:
     check_option_keys(problems, features, args.quiet)
     check_sources(problems, features, args.quiet)
     check_shared(problems, features, args.quiet)
+    check_options_screen(problems, args.quiet)
     check_manifest(problems, args.quiet)
 
     for warning in problems.warnings:

@@ -45,6 +45,39 @@ function Menus.installOptionsScreen(mod, Skin, opt)
         local state = Builtin.new(game, ...)
         local broken = false
 
+        -- ------- rows that asked for the top
+        --
+        -- Since the engine grouped this screen it lays out the rows its own
+        -- ORDER names first -- the group openers, then MODS -- and appends
+        -- everything it does not name after them.  A row added through the
+        -- ui.options.rows hook is never named there, so no mod can reach the
+        -- top of the list on its own however it anchors itself.
+        --
+        -- A row may now ask, by carrying `top = true`.  Those are lifted to
+        -- the front of the view in the order they were already in, and
+        -- everything else keeps its own order behind them.  This runs whatever
+        -- STYLE and HIDE CANCEL are set to: it is the list's order, not its
+        -- drawing, and a row that asked for the top should not move because a
+        -- different row stopped being hidden.
+        --
+        -- `view` is what the screen shows and what the cursor counts; `rows`
+        -- is the flat list the hook built and is left exactly as it was, so a
+        -- mod reading it still sees what it handed over.
+        local view = state.view
+        if type(view) == "table" then
+          local first, rest = {}, {}
+          for _, row in ipairs(view) do
+            local bucket = (type(row) == "table" and row.top) and first or rest
+            bucket[#bucket + 1] = row
+          end
+          if #first > 0 then
+            local reordered = {}
+            for _, row in ipairs(first) do reordered[#reordered + 1] = row end
+            for _, row in ipairs(rest) do reordered[#reordered + 1] = row end
+            state.view = reordered
+          end
+        end
+
         local function on()
           return not broken and active(opt, "hide_cancel")
         end

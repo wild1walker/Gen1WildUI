@@ -489,19 +489,15 @@ function Menu.new(context)
       })
     end
 
-    -- Gold's OPTION screen has no MODS row; CANCEL is its last row, the way
-    -- MODS is Gen 1's.
-    local anchor = context.isGen2 and "CANCEL" or "MODS"
-    mod.hooks:wrap("ui.options.rows", function(next, game, rows)
-      local out = next(game, rows)
-      if type(out) ~= "table" then return out end
-      return mod.ui.insertBefore(out, anchor, {
-        id = spec.id .. "_root",
-        label = spec.menu_label,
-        value = function() return "CONFIGURE" end,
-        activate = function(g) mod.ui.push(g, rootScreenId) end,
-      })
-    end)
+    -- No row on the game's OPTION screen.  This bundle is a dozen mods in a
+    -- trenchcoat and its settings belong where a mod's settings live: MODS >
+    -- <bundle> > OPTIONS, which the route below lands on these same screens.
+    -- The OPTION screen is the game's own, and a bundle that put itself there
+    -- was spending a line of it on something the manager already lists.
+    --
+    -- The route is now the only way in, so it is not optional decoration: the
+    -- manager offers OPTIONS.. for any mod with an option schema
+    -- (src/mods/ManagerState.lua), and this bundle always defines one.
 
     -- MODS > <bundle> > OPTIONS should land on these screens rather than on
     -- the manager's generic schema list, which would show all sixty rows flat

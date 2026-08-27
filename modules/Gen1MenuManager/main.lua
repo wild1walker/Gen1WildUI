@@ -372,6 +372,14 @@ return function(mod)
     return mod.ui.insertBefore(built, "MODS", {
       id = "Gen1MenuManager",
       label = "MENU MANAGER",
+      -- Ask for the front of the list.  The engine groups this screen after
+      -- the hook runs and lays out the rows its own ORDER names first, so no
+      -- anchor here can reach the top -- MODS is simply the best place left.
+      -- Gen1ModMenu honours `top` when it is installed and lifts this row
+      -- above the group openers; without it the anchor above is where the row
+      -- sits, which is still beside the other mod rows rather than behind the
+      -- platform ones.
+      top = true,
       activate = function(g) openEditor(g, contexts.start, "start", nil) end,
     })
   end)
