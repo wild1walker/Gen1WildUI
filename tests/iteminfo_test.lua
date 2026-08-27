@@ -703,7 +703,7 @@ do
   }
   screens.decorate(list)
 
-  drawn.images, drawn.text, drawn.codes = {}, {}, {}
+  drawn.images, drawn.text, drawn.codes, drawn.rects = {}, {}, {}, {}
   list:draw()
 
   eq(#drawn.images, 2, "one icon per row")
@@ -728,6 +728,26 @@ do
      "the top row's icon stays clear of the header box")
   ok(C.rowY(C.ROWS) + C.ICON_DY + icons.H - 1 <= C.BODY_BOTTOM,
      "the bottom row's icon stays clear of the text box")
+
+  -- ---- the rule between the two columns
+
+  -- One pixel wide and a row tall, so consecutive rows join into one line,
+  -- down the middle of the tile between the icon and the name.
+  ok(C.ICON_RULE_X >= C.ICON_X + icons.W,
+     "the rule is clear of the icon")
+  ok(C.ICON_RULE_X < C.ICON_LABEL_X, "and clear of the name")
+  local rules = {}
+  for _, rect in ipairs(drawn.rects) do
+    if rect.w == 1 and rect.x == C.ICON_RULE_X then rules[#rules + 1] = rect end
+  end
+  eq(#rules, 2, "one rule per row")
+  for i, rect in ipairs(rules) do
+    eq(rect.y, C.rowY(i), "rule " .. i .. " starts on its row")
+    eq(rect.h, C.ROW_STEP,
+       "rule " .. i .. " is a whole row tall, so rows join up")
+  end
+  ok(C.rowY(C.ROWS) + C.ROW_STEP - 1 <= C.BODY_BOTTOM,
+     "the bottom rule stays clear of the text box")
   -- And the icon column has to clear the cursor on one side and the label on
   -- the other.
   ok(C.ICON_X >= C.CURSOR_X + 8, "the icon clears the cursor")
@@ -761,9 +781,13 @@ do
   -- ---- and the switch puts the old row straight back
 
   on = false
-  drawn.images, drawn.text = {}, {}
+  drawn.images, drawn.text, drawn.rects = {}, {}, {}
   list:draw()
   eq(#drawn.images, 0, "ITEM ICONS off draws no icons")
+  for _, rect in ipairs(drawn.rects) do
+    ok(not (rect.w == 1 and rect.x == C.ICON_RULE_X),
+       "ITEM ICONS off still drew the column rule")
+  end
   for _, printed in ipairs(drawn.text) do
     if printed.text == "POTION" then
       eq(printed.x, C.LABEL_X, "and the name goes back to the old column")

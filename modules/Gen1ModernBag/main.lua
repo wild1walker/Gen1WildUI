@@ -108,11 +108,22 @@ local LAYOUTS = {
     tx = 4, ty = 2, tw = 16, th = 11,
     cursorX = 40, iconX = nil, nameX = 48,
   },
-  -- one tile wider at the left: cursor 32, icon 40-55, name from 56, which
-  -- is twelve glyphs to the right margin at 152 and no name trimmed
+  -- two tiles wider at the left: cursor 24, icon 32-47, the rule down the
+  -- middle of the tile after it, and the name from 56 -- which is twelve
+  -- glyphs to the right margin at 152, so no name is trimmed.
+  --
+  -- Two rather than one. The first buys the icon its column; the second buys
+  -- the gap between the icon and the word, and the rule down the middle of
+  -- that gap. Without it a picture sits flush against the first letter of the
+  -- name and reads as part of it.
+  --
+  -- The window still starts inside the screen and the map still shows around
+  -- it. Every column that was here before this feature -- the name, the
+  -- quantity, the more-arrow, the pocket name and the money -- is still
+  -- exactly where it was; what has moved is only what was added.
   icons = {
-    tx = 3, ty = 2, tw = 17, th = 11,
-    cursorX = 32, iconX = 40, nameX = 56, iconY = -4,
+    tx = 2, ty = 2, tw = 18, th = 11,
+    cursorX = 24, iconX = 32, nameX = 56, iconY = -4, ruleX = 51,
   },
 }
 
@@ -1325,6 +1336,15 @@ local function drawItemWindow(list, icons)
     local y = ITEM_ROW_TOP_Y + (row - 1) * ITEM_ROW_H
     if box.iconX and icons then
       icons.drawFor(list.game, item.value, box.iconX, y + (box.iconY or 0))
+    end
+    -- The column rule, on every row including CANCEL: it divides two columns
+    -- rather than decorating an item, and one with gaps in it where a row
+    -- happens to have no picture reads as damage. A row's full height, so
+    -- consecutive rows join into one line and the line stops where the list
+    -- does.
+    if box.ruleX then
+      love.graphics.setColor(0, 0, 0, 1)
+      love.graphics.rectangle("fill", box.ruleX, y, 1, ITEM_ROW_H)
     end
     Font.draw(fitLabel(Font, tostring(item.label or ""), budget), box.nameX, y)
     if item.sub then

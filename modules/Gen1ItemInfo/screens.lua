@@ -159,6 +159,7 @@ return function(mod, C, describe, wants, icons)
         -- ICON_DY is what lines the picture up with the word beside it; see
         -- chrome.lua.
         icons.drawFor(self.game, item.value, C.ICON_X, y + C.ICON_DY)
+        C.iconRule(y)
       end
       Font.draw(C.fit(item.label, budget), labelX, y)
       if right then
