@@ -27,6 +27,22 @@
 -- It also means this needs to know nothing about Gen1ModernBag, and keeps
 -- working if the bag is switched off, replaced, or upgraded underneath it.
 --
+-- ------- with one exception, which position alone cannot see
+--
+-- A menu row can open a SECOND menu, and Menu pops itself before running a
+-- row's onSelect -- so by the time the second one is built, the bag list is
+-- back on top and it looks exactly like the first.  Gen1ModernBag's tools
+-- menu does this: SORT opens the pocket's sort-order picker, which is about
+-- the pocket and not about the item, and would otherwise grow an ABOUT row of
+-- its own.
+--
+-- A submenu is recognised as one by WHERE IT IS OPENED FROM rather than by
+-- what is in it: every row of a menu this added a row to runs inside a flag,
+-- and a menu built while that flag is up is a submenu of a menu already
+-- offered ABOUT.  Which stays true of a sort picker, a filter picker or
+-- anything else a bag mod hangs off its own menu, without this file knowing
+-- any of their names.
+--
 -- ------- where the row goes
 --
 -- Before CANCEL when there is one, and last when there is not.  Never first:
@@ -72,6 +88,27 @@ return function(mod, describe, wants)
     local item = top.items and top.items[top.index or 1]
     if type(item) ~= "table" or item.cancel then return nil end
     return item.value
+  end
+
+  -- A row of a menu this added ABOUT to is running.  Anything it opens is a
+  -- submenu of that menu, not a second menu about the item.  A plain flag is
+  -- enough: menus are opened synchronously from inside onSelect, on one
+  -- thread, and the flag is restored on the way out whether the row returned
+  -- or raised.
+  local nested = false
+
+  local function guard(row)
+    local onSelect = row.onSelect
+    if type(onSelect) ~= "function" then return end
+    row.onSelect = function(...)
+      local was = nested
+      nested = true
+      local ok, err = pcall(onSelect, ...)
+      nested = was
+      -- rethrown with level 0 so the message keeps the position it was
+      -- raised at rather than gaining this line's
+      if not ok then error(err, 0) end
+    end
   end
 
   local function alreadyThere(items)
@@ -130,8 +167,8 @@ return function(mod, describe, wants)
     local baseNew = Menu.new
     Menu.new = function(game, items, opts)
       local added = false
-      if wants("about") and type(items) == "table" and #items > 0
-          and not alreadyThere(items) then
+      if wants("about") and not nested and type(items) == "table"
+          and #items > 0 and not alreadyThere(items) then
         local id = bagItem(game)
         local text = id and describe(game, id)
         if text then
@@ -140,6 +177,11 @@ return function(mod, describe, wants)
             onSelect = function() show(game, text) end,
           })
           added = true
+          -- every row that was already here, so whatever one of them opens
+          -- is not offered ABOUT a second time
+          for _, row in ipairs(items) do
+            if row.label ~= LABEL then guard(row) end
+          end
           -- only a box that named its own height needs correcting; one that
           -- let Menu.new measure it is measured again with the new row in it
           if type(opts) == "table" and type(opts.th) == "number" then
@@ -159,6 +201,7 @@ return function(mod, describe, wants)
   M.bagItem = bagItem
   M.insertAt = insertAt
   M.keepOnScreen = keepOnScreen
+  M.nested = function() return nested end
   M.LABEL = LABEL
 
   return M

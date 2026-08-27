@@ -281,6 +281,40 @@ do
   Menu.new({ stack = stack({ { kind = "overworld" } }) }, elsewhere, {})
   eq(#elsewhere, 2, "a menu that is not over the bag is untouched")
 
+  -- ---- a submenu of a menu that already offered ABOUT does not offer it again
+  --
+  -- Menu pops itself before running a row, so a picker opened from a row is
+  -- built with the bag list back on top and looks exactly like the first
+  -- menu.  This is Gen1ModernBag's SORT row, reproduced.
+
+  local game = { stack = stack({ { kind = "bag", index = 1,
+    items = { { value = "POTION" } } } }) }
+  local submenu
+  local tools = {
+    { label = "SORT", onSelect = function()
+        submenu = { { label = "A-Z" }, { label = "QUANTITY" } }
+        Menu.new(game, submenu, { ty = 6 })
+      end },
+    { label = "MOVE ITEM" },
+    { label = "CANCEL" },
+  }
+  Menu.new(game, tools, { ty = 5 })
+  eq(#tools, 4, "the tools menu gets an ABOUT row")
+  eq(tools[3].label, "ABOUT", "above CANCEL")
+
+  tools[1].onSelect()
+  eq(#submenu, 2, "and the picker it opens does not get one")
+  ok(not about.nested(), "the flag is down again once the row has run")
+
+  -- a row that raises still puts the flag down
+  local raiser = { { label = "USE", onSelect = function() error("boom", 0) end },
+                   { label = "TOSS" } }
+  Menu.new(game, raiser, { ty = 10, th = 5 })
+  eq(#raiser, 3, "the box gets its row")
+  local ran = pcall(raiser[1].onSelect)
+  ok(not ran, "a row that raises still raises")
+  ok(not about.nested(), "and the flag does not stay up")
+
   Menu.new = baseNew
 end
 
