@@ -1,5 +1,65 @@
 # Changelog
 
+## 1.10.1
+
+Three fixes to what 1.10.0 shipped, all found by looking at the screen.
+
+### The lift panel was spaced wrong
+
+Three separate mistakes, all of them the same mistake: it was drawn to a
+layout of its own instead of to `src/ui/Menu.lua`'s, which is what every
+boxed choice in this game is drawn by.
+
+- **Rows were one tile apart**, not two. Nothing else in the game is spaced
+  that way, and it read as a list that had been squashed to fit.
+- **Choices ran from the top**, so the slack fell at the bottom. Gen 1
+  anchors them to the last interior row and lets the blank row fall under the
+  top border — that blank row is what keeps the first choice off the title.
+- **The FLOOR label knocked out the whole top rule.** The knock-out was padded
+  by a tile at each end, which is right for a sixteen-tile pocket header and,
+  in a box this narrow, erased everything between the corners — leaving FLOOR
+  floating between two ornaments with no frame attached to it.
+
+The box is now sized so the word keeps a column of rule on each side of it,
+and the knock-out is exactly the glyphs, the way `Menu` titles its own box.
+Every floor still fits without scrolling anywhere but SILPH CO.
+
+### The LINK CABLE had no description
+
+It is [Gen151](https://github.com/wild1walker/Gen151)'s, registered from
+Gen1WildQOL, so nothing in this bundle's table had a line for it — and it
+sits on the Celadon 4F shelf beside the four stones, every one of which
+explains itself. A row whose neighbours all speak and it does not looks
+broken.
+
+It is described here now. Safe either way: only ids the game actually has are
+described, and Gen1WildQOL loads first, so the cable is either registered by
+then or was never going to be.
+
+### The item PC printed the menu underneath it
+
+`WITHDRAW / DEPOSIT / TOSS / LOG OFF` is pushed **over** the Pokémon Center's
+own PC menu, which stays on the stack so `B` comes back to it — and, being a
+menu rather than a screen, kept drawing. Both boxes start in the same corner
+and are the same width, so for as long as they were the same height nobody
+saw it.
+
+They are not the same height. The PC menu sizes itself to its rows and grows
+one for `PROF.OAK's PC`, another for `<PK><MN>LEAGUE` once there is a HALL OF
+FAME to read, and another for anything `MENU LAYOUT` pins there, while the
+item PC's box is a fixed ten tiles. Past four rows the menu underneath
+printed its last rows out from under the box on top of it, with a second
+bottom border under those: a `LOG OFF` row below a `LOG OFF` row.
+
+The covered menu is now hidden rather than drawn over, through the engine's
+own `screen.render_visible`. It keeps its place on the stack and its place in
+the `B` chain and comes back the moment the item PC closes — and because
+nothing is painted over it, the overworld still shows around the box. The
+bedroom PC, which opens with no menu under it at all, is untouched.
+
+This one predates 1.10.0; it is what the PC has always done. It is fixed here
+because ITEM INFO is what owns those screens now.
+
 ## 1.10.0
 
 **Every item says what it is now**, and four screens that had nowhere to say it

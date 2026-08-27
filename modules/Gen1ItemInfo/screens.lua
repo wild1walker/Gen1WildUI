@@ -85,6 +85,11 @@ return function(mod, C, describe, wants)
   -- both bundles somehow getting this far) wraps nothing twice.
   local LIST_PATCH = "__gen1ItemInfoListMenu"
   local SHOP_PATCH = "__gen1ItemInfoShopMenu"
+  local PC_PATCH = "__gen1ItemInfoPlayerPC"
+
+  -- Stamped on the item PC's own menu, so the hook below can tell which
+  -- state on the stack is the one doing the covering.
+  local PC_MENU = "__gen1ItemInfoPlayerPCMenu"
 
   -- ------- the header's number
 
@@ -227,6 +232,100 @@ return function(mod, C, describe, wants)
     return true
   end
 
+  -- ------- the PC menu underneath the item PC
+  --
+  -- WITHDRAW / DEPOSIT / TOSS / LOG OFF is pushed OVER the Pokemon Center's
+  -- own PC menu, which stays on the stack with keepOpen rows so B comes back
+  -- to it -- and, being a menu rather than a screen, keeps drawing.  Both
+  -- boxes start at the top left corner and both are sixteen tiles wide, so
+  -- for as long as they were the same height nobody saw it.
+  --
+  -- They are not the same height.  The PC menu sizes itself to its rows
+  -- (`th = #items * 2 + 2`) and it grows one for PROF.OAK's PC, another for
+  -- <PK><MN>LEAGUE once there is a HALL OF FAME to read, and another for
+  -- anything MENU LAYOUT pins there -- while the item PC's box is a fixed
+  -- ten tiles.  Past four rows the menu underneath is taller than the box on
+  -- top of it and its last rows print out from under the bottom border,
+  -- along with a second bottom border under those.  A LOG OFF row below a
+  -- LOG OFF row.
+  --
+  -- The fix is to stop drawing it, not to draw over it.  Painting a white
+  -- rectangle where it used to be would leave a white patch across the
+  -- overworld -- and the overworld showing around the box is the point of a
+  -- menu that is not opaque.  `screen.render_visible` is the engine's own
+  -- answer: the state stays on the stack, keeps its place in the B-chain and
+  -- comes back the moment the item PC pops, and only its render is skipped.
+  --
+  -- Anything non-opaque below the item PC's menu is hidden, not just a menu,
+  -- because anything else down there is in exactly the same position.  The
+  -- overworld is opaque, so it is never the thing that gets hidden -- which
+  -- is what keeps the bedroom PC (opts.direct, opened with no PC menu under
+  -- it at all) drawing the room behind it.
+  local function coveredByPlayerPC(state)
+    if type(state) ~= "table" or state.isOpaque then return false end
+    if rawget(state, PC_MENU) then return false end
+    local game = state.game
+    local states = game and game.stack and game.stack.states
+    if type(states) ~= "table" then return false end
+    local below = false
+    for i = 1, #states do
+      if states[i] == state then
+        below = true
+      elseif below and type(states[i]) == "table"
+          and rawget(states[i], PC_MENU) then
+        return true
+      end
+    end
+    return false
+  end
+
+  local function patchPlayerPC()
+    local ok, PlayerPC = pcall(require, "src.ui.PlayerPC")
+    if not ok or type(PlayerPC) ~= "table"
+        or type(PlayerPC.new) ~= "function" then
+      mod.log:warn("src.ui.PlayerPC is not what this build expects; its menu "
+        .. "keeps whatever is drawing under it")
+      return false
+    end
+    if rawget(PlayerPC, PC_PATCH) then return true end
+
+    -- How many item PC menus are live.  Only an optimisation -- the scan
+    -- above is what actually decides -- so a count that drifts costs a few
+    -- comparisons a frame and never a wrong answer.  It is here because
+    -- registering this hook at all switches the engine off its "nobody is
+    -- listening" fast path for every state of every frame, and the game is
+    -- not standing at a PC for almost all of them.
+    local open = 0
+
+    local baseNew = PlayerPC.new
+    PlayerPC.new = function(game, opts)
+      local menu = baseNew(game, opts)
+      if type(menu) == "table" then
+        menu[PC_MENU] = true
+        open = open + 1
+      end
+      return menu
+    end
+    PlayerPC[PC_PATCH] = true
+
+    mod.events:on("screen.popped", function(payload)
+      local state = payload and payload.state
+      if type(state) == "table" and rawget(state, PC_MENU) then
+        open = math.max(0, open - 1)
+      end
+    end)
+
+    mod.hooks:wrap("screen.render_visible", function(nextLink, state)
+      local visible = nextLink(state)
+      if visible == false or open <= 0 or not wants("pc") then
+        return visible
+      end
+      if coveredByPlayerPC(state) then return false end
+      return visible
+    end)
+    return true
+  end
+
   -- ------- the four lists
 
   local function patchLists()
@@ -259,7 +358,8 @@ return function(mod, C, describe, wants)
   function M.install()
     local lists = patchLists()
     local shop = patchShop()
-    return lists and shop
+    local pc = patchPlayerPC()
+    return lists and shop and pc
   end
 
   -- exported for the tests, which drive the draw against a stub game rather
@@ -267,6 +367,8 @@ return function(mod, C, describe, wants)
   M.decorate = decorate
   M.headerRight = headerRight
   M.switchedOn = switchedOn
+  M.coveredByPlayerPC = coveredByPlayerPC
+  M.PC_MENU = PC_MENU
   M.KINDS = KINDS
 
   return M

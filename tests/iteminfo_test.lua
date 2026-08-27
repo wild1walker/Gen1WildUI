@@ -130,6 +130,8 @@ local function fakeMod(options)
       define = function() end,
       get = function(_, key) return (options or {})[key] end,
     },
+    events = { on = function(_, name, fn) end },
+    hooks = { wrap = function(self, name, fn) self[name] = fn end },
     logged = logged,
   }
 end
@@ -168,6 +170,11 @@ do
   eq(descriptions.FLOOR_3F, nil, "lift buttons are not described")
   eq(descriptions.ITEM_2C, nil, "unused item ids are not described")
   eq(descriptions.TM_MEGA_PUNCH, nil, "machines are described from their move")
+
+  -- Gen151's LINK CABLE, sold on the Celadon 4F shelf beside the four
+  -- stones.  It is not vanilla and it is described anyway, because a row
+  -- whose every neighbour explains itself and it does not looks broken.
+  ok(descriptions.LINK_CABLE ~= nil, "Gen151's LINK CABLE is described")
 end
 
 -- --------------------------------------------------- a machine's two lines
@@ -396,6 +403,41 @@ do
   list:draw()
   eq(drew, 1, "switched off, the engine draws its own screen")
   on = true
+
+  -- ---- the PC menu underneath the item PC
+  --
+  -- The item PC's menu is pushed over the Pokemon Center's own, which keeps
+  -- drawing and prints its extra rows out from under the shorter box on top.
+
+  local covered, PC_MENU = screens.coveredByPlayerPC, screens.PC_MENU
+  local pcMenu = { tx = 0, ty = 0, tw = 16, th = 12 }
+  local itemPc = { tx = 0, ty = 0, tw = 16, th = 10, [PC_MENU] = true }
+  local overworld = { isOpaque = true }
+  local box = { tx = 0, ty = 12, tw = 20, th = 6 }
+
+  local states = { overworld, pcMenu, itemPc }
+  for _, st in ipairs(states) do st.game = { stack = { states = states } } end
+  box.game = states[1].game
+
+  ok(covered(pcMenu), "the PC menu under the item PC is hidden")
+  ok(not covered(itemPc), "the item PC itself is not")
+  ok(not covered(overworld),
+     "and the overworld is opaque, so it is never the thing hidden")
+  ok(not covered(box), "a state that is not on the stack is left alone")
+
+  -- a text box over the item PC does not un-hide what is under it
+  states[#states + 1] = { tx = 0, ty = 12, game = states[1].game }
+  ok(covered(pcMenu), "still hidden with a text box on top of the item PC")
+
+  -- the bedroom PC: opened with no PC menu under it at all
+  local direct = { [PC_MENU] = true }
+  local alone = { overworld, direct }
+  overworld.game = { stack = { states = alone } }
+  direct.game = overworld.game
+  ok(not covered(overworld), "the bedroom PC still shows the room behind it")
+
+  ok(not covered(nil), "no state is not a crash")
+  ok(not covered({}), "a state with no game is not a crash")
 end
 
 -- --------------------------------------------------------- the lift panel
@@ -407,18 +449,77 @@ do
   chunkOf(ELEVATOR .. "main.lua")(mod)
   ok(ListMenu.new ~= baseNew, "the panel wraps ListMenu.new")
 
-  local isPanel, widthFor = mod.exports.isPanel, mod.exports.widthFor
+  local isPanel = mod.exports.isPanel
+  local widthFor, visibleFor = mod.exports.widthFor, mod.exports.visibleFor
+  local geometry = mod.exports.geometry
+
   ok(isPanel("WHICH FLOOR?"), "the lift's list is recognised")
   ok(not isPanel("BUY"), "and nothing else is")
   ok(not isPanel(nil), "a list with no title is not a crash")
 
-  -- Eight tiles is the floor: the word on the border needs six between the
-  -- corners, and no Gen 1 floor token is wide enough to beat it.
-  eq(widthFor({ { label = "1F" }, { label = "B1F" } }), 8,
-     "a normal lift is as wide as its border label")
+  -- ---- wide enough for the word on its border, with rule left over
+  --
+  -- FLOOR is five glyphs; a box of nine spends two on corners, leaves one
+  -- column of rule at each end and centres the word in the six between.
+
+  eq(widthFor({ { label = "1F" }, { label = "B1F" } }), 9,
+     "a normal lift is as wide as its border label needs")
   eq(widthFor({ { label = "MEZZANINE" } }), 13,
      "a modded lift with long names is as wide as it needs to be")
-  eq(widthFor({}), 8, "a lift with no floors still draws a box")
+  eq(widthFor({}), 9, "a lift with no floors still draws a box")
+
+  local FLOOR_GLYPHS = 5
+  for _, items in ipairs({
+    { { label = "1F" } },
+    { { label = "1F" }, { label = "2F" }, { label = "3F" } },
+    { { label = "B4F" } },
+  }) do
+    local tw = widthFor(items)
+    -- the centred, exactly-knocked-out label leaves (tw - 2 - glyphs)
+    -- columns of rule, split either side; one column each is the minimum
+    -- that reads as a titled box rather than a gap between two corners
+    ok(tw - 2 - FLOOR_GLYPHS >= 2,
+       ("a box %d wide leaves rule either side of FLOOR"):format(tw))
+  end
+
+  -- ---- every floor visible where there is room, scrolling where there is not
+
+  eq(visibleFor(5), 5, "CELADON's five floors are all on screen")
+  eq(visibleFor(4), 4, "the ROCKET HIDEOUT's four are too")
+  eq(visibleFor(11), 7, "SILPH CO.'s eleven scroll")
+  eq(visibleFor(0), 1, "a lift with no floors still has a row's worth of box")
+
+  -- ---- and the box stays on the screen
+
+  local function floors(n)
+    local items = {}
+    for i = 1, n do items[i] = { label = i .. "F" } end
+    return items
+  end
+
+  for _, n in ipairs({ 1, 3, 4, 5, 7, 11, 20 }) do
+    local tx, ty, tw, th, visible = geometry(floors(n))
+    ok(tx >= 0 and tx + tw <= 20,
+       ("%d floors: the box is inside the screen across"):format(n))
+    ok(ty >= 0 and ty + th <= 18,
+       ("%d floors: the box is inside the screen down (ty %d, th %d)")
+         :format(n, ty, th))
+    eq(th, visible * 2 + 2, n .. " floors: two tiles a row, plus the borders")
+    ok(visible <= n, n .. " floors: no more rows than there are floors")
+    -- Menu's own anchoring: the last choice on the last interior row, the
+    -- slack as a blank row under the top border
+    local lastY = (ty + th - 2) * 8
+    local firstY = (ty + th - 2 - (visible - 1) * 2) * 8
+    eq(lastY, (ty + th - 2) * 8, n .. " floors: the last row is the last row")
+    ok(firstY >= (ty + 2) * 8,
+       n .. " floors: a blank row sits under the top border")
+    ok(lastY + 8 <= (ty + th - 1) * 8,
+       n .. " floors: no row is drawn on the bottom border")
+  end
+
+  -- The regression this rewrite is for: one-tile rows.
+  local _, _, _, th5 = geometry(floors(5))
+  eq(th5, 12, "five floors is twelve tiles, not seven")
 end
 
 print(("iteminfo: %d passed, %d failed"):format(passed, failed))

@@ -150,6 +150,24 @@ return {
   NUGGET        = "A nugget of pure\ngold. Sells high.",
   COIN          = "A coin used at the\nGAME CORNER.",
 
+  -- ------- items the rest of the suite adds
+  --
+  -- Not vanilla, and described here anyway.  Gen151 -- which lives in
+  -- Gen1WildQOL, the other half of the suite -- registers a LINK CABLE and
+  -- sells it on the Celadon 4F shelf beside the four stones, and an item on
+  -- a shelf where every neighbour explains itself and it does not is the one
+  -- row that looks broken.
+  --
+  -- Safe to carry whether or not that mod is installed: main.lua only
+  -- describes ids this game actually has, and Gen1WildQOL loads first
+  -- (manifest priority 100 against this bundle's 1100), so by the time this
+  -- runs the cable is either registered or was never going to be.
+  --
+  -- It does not say the cable breaks.  That is a scripted beat -- ZzZzap!,
+  -- then "The LINK CABLE broke!" -- and Gen151 stages it deliberately; the
+  -- stones beside it do not announce that they are consumed either.
+  LINK_CABLE    = "An old LINK CABLE.\nEvolves by trade.",
+
   -- ------- badges
   --
   -- Never in the bag -- Bag.order filters them out and the trainer card is
