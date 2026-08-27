@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.8.1
+
+The status tint on a POKéMON reaches **full-colour icon art** now, in the party
+list and the box.
+
+- **PARTY MENU** → [Gen1Party](https://github.com/wild1walker/Gen1Party) 1.6.0
+- **POKEMON BOX** → [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox)
+  1.4.0
+
+It rode a palette zone, and a palette zone only reaches art that goes through
+the shade-remap pass -- which full-colour art sits out **by design**, since both
+mods mark their icon rect trueColor precisely so the pass does not repaint it
+off its red channel. So the tint coloured nothing at all for anyone running a
+full-colour icon pack. The icon is now drawn in the condition's colour as well,
+which reaches both kinds of art.
+
+The colour comes from `drawColour` in **STATUS COLOURS**
+([Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL) 1.8.0), so the party,
+the box and the overworld keep agreeing. **Without Gen1WildQOL 1.8.0 or later
+installed there is no tint**, exactly as before.
+
 ## 1.8.0
 
 A POKéMON in the party list or the box wears its condition: poisoned is purple,

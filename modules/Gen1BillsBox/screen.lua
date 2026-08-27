@@ -736,6 +736,22 @@ return function(mod)
     return statusApi
   end
 
+  -- The condition as a draw colour, from the same mod that owns the palette
+  -- one.  A palette zone reaches only art that goes through the shade-remap
+  -- pass, and a full-colour icon pack sits that pass out by design -- so the
+  -- zone below tints nothing at all for anyone running one.  Drawing the icon
+  -- in a colour reaches both: LOVE multiplies an image by the current colour,
+  -- so white is the untouched icon and this shifts its hue while keeping its
+  -- own light and dark.  nil means draw it as it is.
+  local function statusDrawColour(mon)
+    if type(mon) ~= "table" then return nil end
+    local api = statusColours()
+    if not api or type(api.drawColour) ~= "function" then return nil end
+    local ok, colour = pcall(api.drawColour, mon)
+    if not ok or type(colour) ~= "table" then return nil end
+    return colour
+  end
+
   local function statusTinted(colors, mon)
     if not colors or type(mon) ~= "table" then return colors end
     local api = statusColours()
@@ -1534,7 +1550,15 @@ return function(mod)
 
   function Screen:drawIcon(mon, x, y, selected)
     if not mon then return end
-    love.graphics.setColor(1, 1, 1, 1)
+    -- White is "draw it as it is"; a status replaces it with the colour that
+    -- condition wears, which reaches full-colour art as well as the palette
+    -- zone does not.
+    local tint = statusDrawColour(mon)
+    if tint then
+      love.graphics.setColor(tint[1], tint[2], tint[3], 1)
+    else
+      love.graphics.setColor(1, 1, 1, 1)
+    end
     pcall(PartyMenu.drawIcon, self.game, mon, x, y, false, 0,
           selected and self:animAlt() or false)
     -- full-colour art must sit out the shade remap, or the pass repaints it
