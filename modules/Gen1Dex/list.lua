@@ -100,10 +100,6 @@ return function(mod, DexData, C, Area)
   -- (a number value)` the first time the cursor moves -- which is the first
   -- frame the dex is open and the cursor is anywhere but where it started.
   --
-  -- Nothing here is a bundle question: the standalone mod and either half of
-  -- the suite all build the same screen out of the same engine, and this
-  -- crash landed on all of them at once when the engine changed underneath.
-  --
   -- Asked once, of the module rather than of an instance, so both answers
   -- come from the same reading.
   local Vanilla = require("src.ui.PokedexMenu")

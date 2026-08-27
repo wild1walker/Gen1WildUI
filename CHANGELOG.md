@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.10.4
+
+**POKEDEX follows Gen1Dex to 1.5.1, and the overlay that stood in for it goes.**
+
+1.10.3 carried the Pokédex crash fix as `overlays/Gen1Dex/list.lua`, laid over
+a submodule pinned at 1.5.0 — because the fix belonged upstream and was not
+there yet. It is there now: [Gen1Dex
+1.5.1](https://github.com/wild1walker/Gen1Dex/releases/tag/v1.5.1) is the same
+fix at its source, with the mod's own suite driving the real screen through the
+cursor keys, SELECT, both ends of the wrap and a held key's repeat.
+
+So the pin moves and the overlay is deleted in the same change, which is the
+whole of its intended life. `modules/Gen1Dex/list.lua` is upstream's file again
+and `tools/build.py --check` agrees; the only thing that reaches the game
+differently is four lines of comment that said, from inside the bundle, that
+the crash was not a bundle question.
+
+`overlays/` is empty now and the mechanism stays documented in
+`tools/build.py`, for the next tracked mod that needs a fix before its own
+release carries one.
+
+Nothing about the feature changes. A player on 1.10.3 already had the fix.
+
 ## 1.10.3
 
 **The POKEDEX crashed the moment the cursor moved.**
