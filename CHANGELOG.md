@@ -1,5 +1,59 @@
 # Changelog
 
+## 1.10.3
+
+**The POKEDEX crashed the moment the cursor moved.**
+
+`src/ui/PokedexMenu.lua:116: attempt to call method 'rows' (a number value)`,
+in the engine's own `syncScroll`, on the first press of UP or DOWN after the
+list came up.
+
+The vanilla dex was a `ListMenu` until gen1recomp rewrote it as a screen of
+its own, and the two shapes disagree about the one field this feature has
+always written. A `ListMenu` carries `rows` as a number — this list wants six
+where vanilla shows seven, because the header and footer boxes took a tile row
+each end — and the screen that replaced it carries `rows()` as a method its
+own scroll clamp calls. Writing the six over the method left the engine
+calling a number.
+
+Which shape the engine has is now asked once, and the six rows are handed over
+the way that shape asks for them. Nothing about the screen changes on a build
+that still has the list.
+
+It was never a bundle question. Installing GEN1WILD UI without GEN1WILD QOL is
+where it happened to be found, but the two halves have nothing to do with this
+one: the dex is carried here alone, the other half never touches
+`PokedexMenu`, and the standalone
+[Gen1Dex](https://github.com/wild1walker/Gen1Dex) hits it the same way. The
+suite's halves stand alone, and this was the engine moving underneath all
+three of them at once.
+
+### Three settings that had gone quiet with it
+
+The same rewrite took `wrap`, `keyRepeat` and `onSelectKey` with it — they
+were `ListMenu` opts, and the screen's own update reads none of them. So
+SELECT VIEWS, LIST WRAPS and HOLD TO SCROLL were three rows on the menu that
+did nothing, and LEFT/RIGHT paged by the engine's seven over a list showing
+six, stepping past an entry each press and never reaching the last one.
+
+All four are answered again, as a layer over the engine's update rather than a
+replacement for it: A, B and the side menu never reach it, and every key it
+does take is one the engine leaves unbound here or one whose press it would
+have spent doing nothing.
+
+### How it is carried
+
+`overlays/Gen1Dex/list.lua`, laid over the pinned submodule on the way into
+`modules/` by `tools/build.py`. The fix belongs upstream and should land
+there; until it does, an overlay is what keeps this bundle from shipping a
+Pokédex that crashes, without editing a submodule this repository does not
+own. The next sync that carries the upstream fix should delete it.
+
+`tests/dexlist_test.lua` stands both shapes of the engine screen up headless —
+the screen's `rows`/`syncScroll`/`pageScroll`/`update` arithmetic copied
+rather than approximated — and drives the list through them. It fails with
+exactly the reported error against the code this release fixes.
+
 ## 1.10.2
 
 **The lift panel loses its FLOOR header.**

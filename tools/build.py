@@ -15,6 +15,17 @@ Most features are the first kind.  The two that are not were originally other
 people's mods and are now maintained here -- see `maintained` in features.lua,
 and the credits in README.md, which stay either way.
 
+    overlays/<Dir>/      files laid over a TRACKED mod on the way into
+                         modules/, whole files at a time.
+
+The overlay is the seam for a fix a tracked mod needs before its own release
+carries one -- an engine change that broke it, most of all, where the choice is
+otherwise between shipping a bundle that crashes and editing a submodule this
+repository does not own.  It is meant to be temporary: an overlay whose file
+the upstream has caught up with is dead weight, and the next sync should delete
+it rather than keep laying an old copy over a newer one.  A feature under
+maintained/ never has one -- its source is the source.
+
 modules/ is committed rather than generated at install time, because a mod is
 installed by copying a folder or importing a .zip and neither runs a build.
 Committing it also means an upstream bump shows up as a reviewable diff in this
