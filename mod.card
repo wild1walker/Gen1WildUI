@@ -16,6 +16,11 @@ return {
         .. "press of A away",
       "seven features drawn from seven mods, each of which remains its own "
         .. "repository and is pinned here as a submodule",
+      "item icons: a picture of every item in the column left of its name, "
+        .. "in the bag, in the mart's two lists and the item PC's three.  A "
+        .. "machine is a disc in the colour of the type of the move it "
+        .. "teaches.  The art is Pokemon Polished Crystal's, not this "
+        .. "project's -- see modules/Gen1ItemInfo/CREDITS.md",
       "ITEM INFO: a description for every item in the game, shown in the "
         .. "mart's BUY and SELL lists where the clerk used to say \"Take "
         .. "your time.\", in the item PC's WITHDRAW, DEPOSIT and TOSS "

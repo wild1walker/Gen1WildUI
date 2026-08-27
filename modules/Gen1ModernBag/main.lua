@@ -84,8 +84,61 @@ end
 -- corners are the label's. Nothing else is on that border: up to 1.3.1 the
 -- Left/Right arrows took the outermost column at each end, which left a
 -- nine-letter pocket name only one column of rule to sit in.
-local ITEM_BOX = { tx = 4, ty = 2, tw = 16, th = 11 }
-local HEADER_Y = ITEM_BOX.ty * 8
+--
+-- ------- and the same window one tile wider, for the icons
+--
+-- An item icon is sixteen pixels, which is two tiles, and the engine's window
+-- has one to spare: the cursor takes the column at x = 40 and a name from
+-- x = 48 has thirteen columns to the right margin for the twelve glyphs a Gen
+-- 1 item name can be. Putting a picture in that one spare column would have
+-- cost every twelve-glyph name its last letter -- SUPER POTION, FULL RESTORE,
+-- THUNDERSTONE, HELIX FOSSIL, BIKE VOUCHER, HYPER POTION and OAK's PARCEL are
+-- the seven, which is most of a starting Bag -- and a name cut short is a
+-- worse row than a name with no picture beside it.
+--
+-- So the window grows a tile at the left instead. It still starts inside the
+-- screen and the map still shows around it: this is the same pop-up over the
+-- overworld it has always been, two tiles in from the edge rather than four.
+-- Nothing else moves. The name column, the quantity column, the more-arrow
+-- and both borders are where they were, so the pocket name and the money
+-- still sit exactly where a player's eye already goes for them.
+local LAYOUTS = {
+  -- the engine's own, drawn by the engine's own drawItemBox
+  plain = {
+    tx = 4, ty = 2, tw = 16, th = 11,
+    cursorX = 40, iconX = nil, nameX = 48,
+  },
+  -- one tile wider at the left: cursor 32, icon 40-55, name from 56, which
+  -- is twelve glyphs to the right margin at 152 and no name trimmed
+  icons = {
+    tx = 3, ty = 2, tw = 17, th = 11,
+    cursorX = 32, iconX = 40, nameX = 56,
+  },
+}
+local HEADER_Y = LAYOUTS.plain.ty * 8
+
+-- Which of the two a Bag is drawing in. The icons are a setting and the
+-- setting is live, so this is asked every frame rather than fixed when the
+-- Bag opened -- and it answers `plain` whenever there are no icons to draw,
+-- which is a build whose assets did not survive being installed.
+local function layoutFor(state)
+  if type(state) ~= "table" or state.icons == nil then return LAYOUTS.plain end
+  if optionValue(state.mod, "item_icons", true) == false then
+    return LAYOUTS.plain
+  end
+  return LAYOUTS.icons
+end
+
+local function layoutOf(list)
+  return layoutFor(type(list) == "table" and list.modernBag or nil)
+end
+
+-- How many glyphs a name has between where it starts and the frame: the
+-- window's last interior column less the name column, in 8px cells. Thirteen
+-- in the engine's window, twelve in the one with icons in it.
+local function nameGlyphs(box)
+  return math.floor(((box.tx + box.tw - 1) * 8 - box.nameX) / 8)
+end
 
 -- Knock the border line out from under a label.
 --
@@ -182,9 +235,10 @@ local function drawPocketHeader(list)
   local pocket = state and POCKETS[state.pocket]
   if not pocket then return end
   local Font = require("src.render.Font")
+  local box = layoutOf(list)
   -- Corners, and a tile of clearance inside each.
-  local label = fitLabel(Font, pocket.label, (ITEM_BOX.tw - 4) * 8)
-  drawBorderLabel(Font, label, ITEM_BOX.tx, ITEM_BOX.ty, ITEM_BOX.tw)
+  local label = fitLabel(Font, pocket.label, (box.tw - 4) * 8)
+  drawBorderLabel(Font, label, box.tx, box.ty, box.tw)
   love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -199,9 +253,13 @@ end
 -- The amount stops one column short of the corner, at x = 144, so the tile
 -- between it and the corner glyph is its clearance -- the same tile the rule
 -- gives it at the other end.
-local MONEY_Y = (ITEM_BOX.ty + ITEM_BOX.th - 1) * 8
-local MONEY_RIGHT_X = (ITEM_BOX.tx + ITEM_BOX.tw - 2) * 8
-local MONEY_LEFT_LIMIT = (ITEM_BOX.tx + 1) * 8 + BORDER_LABEL_PAD
+-- Both windows end on the same tile row and the same right-hand corner, so
+-- the amount does not move between them; only the wall it can never be pushed
+-- past on the way left does.
+local MONEY_Y = (LAYOUTS.plain.ty + LAYOUTS.plain.th - 1) * 8
+
+local function moneyRightX(box) return (box.tx + box.tw - 2) * 8 end
+local function moneyLeftLimit(box) return (box.tx + 1) * 8 + BORDER_LABEL_PAD end
 
 local function moneyText(game)
   local amount = math.floor(tonumber(game and game.save and game.save.money) or 0)
@@ -209,13 +267,15 @@ local function moneyText(game)
 end
 
 local function drawBagMoney(list)
-  local text = list.footer
+  local text = moneyText(list.game)
   if type(text) ~= "string" or text == "" then return end
   local Font = require("src.render.Font")
+  local box = layoutOf(list)
+  local rightX, leftLimit = moneyRightX(box), moneyLeftLimit(box)
   -- Never past its own clearance at the other end, however wide the glyphs are.
-  local x = math.max(MONEY_LEFT_LIMIT, MONEY_RIGHT_X - Font.width(text))
+  local x = math.max(leftLimit, rightX - Font.width(text))
   clearBorderRun(x - BORDER_LABEL_PAD,
-    MONEY_Y, (MONEY_RIGHT_X - x) + BORDER_LABEL_PAD * 2)
+    MONEY_Y, (rightX - x) + BORDER_LABEL_PAD * 2)
   love.graphics.setColor(0, 0, 0, 1)
   Font.draw(text, x, MONEY_Y)
   love.graphics.setColor(1, 1, 1, 1)
@@ -623,14 +683,16 @@ end
 
 -- Drawable width of a machine row. The 20-tile item window also spends
 -- columns on the selection cursor and the window border, so the usable run
--- is ~13 glyphs, not 15. The marker variant reserves room for "P"/"F"/"PF".
--- Lower these if your display still clips.
-local MACHINE_LABEL_WIDTH = 13
-local MACHINE_LABEL_WIDTH_MARKED = 9
+-- is ~13 glyphs, not 15 -- and one fewer again in the window with icons in
+-- it, where the name starts a tile further in. The marker variant reserves
+-- four of those for "P"/"F"/"PF", which is upstream's own offset between the
+-- two. Lower MACHINE_LABEL_TRIM if your display still clips.
+local MACHINE_LABEL_TRIM = 0
+local MACHINE_LABEL_MARKER_ROOM = 4
 
-local function compactMachineLabel(info, markers)
-  local maxChars = markers ~= "" and MACHINE_LABEL_WIDTH_MARKED
-    or MACHINE_LABEL_WIDTH
+local function compactMachineLabel(info, markers, box)
+  local maxChars = nameGlyphs(box or LAYOUTS.plain) - MACHINE_LABEL_TRIM
+  if markers ~= "" then maxChars = maxChars - MACHINE_LABEL_MARKER_ROOM end
   local label = info.code .. " " .. info.name
   if #label > maxChars then label = label:sub(1, maxChars - 1) .. "." end
   return label
@@ -797,7 +859,7 @@ local function itemRows(game, pocketId, state)
         local info = actualPocket == "machines" and machineInfo(game, id, def) or nil
         local label = (def and def.name) or id
         if pocketId == "machines" and info then
-          label = compactMachineLabel(info, markers)
+          label = compactMachineLabel(info, markers, layoutFor(state))
         end
         rows[#rows + 1] = {
           label = label,
@@ -896,8 +958,13 @@ local function refreshPocket(list, preserveId)
   state.selectActionLabel = "SEARCH"
   -- Published for Gen1 Modern UI: the order this tab is in.
   state.pocketSortLabel = SORT_LABELS[pocketSortMode(state, pocket.id)]
-  -- The whole footer is now the amount on the window's bottom border.
-  list.footer = moneyText(list.game)
+  -- The amount is drawn on the window's bottom border, off the save, and the
+  -- list's own footer is left empty on purpose.  `ListMenu:drawItemBox` opens
+  -- the standard full-width text box under the window for any list that has
+  -- one -- `if self.messageBox or self.footer` -- so a Bag that parked the
+  -- money there got the amount twice: once on the border and once inside a
+  -- box the Bag has not had since 1.2.0.  Nothing else reads it.
+  list.footer = nil
   restoreCursor(list, rows, preserveId)
 
   if state.swapId then
@@ -1146,11 +1213,14 @@ end
 -- "you are holding this" state. 1.5.0 set list.hollowIndex for it, which the
 -- engine's item-box path does not read, so nothing ever looked picked up.
 --
--- LIST_MENU_BOX draws the selection cursor in the column at x = 40 and the
--- first item name at y = 32, two rows to an item.
-local ITEM_CURSOR_X = 40
+-- LIST_MENU_BOX draws the first item name at y = 32, two rows to an item; the
+-- cursor's column is the layout's, because the icons move it one tile left.
 local ITEM_ROW_TOP_Y = 32
 local ITEM_ROW_H = 16
+-- home/list_menu.asm:479-490 -- the 'x' at column 14, the count right-aligned
+-- after it -- and the terminator's more-arrow at 144,88.
+local ITEM_QTY_X, ITEM_QTY_END = 112, 136
+local ITEM_MORE_X, ITEM_MORE_Y = 144, 88
 
 local function drawCarriedCursor(list)
   local row = carriedRow(list)
@@ -1159,13 +1229,110 @@ local function drawCarriedCursor(list)
   if visible < 1 or visible > (list.rows or 4) then return end
   local Font = require("src.render.Font")
   local Theme = require("src.ui.Theme")
+  local cursorX = layoutOf(list).cursorX
   local y = ITEM_ROW_TOP_Y + (visible - 1) * ITEM_ROW_H
-  -- The engine has already drawn its solid cursor on this row; white it out,
-  -- or the hollow one lands on top of it and neither reads.
+  -- The solid cursor is already drawn on this row; white it out, or the
+  -- hollow one lands on top of it and neither reads.
   love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.rectangle("fill", ITEM_CURSOR_X, y, 8, 8)
+  love.graphics.rectangle("fill", cursorX, y, 8, 8)
   love.graphics.setColor(0, 0, 0, 1)
-  Font.drawCode(Theme.cursorHollow or Theme.cursor, ITEM_CURSOR_X, y)
+  Font.drawCode(Theme.cursorHollow or Theme.cursor, cursorX, y)
+  love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- The standard bottom text box, which the item-box path draws under the
+-- window whenever there is a footer or a message to put in it. Last two lines
+-- of what it is given, like the GB's own scrolled box -- `src/ui/ListMenu.lua`
+-- keeps this as a local, so redrawing the window means carrying a copy of it.
+local function drawListMessageBox(list, Font)
+  Font.drawBox(0, 12, 20, 6)
+  love.graphics.setColor(0, 0, 0, 1)
+  if not list.footer then return end
+  local ok, TextBox = pcall(require, "src.render.TextBox")
+  if not ok or type(TextBox) ~= "table"
+      or type(TextBox.paginate) ~= "function" then
+    return
+  end
+  local flat = {}
+  for _, page in ipairs(TextBox.paginate(list.footer)) do
+    for _, line in ipairs(page) do flat[#flat + 1] = line end
+  end
+  local y = 112
+  for i = math.max(1, #flat - 1), #flat do
+    Font.draw(flat[i], 8, y)
+    y = y + 16
+  end
+end
+
+-- ------- the item window, when it is the one with icons in it
+--
+-- Drawn here rather than by the engine, and only in the icons layout. With
+-- the icons off this is not called at all and `ListMenu:drawItemBox` draws
+-- the Bag exactly as it always has -- which is the point of it being a
+-- setting, and the reason the switch cannot cost anybody a frame of the
+-- window they had.
+--
+-- Everything below is `src/ui/ListMenu.lua`'s own item-box draw with the four
+-- x-positions taken from the layout instead of from its constants: the same
+-- box, the same four rows sixteen apart, the same 'x' at column 14 with the
+-- count right-aligned after it, the same more-arrow on the terminator, the
+-- same bottom text box. Nothing about WHAT is drawn changes, only where two
+-- of the columns are -- so a row that reads oddly here reads oddly with the
+-- icons off too, and is the engine's to fix rather than this file's.
+--
+-- The one addition is the trim. The engine prints an item name unclipped
+-- because at x = 48 nothing in the game is long enough to reach the frame;
+-- from x = 56 a thirteen-glyph name from a mod would print over the border,
+-- so it is cut to the column budget the same way every other label in this
+-- file is.
+local function drawItemWindow(list, icons)
+  local Font = require("src.render.Font")
+  local Theme = require("src.ui.Theme")
+  local Strings = require("src.core.Strings")
+  local box = layoutOf(list)
+  local rows = list.rows or 4
+  local budget = (box.tx + box.tw - 1) * 8 - box.nameX
+
+  love.graphics.setColor(1, 1, 1, 1)
+  Font.drawBox(box.tx, box.ty, box.tw, box.th)
+  love.graphics.setColor(0, 0, 0, 1)
+  if #list.items == 0 then
+    Font.draw(Strings("Nothing here."), box.nameX, ITEM_ROW_TOP_Y)
+  end
+
+  local shown, sawCancel = 0, false
+  for row = 1, rows do
+    local i = (list.scroll or 0) + row
+    local item = list.items[i]
+    if not item then break end
+    shown = shown + 1
+    if item.cancel then sawCancel = true end
+    local y = ITEM_ROW_TOP_Y + (row - 1) * ITEM_ROW_H
+    if box.iconX and icons then
+      icons.drawFor(list.game, item.value, box.iconX, y)
+    end
+    Font.draw(fitLabel(Font, tostring(item.label or ""), budget), box.nameX, y)
+    if item.sub then
+      Font.draw(item.sub, ITEM_QTY_X, y + 8)
+    elseif item.right then
+      local count = item.right:sub(2)
+      Font.draw(item.right:sub(1, 1), ITEM_QTY_X, y + 8)
+      Font.draw(count, ITEM_QTY_END - Font.width(count), y + 8)
+    end
+    if i == list.index then
+      Font.drawCode(list.hollowIndex == i
+                    and Theme.cursorHollow or Theme.cursor, box.cursorX, y)
+    end
+    if list.swapIndex == i and i ~= list.index then
+      Font.drawCode(Theme.cursorHollow, box.cursorX, y)
+    end
+  end
+
+  -- the terminator prints CANCEL and returns before the '▼'
+  if shown == rows and not sawCancel then
+    Font.drawCode(Theme.moreArrow, ITEM_MORE_X, ITEM_MORE_Y)
+  end
+  if list.messageBox or list.footer then drawListMessageBox(list, Font) end
   love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -1197,7 +1364,7 @@ local function searchRows(game, query, state)
         -- A machine answers to its code, its move, and that move's type and
         -- damage class; and it is listed by its move, not by "TM24".
         haystack = haystack .. info.searchKey
-        label = compactMachineLabel(info, markers)
+        label = compactMachineLabel(info, markers, layoutFor(state))
       end
       if wanted == "" or haystack:find(wanted, 1, true) then
         rows[#rows + 1] = {
@@ -1600,7 +1767,7 @@ local function openBagTools(list)
   if item then openItemTools(item, list) end
 end
 
-local function decorateBag(game, opts, list, mod)
+local function decorateBag(game, opts, list, mod, icons)
   if type(list) ~= "table" or list.modernBag then return list end
 
   local baseUpdate = list.update
@@ -1630,6 +1797,10 @@ local function decorateBag(game, opts, list, mod)
     pocketSort = preferences.pocketSort,
     machineFilters = { query = "", type = "ANY", damageClass = "ANY" },
     searchAvailable = true,
+    -- The item icons, or nil when there are none to draw. Loaded once per
+    -- install (see loadIcons) and carried on the state so the drawing code
+    -- reaches them through the list it is already given.
+    icons = icons,
     startActionLabel = "TOOLS",
     selectActionLabel = "SEARCH",
   }
@@ -1708,7 +1879,16 @@ local function decorateBag(game, opts, list, mod)
   end
 
   function list:draw()
-    baseDraw(self)
+    -- The wider window is drawn here; the engine's own is drawn by the engine.
+    -- Which one it is is asked every frame, so ITEM ICONS switches the Bag on
+    -- the next frame rather than on the next boot -- and an item-box list this
+    -- mod never decorated (a build that draws its own) is left to whatever
+    -- draws it.
+    if self.itemBox and layoutOf(self).iconX then
+      drawItemWindow(self, self.modernBag.icons)
+    else
+      baseDraw(self)
+    end
     -- Only the item-box path leaves the title and footer rows unpainted. If a
     -- build ever draws them itself, leave it alone rather than doubling up.
     if self.itemBox then
@@ -1902,6 +2082,28 @@ local modernUiContract = {
   },
 }
 
+-- ------- the icon set
+--
+-- A file this mod ships, compiled in this mod's own sandbox. `mod:read` plus
+-- `load` is the documented way to reach one: a mod's directory is not on
+-- package.path, and require() would only find it by accident of where the mod
+-- happens to be installed.
+--
+-- Nil is an ordinary answer -- an older host with no `mod:read`, or an
+-- install that dropped assets/ -- and the Bag draws the window it always drew.
+local function loadIcons(mod)
+  if type(mod.read) ~= "function" then return nil end
+  local ok, source = pcall(mod.read, mod, "icons.lua")
+  if not ok or not source then return nil end
+  local chunk = load(source, "@" .. tostring(mod.path) .. "/icons.lua")
+  if not chunk then return nil end
+  local built, icons = pcall(chunk)
+  if not built or type(icons) ~= "function" then return nil end
+  local made, value = pcall(icons, mod)
+  if not made or type(value) ~= "table" then return nil end
+  return value
+end
+
 return function(mod)
   if mod.options and type(mod.options.define) == "function" then
     mod.options:define({
@@ -1939,6 +2141,17 @@ return function(mod)
           { "Fast", "fast" },
           { "Very Fast", "very_fast" },
         },
+      },
+      {
+        key = "item_icons",
+        type = "toggle",
+        label = "Item Icons",
+        -- A picture of every item in the column between the cursor and the
+        -- name. It is a switch because it is the one setting here that moves
+        -- the window: the icons need a column the engine's own does not have,
+        -- so the Bag grows a tile at the left to hold one (see LAYOUTS). Off
+        -- is the window every release up to 1.9.4 drew, to the pixel.
+        default = true,
       },
     })
   end
@@ -1985,6 +2198,14 @@ return function(mod)
     return { enabled = cfg.enabled, delay = cfg.delay, rate = cfg.rate }
   end
 
+  -- Loaded once, at install, and carried onto every Bag this mod decorates.
+  -- The images themselves are still loaded lazily, the first time a row asks
+  -- for one; what is built here is only the thing that knows how to find them.
+  local icons = loadIcons(mod)
+  if not icons then
+    mod.log:info("Gen1ModernBag found no item icons; the Bag draws its rows without them")
+  end
+
   mod.events:on("game.ready", function(event)
     local game = event and event.game
     if not game then
@@ -2024,11 +2245,24 @@ return function(mod)
       end
     end
     dispatch.decorate = function(currentGame, opts, list)
-      return decorateBag(currentGame, opts, list, mod)
+      return decorateBag(currentGame, opts, list, mod, icons)
     end
     mod.log:info("Gen1ModernBag installed with " .. tostring(#POCKETS)
       .. " pockets, configurable opening pocket, hold scrolling, favorites, pinned items, TM/HM filters, move data, power sorting and unlimited inventory")
   end)
+
+  -- Published like every other capability here: a sibling with a place for an
+  -- item's picture -- a held-item row, a shop, a PC list -- can draw one
+  -- without carrying a copy of the set. Nil for an item that has no icon,
+  -- which every caller has to handle anyway.
+  mod.exports.itemIcon = function(game, id)
+    if not icons then return nil end
+    return icons.of(game, id)
+  end
+  mod.exports.drawItemIcon = function(game, id, x, y)
+    if not icons then return nil end
+    return icons.drawFor(game, id, x, y)
+  end
 
   mod.exports.pocketFor = pocketFor
   mod.exports.autoSort = function(game)

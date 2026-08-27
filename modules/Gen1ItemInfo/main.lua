@@ -17,9 +17,11 @@
 -- lists have no header, no margins and a money box floating in the corner.
 --
 --   descriptions.lua  the sentences: every item, two lines, eighteen glyphs
+--   icons.lua         the pictures, and how a machine gets one
 --   chrome.lua        the drawing kit, shared with Gen1Dex's and Gen1Party's
 --   screens.lua       the mart and the item PC
 --   about.lua         the bag's ABOUT row
+--   assets/items/     one 16x16 PNG per item, named for its id
 --
 -- ------- the descriptions go into the DATA, not into this mod
 --
@@ -41,7 +43,7 @@
 -- one asks its option every time it draws, so turning MART SCREENS off puts
 -- the engine's own draw back on the next frame rather than on the next boot.
 
-local FEATURES = { "mart", "pc", "about" }
+local FEATURES = { "mart", "pc", "about", "icons" }
 
 -- A file this mod ships, compiled in this mod's own sandbox.  mod:read plus
 -- load is the documented way to reach one: a mod's directory is not on
@@ -105,6 +107,17 @@ return function(mod)
     -- The bag row.  Its own switch because it is the one part of this that
     -- adds something to a menu rather than redrawing one.
     { key = "about", type = "toggle", label = "BAG ABOUT", default = true,
+      visible_if = { key = "enabled", equals = true } },
+    -- A picture of every item, in the column between the cursor and the name
+    -- on the mart's two lists and the item PC's three.  Its own row because
+    -- it is the one thing here a player might not want -- it moves the price
+    -- to the line under the name to pay for the column -- and because a
+    -- screen without it is exactly the screen 1.10.4 drew.
+    --
+    -- The bag's icons are the BAG feature's own: it draws its window itself,
+    -- and a row here could not reach it.  This switch is about the three
+    -- screens this mod draws.
+    { key = "icons", type = "toggle", label = "ITEM ICONS", default = true,
       visible_if = { key = "enabled", equals = true } },
   })
 
@@ -194,12 +207,21 @@ return function(mod)
     return
   end
 
+  -- The pictures.  A nil here is a mod whose assets did not survive whatever
+  -- installed it, and the screens draw the rows they always drew: an icon is
+  -- the one thing in this mod that is decoration rather than information.
+  local Icons = part(mod, "icons.lua")
+  local I = type(Icons) == "function" and Icons(mod) or nil
+  if not I then
+    mod.log:warn("no item icons; the screens draw their rows without them")
+  end
+
   local Screens = part(mod, "screens.lua")
   if type(Screens) == "function" then
     -- `wants` is passed rather than folded into `describe`: each list asks
     -- about its own row, so MART SCREENS off has to leave the PC's three
     -- alone, and one gate for both could not tell them apart.
-    local screens = Screens(mod, C, describe, wants)
+    local screens = Screens(mod, C, describe, wants, I)
     if type(screens) == "table" then screens.install() end
   end
 
@@ -214,6 +236,18 @@ return function(mod)
   -- somewhere one would fit.
   mod.exports.describe = describe
   mod.exports.descriptions = Descriptions
+  -- Published for the same reason `describe` is: Gen1BillsBox's held-item row
+  -- and any other screen with a place for one can draw an item's picture
+  -- without carrying a copy of the set.  Nil when there are no assets, and
+  -- nil for an item that has none, which every caller has to handle anyway.
+  mod.exports.icon = function(game, id)
+    if not I then return nil end
+    return I.of(game, id)
+  end
+  mod.exports.drawIcon = function(game, id, x, y)
+    if not I then return nil end
+    return I.drawFor(game, id, x, y)
+  end
   mod.exports.machineLine = machineLine
   mod.exports.features = FEATURES
 

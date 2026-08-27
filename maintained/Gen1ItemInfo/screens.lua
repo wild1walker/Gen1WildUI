@@ -1,6 +1,6 @@
 -- Gen1ItemInfo: the mart and the item PC, redrawn.
 --
--- Returns a factory: factory(mod, C, describe) -> { install = fn }.
+-- Returns a factory: factory(mod, C, describe, wants, icons) -> { install = fn }.
 --
 -- ------- decorated, not replaced
 --
@@ -53,7 +53,7 @@
 -- than named here, so a localized `_PokemartBuyingGreetingText` is still
 -- recognised as the idle line and still replaced.
 
-return function(mod, C, describe, wants)
+return function(mod, C, describe, wants, icons)
   local Font = mod.ui.Font
   local Menu = mod.ui.Menu
   local Theme = mod.ui.Theme
@@ -111,13 +111,24 @@ return function(mod, C, describe, wants)
 
   -- ------- the draw
 
+  -- Icons are a row of their own in the menu, so a player who wants the
+  -- screens and not the pictures can have that -- and a build with no icons
+  -- to load (a partial install, a stripped package) draws the rows it always
+  -- drew rather than a column of gaps.
+  local function withIcons()
+    return icons ~= nil and wants("icons")
+  end
+
   local function draw(self)
     C.clear()
     C.header(Strings(self.title or ""), headerRight(self))
 
+    local pictures = withIcons()
+    local labelX = pictures and C.ICON_LABEL_X or C.LABEL_X
+
     local rows = self.rows or C.ROWS
     if #self.items == 0 then
-      Font.draw(Strings("Nothing here."), C.LABEL_X, C.rowY(1))
+      Font.draw(Strings("Nothing here."), labelX, C.rowY(1))
     end
 
     for row = 1, rows do
@@ -128,12 +139,27 @@ return function(mod, C, describe, wants)
       local right = item.right
       -- The label's budget is what is left after the price or the count,
       -- plus a tile of clearance so the two can never touch.  ListMenu's own
-      -- full-screen branch keeps the same gap.
-      local budget = C.RIGHT - C.LABEL_X
-      if right then budget = budget - Font.width(right) - 8 end
-      Font.draw(C.fit(item.label, budget), C.LABEL_X, y)
+      -- full-screen branch keeps the same gap.  With an icon the number is on
+      -- the line below and takes nothing from the name (see chrome.lua).
+      local budget = C.RIGHT - labelX
+      local rightY = y
       if right then
-        Font.draw(right, C.rightAlign(right, C.RIGHT), y)
+        if pictures then
+          rightY = y + C.RIGHT_SUB_Y
+        else
+          budget = budget - Font.width(right) - 8
+        end
+      end
+      if pictures then
+        -- Drawn before the label, not after: an icon is opaque where it is
+        -- inked and the label is a tile clear of it either way, but a row
+        -- whose art arrives late would flicker over its own name on the
+        -- frame a pocket changes under it.
+        icons.drawFor(self.game, item.value, C.ICON_X, y)
+      end
+      Font.draw(C.fit(item.label, budget), labelX, y)
+      if right then
+        Font.draw(right, C.rightAlign(right, C.RIGHT), rightY)
       end
       if i == self.index then
         C.cursor(y)
@@ -367,6 +393,7 @@ return function(mod, C, describe, wants)
   M.decorate = decorate
   M.headerRight = headerRight
   M.switchedOn = switchedOn
+  M.withIcons = withIcons
   M.coveredByPlayerPC = coveredByPlayerPC
   M.PC_MENU = PC_MENU
   M.KINDS = KINDS

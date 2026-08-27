@@ -22,10 +22,10 @@ itself. Nothing is all-or-nothing.
 | **POKEDEX** | [Gen1Dex](https://github.com/wild1walker/Gen1Dex) — a Pokémon beside every entry, base stats, evolutions, the full movelist, and an AREA screen |
 | **POKEMON BOX** | [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) — Bill's PC as the box it stood in for: party left, twenty slots right |
 | **PARTY MENU** | [Gen1Party](https://github.com/wild1walker/Gen1Party) — every Pokémon in its own species colours instead of six sharing one |
-| **BAG** | [Gen1ModernBag](https://github.com/wild1walker/Gen1ModernBag) — seven pockets, auto-sorting, favorites, search, no capacity limit |
+| **BAG** | [Gen1ModernBag](https://github.com/wild1walker/Gen1ModernBag) — seven pockets, an icon on every row, auto-sorting, favorites, search, no capacity limit |
 | **MENU LAYOUT** † | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) — reorder the START and PC menus, hide rows, pin field moves |
 | **MOD MANAGER** † | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) — the mod manager redrawn in the game's own OPTION-screen idiom |
-| **ITEM INFO** ‡ | what every item is, in the mart, in the item PC and on an ABOUT row in the bag — and those screens redrawn to have somewhere to put it |
+| **ITEM INFO** ‡ | what every item is, and a picture of it, in the mart, in the item PC and on an ABOUT row in the bag — and those screens redrawn to have somewhere to put it |
 | **ELEVATOR PANEL** ‡ | the lift's WHICH FLOOR? list as a small panel against the edge, with the car still on the screen behind it |
 
 All eleven ship on.
@@ -240,6 +240,15 @@ Everything here is somebody's work, and mostly not mine:
 - **[ShaneMcGovernIE](https://github.com/ShaneMcGovernIE/gen1recomp-widescreen-battle-intro)**
   — *Widescreen Battle Intro*, essentially whole. `BATTLE INTRO` is their mod
   with the bundle's menu around it. Maintained here now, theirs by origin.
+- **[Pokémon Polished Crystal](https://github.com/Rangi42/polishedcrystal)**,
+  maintained by **Rangi** (Rangi42), and its graphics contributors — the item
+  icons `ITEM INFO` and `BAG` draw, recolored from that project's own palette
+  data and scaled to the sixteen pixels a Gen 1 list row is high. None of that
+  art was made for this bundle and none of it is mine; that project ships no
+  licence file, so what it asks for is credit and a word before a wide
+  release. [`modules/Gen1ItemInfo/CREDITS.md`](modules/Gen1ItemInfo/CREDITS.md)
+  is the full attribution and the terms — read it before you redistribute the
+  assets.
 - **[Gen1Recomp](https://github.com/bryanthaboi/gen1recomp)** and
   **[pret](https://github.com/pret)** — the engine and the disassemblies all of
   it stands on.

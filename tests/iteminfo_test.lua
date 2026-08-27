@@ -129,12 +129,26 @@ end
 local drawn
 
 local function watchDraws(ui)
-  drawn = { boxes = {}, text = {}, codes = {}, rects = {} }
+  drawn = { boxes = {}, text = {}, codes = {}, rects = {}, images = {} }
   love = {
     graphics = {
       setColor = function() end,
       rectangle = function(_, x, y, w, h)
         drawn.rects[#drawn.rects + 1] = { x = x, y = y, w = w, h = h }
+      end,
+      -- The icons are real files under the module's own assets/, so the stub
+      -- opens them rather than pretending: a mapping that names an icon this
+      -- mod does not ship is exactly the mistake worth catching, and it can
+      -- only be caught against the folder itself.
+      newImage = function(path)
+        local handle = io.open(path, "rb")
+        if not handle then error("no image at " .. tostring(path), 0) end
+        handle:close()
+        return { path = path, setFilter = function() end }
+      end,
+      draw = function(image, x, y)
+        drawn.images[#drawn.images + 1] =
+          { path = image and image.path, x = x, y = y }
       end,
     },
   }
@@ -595,6 +609,157 @@ do
   eq(#drawn.codes, 1, "one cursor")
   eq(drawn.codes[1].y, drawn.text[4].y, "on the row it is pointing at")
   eq(drawn.codes[1].x, drawn.text[1].x - 8, "one column left of the labels")
+end
+
+-- ------------------------------------------------------------ the icons
+
+do
+  local mod = fakeMod()
+  -- The icons resolve against the module's own folder, which is where the
+  -- PNGs actually are; `.` is where this suite runs from.
+  mod.path = "modules/Gen1ItemInfo"
+  watchDraws(mod.ui)
+
+  local icons = chunkOf(MODULE .. "icons.lua")(mod)
+  eq(icons.W, 16, "an icon is sixteen wide")
+  eq(icons.H, 16, "and sixteen tall, which is the height of a list row")
+
+  local game = {
+    data = {
+      items = {
+        POTION = { name = "POTION" },
+        SURFBOARD = { name = "SURFBOARD" },
+        TM_FLAMETHROWER = { name = "TM35",
+          machine = { kind = "TM", number = 35, move = "FLAMETHROWER" } },
+        HM_SURF = { name = "HM03",
+          machine = { kind = "HM", number = 3, move = "SURF" } },
+        TM_NOSUCHMOVE = { name = "TM99",
+          machine = { kind = "TM", number = 99, move = "NOSUCHMOVE" } },
+        LINK_CABLE = { name = "LINK CABLE" },
+      },
+      moves = {
+        FLAMETHROWER = { name = "FLAMETHROWER", type = "FIRE" },
+        SURF = { name = "SURF", type = "WATER" },
+      },
+    },
+  }
+
+  local function pathOf(id)
+    local image = icons.of(game, id)
+    return image and image.path
+  end
+
+  eq(pathOf("POTION"), "modules/Gen1ItemInfo/assets/items/potion.png",
+     "an item resolves to the file named for its id")
+
+  -- A machine takes the disc of the type of the move it teaches, off the move
+  -- and never off a table here: TM35 is FLAMETHROWER is FIRE.
+  eq(pathOf("TM_FLAMETHROWER"), "modules/Gen1ItemInfo/assets/items/tm_fire.png",
+     "TM35 takes the FIRE disc")
+  eq(pathOf("HM_SURF"), "modules/Gen1ItemInfo/assets/items/hm_water.png",
+     "HM03 takes the WATER disc, and an HM is never a TM")
+  eq(pathOf("TM_NOSUCHMOVE"), "modules/Gen1ItemInfo/assets/items/tm.png",
+     "a machine whose move has no type falls back to the plain disc")
+
+  -- Gen151's cable, which the pack has no icon for: the ESCAPE ROPE recolored,
+  -- because a coiled rope is the shape a cable has.
+  ok(pathOf("LINK_CABLE"), "the LINK CABLE has an icon of its own")
+
+  -- The one drawn placeholder: nothing anywhere has ever drawn Gen 1's
+  -- SURFBOARD, so make_item_icons.py draws a board-shaped one in the set's
+  -- own idiom rather than borrowing an icon that means something else.
+  eq(pathOf("SURFBOARD"), "modules/Gen1ItemInfo/assets/items/surfboard.png",
+     "the SURFBOARD has its placeholder")
+
+  -- No icon is an ordinary answer, not an error: a badge is never in a list
+  -- this mod draws, and an item a mod added is not in this folder.
+  eq(pathOf("BOULDERBADGE"), nil, "an item with no icon resolves to nothing")
+  eq(pathOf("SOMEMOD_WIDGET"), nil, "and so does an item this set never saw")
+  eq(icons.of(game, nil), nil, "a nil id is not a crash")
+
+  -- An item that names its own wins, and a path that is not there falls back
+  -- rather than leaving the row blank.
+  game.data.items.POTION.icon = "modules/Gen1ItemInfo/assets/items/nugget.png"
+  eq(pathOf("POTION"), "modules/Gen1ItemInfo/assets/items/nugget.png",
+     "an item's own icon wins over the shipped one")
+  game.data.items.POTION.icon = "modules/Gen1ItemInfo/assets/items/nothing.png"
+  eq(pathOf("POTION"), "modules/Gen1ItemInfo/assets/items/potion.png",
+     "and a missing override falls back")
+  game.data.items.POTION.icon = nil
+
+  -- ---- the row an icon is drawn on
+
+  local C = chunkOf(MODULE .. "chrome.lua")(mod)
+  local on = true
+  local screens = chunkOf(MODULE .. "screens.lua")(
+    mod, C, function() return "a description" end,
+    function(feature) return on or feature ~= "icons" end, icons)
+
+  local list = {
+    kind = "BUY", title = "BUY", index = 1, scroll = 0, game = game,
+    items = { { value = "POTION", label = "POTION", right = "¥300" },
+              { value = "TM_FLAMETHROWER", label = "TM35", right = "¥2000" } },
+    draw = function() end, update = function() end,
+  }
+  screens.decorate(list)
+
+  drawn.images, drawn.text, drawn.codes = {}, {}, {}
+  list:draw()
+
+  eq(#drawn.images, 2, "one icon per row")
+  for i, image in ipairs(drawn.images) do
+    eq(image.x, C.ICON_X, "icon " .. i .. " is in the icon column")
+    eq(image.y, C.rowY(i), "icon " .. i .. " is on its own row")
+  end
+  -- The last row's icon has to clear the text box: rows are sixteen apart and
+  -- so is an icon, so the fourth one ends where the body does.
+  ok(C.rowY(C.ROWS) + icons.H - 1 <= C.BODY_BOTTOM,
+     "the bottom row's icon stays clear of the text box")
+  -- And the icon column has to clear the cursor on one side and the label on
+  -- the other.
+  ok(C.ICON_X >= C.CURSOR_X + 8, "the icon clears the cursor")
+  ok(C.ICON_LABEL_X >= C.ICON_X + icons.W, "and the label clears the icon")
+
+  local labels, prices = {}, {}
+  for _, printed in ipairs(drawn.text) do
+    if printed.text == "POTION" or printed.text == "TM35" then
+      labels[#labels + 1] = printed
+    elseif printed.text:find("¥") and printed.y >= C.BODY_TOP then
+      -- the header's money is a ¥ too, and it is not on a row
+      prices[#prices + 1] = printed
+    end
+  end
+  eq(#labels, 2, "both names are printed")
+  for _, label in ipairs(labels) do
+    eq(label.x, C.ICON_LABEL_X, "a name starts after the icon")
+  end
+  -- The price drops to the row's second line, which is what buys the name the
+  -- whole width: SUPER POTION is twelve glyphs and a price is five more.
+  eq(#prices, 2, "both prices are printed")
+  for i, price in ipairs(prices) do
+    eq(price.y, C.rowY(i) + C.RIGHT_SUB_Y, "a price is on the row's second line")
+    ok(price.x + 8 * 4 <= C.RIGHT, "and right-aligned inside the margin")
+  end
+  -- Twelve glyphs is the longest a Gen 1 item name gets, and it has to fit
+  -- from the label column to the right margin without being cut.
+  eq(C.fit("HYPER POTION", C.RIGHT - C.ICON_LABEL_X), "HYPER POTION",
+     "the longest item name fits beside an icon")
+
+  -- ---- and the switch puts the old row straight back
+
+  on = false
+  drawn.images, drawn.text = {}, {}
+  list:draw()
+  eq(#drawn.images, 0, "ITEM ICONS off draws no icons")
+  for _, printed in ipairs(drawn.text) do
+    if printed.text == "POTION" then
+      eq(printed.x, C.LABEL_X, "and the name goes back to the old column")
+    end
+    if printed.text == "¥300" then
+      eq(printed.y, C.rowY(1), "with the price back on the name's own line")
+    end
+  end
+  on = true
 end
 
 print(("iteminfo: %d passed, %d failed"):format(passed, failed))

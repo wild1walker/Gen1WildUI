@@ -1,5 +1,77 @@
 # Changelog
 
+## 1.11.0
+
+**Every item has a picture now — in the bag, at the mart, and in the item PC.**
+
+Gen 1 shows a name and a number and nothing else. A POTION and a MAX POTION
+are the same row twice; five evolution stones are five rows that differ by one
+word; and a TM pocket is fifty-five rows that all read `TMnn`. The suite has
+had a sentence for each of them since 1.5.0 — ITEM INFO's descriptions — and a
+sentence tells you what a thing is once you have found it. A picture is what
+finds it.
+
+So every row in the two mart lists, the item PC's three, and the bag now
+carries a 16x16 icon in the column left of its name. A machine carries a disc
+in the colour of the type of the move it teaches — read off the move, not off a
+table, so a mod that retunes what TM26 teaches recolours its disc with it.
+
+The art is **Pokémon Polished Crystal's**, recolored from that project's own
+palette data and scaled to the sixteen pixels a Gen 1 list row is high. It is
+not this project's work. `modules/Gen1ItemInfo/CREDITS.md` says who it belongs
+to, and says what they ask of anyone who ships it; the same file is in
+Gen1ModernBag. Three icons in the set are not theirs: the TM and HM discs, the
+LINK CABLE (their ESCAPE ROPE in red — Gen151 sells a cable and nothing
+anywhere has drawn one, and a coiled rope is the shape a cable has), and the
+GOLD TEETH.
+
+**The mart's and the PC's rows put their number underneath.** An icon takes
+two tile columns, and a name that starts after one has 112 pixels to the right
+margin — which a `¥2100` and its clearance take fifty of, leaving eight glyphs
+and cutting SUPER POTION in half. The price and the count drop to the row's
+second line instead, which is where the game itself puts a number when a list
+has an icon-sized gap on the left; it is what the bag has always done with a
+quantity. Nothing on any of those five screens is truncated any more, which
+was not true before the icons.
+
+**The bag's window is one tile wider.** Same problem, different window: the
+engine's item box has exactly one spare column, and spending it on a picture
+would have cost every twelve-glyph name its last letter — `SUPER POTION`,
+`HYPER POTION`, `FULL RESTORE`, `THUNDERSTONE`, `HELIX FOSSIL`, `BIKE VOUCHER`
+and `OAK's PARCEL`, which is most of a starting bag. The window grows at the
+left instead, tiles 3,2–19,12 rather than 4,2–19,12, and the cursor moves with
+it. It is the same pop-up over the overworld it always was, two tiles in from
+the screen edge rather than four, and the name column, the quantity column,
+the more-arrow, the pocket name and the money have not moved a pixel.
+
+**Two switches, both on.** `ITEM INFO > ITEM ICONS` is the mart's and the item
+PC's; `BAG > ITEM ICONS` is the bag's, because the bag draws its own window
+and a row under ITEM INFO could not reach it. Either one off is that screen
+exactly as 1.10.4 drew it, on the next frame rather than the next boot.
+
+An item may name its own icon: `data.items[id].icon`, if it is a string, is a
+path and wins over the shipped set — the same shape `description` has, so a
+sprite pack or a mod that adds an item can hand its art to every screen in the
+suite without either mod being told. `ITEM INFO` publishes `icon` and
+`drawIcon`, and `BAG` publishes `itemIcon` and `drawItemIcon`, for a sibling
+with somewhere to put one.
+
+`tools/make_item_icons.py` rebuilds the whole folder from a checkout of the
+Polished Crystal pack, and is where the choice of which of their icons stands
+for which Gen 1 item is written down. The SURFBOARD is the one placeholder:
+nothing anywhere has ever drawn Gen 1's, so the script draws a board-shaped
+thing in the set's own idiom — black outline, two shades, lit from the top
+left — rather than borrowing an icon that means something else.
+
+**BAG follows Gen1ModernBag to 1.10.0**, which is where the bag half of this
+lives. It also fixes the money being printed twice: gen1recomp's item-box path
+now opens the standard full-width text box under the window for any list
+carrying a footer, and the bag parked the amount there while also drawing it
+on the window's border — so the bag had grown back the box Gen1ModernBag 1.2.0
+removed, with the same number in it.
+
+---
+
 ## 1.10.4
 
 **POKEDEX follows Gen1Dex to 1.5.1, and the overlay that stood in for it goes.**
