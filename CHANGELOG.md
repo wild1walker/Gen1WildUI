@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.10.2
+
+**The lift panel loses its FLOOR header.**
+
+It earned nothing. A box of floor numbers that opens when you read a lift's
+button plate, in a lift, is not ambiguous — the word only ever said what the
+rows already said, and it was the most expensive thing on the box: it set the
+width (nine tiles rather than the six the floors need), and it needed a run of
+the top rule knocked out to make room for itself.
+
+Without it the panel is as wide as its widest floor and no wider, which is
+what a panel against the edge of the screen should be. Nothing else moves:
+same two-tile row pitch, same blank row under the top border, same place
+against the right edge, same scrolling for SILPH CO.
+
+`tests/iteminfo_test.lua` now draws the panel rather than only measuring it —
+a stub `love.graphics` and a recording `Font`, then assertions on what
+actually reached the screen: one box, six tiles wide, five floors printed and
+nothing else, sixteen pixels apart, with the cursor a column left of the
+labels. It is the guard for the header coming back and for the row pitch
+collapsing again, both of which the code believed it had right until someone
+looked at it.
+
 ## 1.10.1
 
 Three fixes to what 1.10.0 shipped, all found by looking at the screen.
