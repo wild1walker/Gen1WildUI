@@ -16,6 +16,15 @@ return {
         .. "press of A away",
       "seven features drawn from seven mods, each of which remains its own "
         .. "repository and is pinned here as a submodule",
+      "ITEM INFO: a description for every item in the game, shown in the "
+        .. "mart's BUY and SELL lists where the clerk used to say \"Take "
+        .. "your time.\", in the item PC's WITHDRAW, DEPOSIT and TOSS "
+        .. "lists, and on an ABOUT row in the bag's item menu. Those four "
+        .. "lists are redrawn in the frame the rest of the suite uses; how "
+        .. "they work is untouched. Written here",
+      "ELEVATOR PANEL: the lift's WHICH FLOOR? full-screen list as a small "
+        .. "panel against the right edge with every floor on it at once, "
+        .. "and the car still drawn behind it. Written here",
       "MENU LAYOUT and MOD MANAGER, which Gen1WildQOL also carries. They "
         .. "are the furniture every other feature is reached through, so "
         .. "neither half goes without them. With both bundles installed the "

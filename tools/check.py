@@ -10,6 +10,7 @@ bundle of a dozen independent mods actually goes wrong:
   * no two features share an id, a directory entry, or an alias
   * no two option keys collide once prefixed
   * every adapter and overlay a feature names is present
+  * every file a module loads by name survived the build
   * the manifest agrees with the changelog
 
 Usage:  python3 tools/check.py [--quiet]
@@ -302,6 +303,73 @@ def check_sources(problems: Problems, features: list[dict], quiet: bool) -> None
         print(f"  sources:    {tracked} tracked, {owned} maintained here")
 
 
+def check_module_reads(problems: Problems, quiet: bool) -> None:
+    """Every Lua file a module names in its code is actually in modules/.
+
+    A mod cannot `require` its own files -- its directory is not on
+    package.path -- so the supported route is `mod:read("x.lua")` plus load,
+    which most features here wrap in a one-line helper and then call with a
+    bare filename.  Both ends answer nil for a file that is not there, and
+    every one of these helpers reports that to the log and carries on
+    without, which is a silent feature outage.
+
+    The bundle has had one: build.py used to strip `build.lua` as build
+    furniture, and Gen151 -- which loads build.lua at install and returns
+    early without it -- switched itself off on every install while its
+    options row still said ALL 151 was on.  This is the check that would
+    have said so.
+
+    Comments are cut first, because these files cite engine paths
+    (src/ui/Screens.lua) in prose by the dozen and none of those are ours to
+    find.  What is left is any "....lua" literal in live code, resolved
+    against the module's own directory.
+    """
+    literal = re.compile(r'"([\w][\w./+-]*\.lua)"')
+    checked, missing = 0, 0
+
+    def strip_comments(body: str) -> str:
+        """Drop --line and --[[block]] comments, leaving string literals alone."""
+        out, i, n = [], 0, len(body)
+        while i < n:
+            ch = body[i]
+            if ch in "\"'":
+                quote, j = ch, i + 1
+                while j < n and body[j] != quote:
+                    j += 2 if body[j] == "\\" else 1
+                out.append(body[i:j + 1])
+                i = j + 1
+            elif body.startswith("--", i):
+                if body.startswith("--[[", i):
+                    close = body.find("]]", i)
+                    i = n if close < 0 else close + 2
+                else:
+                    stop = body.find("\n", i)
+                    i = n if stop < 0 else stop
+            else:
+                out.append(ch)
+                i += 1
+        return "".join(out)
+
+    for directory in sorted(p for p in MODULES.iterdir() if p.is_dir()):
+        for source in sorted(directory.rglob("*.lua")):
+            try:
+                body = source.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for wanted in literal.findall(strip_comments(body)):
+                checked += 1
+                if not (directory / wanted).exists():
+                    missing += 1
+                    problems.error(
+                        f"{source.relative_to(ROOT)} names {wanted!r}, which is "
+                        f"not in modules/{directory.name}/ -- a feature that "
+                        "loads it will log and switch itself off (is "
+                        "tools/build.py excluding it?)")
+
+    if not quiet:
+        print(f"  reads:      {checked} named files, {missing} missing")
+
+
 def check_shared(problems: Problems, features: list[dict], quiet: bool) -> None:
     """A feature carried by both bundles has to be declared the same in both.
 
@@ -455,6 +523,7 @@ def main() -> int:
     check_features(problems, features, args.quiet)
     check_option_keys(problems, features, args.quiet)
     check_sources(problems, features, args.quiet)
+    check_module_reads(problems, args.quiet)
     check_shared(problems, features, args.quiet)
     check_options_screen(problems, args.quiet)
     check_manifest(problems, args.quiet)
