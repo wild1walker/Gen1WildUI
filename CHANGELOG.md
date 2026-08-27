@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.8.0
+
+A POKéMON in the party list or the box wears its condition: poisoned is purple,
+fainted is grey, and the rest of the statuses have their own colour -- over the
+species colours those cells already wear, so a poisoned CHARMANDER still reads
+as a CHARMANDER.
+
+- **PARTY MENU** → [Gen1Party](https://github.com/wild1walker/Gen1Party) 1.5.0
+- **POKEMON BOX** →
+  [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox) 1.3.0, on the
+  grid and on the party column beside it
+
+The colours are not defined in either. They come from **STATUS COLOURS**, the
+feature in [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL) 1.7.0 that
+turns the overworld purple while you walk poisoned, and which owns one table of
+what each condition looks like so these two and the stats page agree instead of
+drifting apart. Both ask it; **without Gen1WildQOL installed there is no tint**
+and the cells are the species colours exactly as before.
+
+It rides the per-POKéMON zone each screen already builds, so it costs nothing
+extra to draw, and full-colour art still sits out the pass untouched.
+
+The Pokédex is deliberately not in that list: a dex entry is a page about a
+*species*, so there is no condition there to show.
+
 ## 1.7.0
 
 **This bundle no longer puts a row on the game's OPTION screen.** Its settings

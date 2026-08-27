@@ -60,6 +60,47 @@ function Facade.new(feature, context)
   facade.version = feature.version or mod.version
   facade.exports = {}
 
+  -- `mod.exports` is how a feature reaches its SIBLINGS: the bundle registers
+  -- it in runtime/registry.lua under every name the feature answers to, and a
+  -- sibling asks by name through mod.find.  That is the right shape for one
+  -- bundled mod talking to another, and the wrong shape for a feature whose
+  -- API is meant for the world outside: reaching it from another mod means
+  -- knowing that this bundle exists, that it keeps a registry, and what the
+  -- feature's folder is called -- three facts about our plumbing that nothing
+  -- out there should have to learn.
+  --
+  -- `mod.publish` puts a value on the BUNDLE's own exports, where the engine's
+  -- own mod.find already looks:
+  --
+  --     local qol = mod.find("gen1_wild_qol")
+  --     local api = qol and qol.exports and qol.exports.statusColours
+  --
+  -- Two names cannot be published by two features: the second is refused and
+  -- says so, because silently winning would make which mod answers depend on
+  -- feature order.  Nothing about the bundle's own exports is overwritable
+  -- either -- `features`, `bundle` and the rest are the runtime's.
+  function facade.publish(name, value)
+    if type(name) ~= "string" or name == "" then
+      mod.log:error("[%s] publish needs a name", feature.label)
+      return false
+    end
+    local taken = context.published or {}
+    context.published = taken
+    if taken[name] and taken[name] ~= feature.id then
+      mod.log:error("[%s] will not publish %q: %s published it first",
+        feature.label, name, tostring(taken[name]))
+      return false
+    end
+    if mod.exports[name] ~= nil and taken[name] == nil then
+      mod.log:error("[%s] will not publish %q: the bundle already exports it",
+        feature.label, name)
+      return false
+    end
+    taken[name] = feature.id
+    mod.exports[name] = value
+    return true
+  end
+
   -- A scratch table shared by every feature in the bundle.  It exists for the
   -- one case where two features genuinely need the same object rather than one
   -- each: the QOL battle overlay host, which the XP bar and the caught marker

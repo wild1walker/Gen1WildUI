@@ -4,11 +4,11 @@
 return {
   ["Gen1Arena"] = "0.18.3",
   ["Gen1BattleUI"] = "1.5.2",
-  ["Gen1BillsBox"] = "1.2.0",
+  ["Gen1BillsBox"] = "1.3.0",
   ["Gen1Dex"] = "1.5.0",
   ["Gen1MenuManager"] = "0.2.8",
   ["Gen1ModMenu"] = "0.9.0",
   ["Gen1ModernBag"] = "1.9.4",
-  ["Gen1Party"] = "1.4.0",
+  ["Gen1Party"] = "1.5.0",
   ["WidescreenBattleIntro"] = "maintained",
 }

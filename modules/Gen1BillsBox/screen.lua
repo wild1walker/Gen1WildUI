@@ -715,6 +715,41 @@ return function(mod)
   -- Answering at all is not optional: this screen is opaque, so with no
   -- opinion of its own the topmost state that HAS one is the overworld
   -- underneath, and the box would come out wearing the map's palette.
+  -- ------- the status tint
+  --
+  -- Gen1WildQOL's STATUS COLOURS feature owns one table of "what does this
+  -- condition look like", so the box, the party and the dex all wear the same
+  -- purple for poison and the same grey for fainted rather than three tables
+  -- drifting apart.  It is asked here rather than copied; without that mod
+  -- installed there is no tint and the cell is the species colours exactly as
+  -- before.
+  --
+  -- Memoised only when found.  A negative is re-probed, because load order is
+  -- not this mod's to know and a permanent no would be decided by whichever of
+  -- us loaded first.
+  local statusApi
+  local function statusColours()
+    if statusApi then return statusApi end
+    local ok, found = pcall(function() return mod.find("gen1_wild_qol") end)
+    local api = ok and found and found.exports and found.exports.statusColours
+    if type(api) == "table" then statusApi = api end
+    return statusApi
+  end
+
+  local function statusTinted(colors, mon)
+    if not colors or type(mon) ~= "table" then return colors end
+    local api = statusColours()
+    if not api then return colors end
+    local live = api.active
+    if type(live) == "function" and not live() then return colors end
+    local ok, key = pcall(api.keyFor, mon)
+    if not ok or not key then return colors end
+    local applied
+    ok, applied = pcall(api.apply, colors, key)
+    if not ok or type(applied) ~= "table" then return colors end
+    return applied
+  end
+
   function Screen:sgbPalettes(game)
     local ok, zones = pcall(function()
       local P = require("src.render.PaletteFX")
@@ -725,7 +760,7 @@ return function(mod)
         -- full-colour art is re-blit unshaded over this pass, so a species
         -- palette under it would be paint nobody ever sees
         if fullColourRect(game, mon) then return end
-        local colors = P.monPal(game.data, mon.species)
+        local colors = statusTinted(P.monPal(game.data, mon.species), mon)
         local zone = colors and P.zone(colors, tx1, ty1, tx2, ty2)
         if zone then out[#out + 1] = zone end
       end

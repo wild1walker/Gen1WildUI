@@ -252,6 +252,41 @@ return function(mod, C)
   -- as vanilla computes them, including the stale-colour window a medicine's
   -- fill animation needs (#252) -- that is the bar's business, not this
   -- mod's.
+  -- ------- the status tint
+  --
+  -- Gen1WildQOL's STATUS COLOURS feature owns one table of "what does this
+  -- condition look like", so the party, the box and the dex all wear the same
+  -- purple for poison and the same grey for fainted rather than three tables
+  -- drifting apart.  It is asked here rather than copied; without that mod
+  -- installed there is no tint and the zone is the species colours exactly as
+  -- before.
+  --
+  -- The answer is memoised only when it is found.  A negative is re-probed,
+  -- because load order is not this mod's to know and a permanent no would be
+  -- decided by whichever of us loaded first.
+  local statusApi
+  local function statusColours()
+    if statusApi then return statusApi end
+    local ok, found = pcall(function() return mod.find("gen1_wild_qol") end)
+    local api = ok and found and found.exports and found.exports.statusColours
+    if type(api) == "table" then statusApi = api end
+    return statusApi
+  end
+
+  local function statusTinted(colors, mon)
+    if not colors or type(mon) ~= "table" then return colors end
+    local api = statusColours()
+    if not api then return colors end
+    local live = api.active
+    if type(live) == "function" and not live() then return colors end
+    local ok, key = pcall(api.keyFor, mon)
+    if not ok or not key then return colors end
+    local applied
+    ok, applied = pcall(api.apply, colors, key)
+    if not ok or type(applied) ~= "table" then return colors end
+    return applied
+  end
+
   local function palettesFor(vanillaSgb)
     return function(self, game)
       if not C.option("species_colours", true) then
@@ -265,7 +300,8 @@ return function(mod, C)
           -- full-colour art sits out the pass, so a zone under it is paint
           -- nobody ever sees
           if not fullColour(game, mon) then
-            local colors = PaletteFX.monPal(game.data, mon.species)
+            local colors = statusTinted(PaletteFX.monPal(game.data, mon.species),
+                                        mon)
             local ty = BODY_TY + (i - 1) * 2
             local zone = colors
               and PaletteFX.zone(colors, ICON_TX1, ty, ICON_TX2, ty + 1)
