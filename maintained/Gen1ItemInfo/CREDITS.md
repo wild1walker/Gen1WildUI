@@ -19,12 +19,16 @@ build on this bundle: credit Polished Crystal by name with a link, ask upstream
 before a wide release, honour any request to drop a specific asset promptly,
 and do not strip this file when passing the assets along.
 
-Four icons in that folder are **not** theirs:
+Some icons in that folder are **not** theirs:
 
 - the TM and HM discs, `tm_*.png` and `hm_*.png`, which are drawn by
   `tools/make_item_icons.py` — Polished Crystal has no machine icon and
   neither does anything else, and a shelf of fifty-five identical
   four-letter rows needs one;
+- `surfboard.png`, drawn by the same script and the one deliberate
+  placeholder in the set: nothing anywhere has ever drawn Gen 1's SURFBOARD,
+  so it is a board-shaped thing in the set's own idiom rather than a borrowed
+  icon that means something else;
 - `link_cable.png`, which is their ESCAPE ROPE in the red the RED CARD is
   drawn in — Gen151 sells a LINK CABLE and nothing anywhere has an icon for
   one, and a coiled rope is the shape a cable has;

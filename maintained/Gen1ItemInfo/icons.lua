@@ -102,8 +102,9 @@ return function(mod)
     return shipped(kind)
   end
 
-  -- The icon for an item, or nil.  Nil is an ordinary answer: SURFBOARD has
-  -- no icon, a badge has no icon, and the row is drawn without one.
+  -- The icon for an item, or nil.  Nil is an ordinary answer -- a badge has
+  -- no icon, and neither does an item a mod added -- and the row is drawn
+  -- without one.
   function C.of(game, id)
     if type(id) ~= "string" or id == "" then return nil end
     local items = game and game.data and game.data.items

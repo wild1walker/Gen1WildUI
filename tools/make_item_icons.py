@@ -4,8 +4,8 @@
 The art is Polished Crystal's, colorized from that project's own .pal data --
 see CREDITS.md beside the icons.  This script only picks which of those icons
 stands for which Gen 1 item, scales them to the 16 pixels a list row has, and
-draws the four things Gen 1 has and Polished Crystal has no icon for: the TM
-and HM discs, the LINK CABLE and the GOLD TEETH.
+draws the things Gen 1 has and Polished Crystal has no icon for: the TM and HM
+discs, the LINK CABLE, the GOLD TEETH and a placeholder SURFBOARD.
 
     python3 tools/make_item_icons.py /path/to/polishedcrystal-item-icons OUTDIR
 
@@ -41,8 +41,9 @@ SIZE = 16
 #   SILPH_SCOPE   silphscope2     the same item, two floors up
 #   X_SPECIAL     x_sp_atk        Gen 1's SPECIAL split into two in Gen 2
 #
-# SURFBOARD has no entry: nothing in the pack reads as a board, and a wrong
-# icon on a row is worse than none.
+# SURFBOARD has no entry here: nothing in the pack reads as a board, so it is
+# drawn instead -- see `surfboard` below, which is the one placeholder in the
+# set.
 STANDINS = {
     "MASTER_BALL": "master_ball", "ULTRA_BALL": "ultra_ball",
     "GREAT_BALL": "great_ball", "POKE_BALL": "poke_ball",
@@ -216,6 +217,21 @@ def disc(dark: tuple, light: tuple, rim: tuple = None) -> Image.Image:
                 lit = ((x - lit_x) ** 2 + (y - lit_y) ** 2) ** 0.5 < lit_r
                 pixels[x, y] = (light if lit else dark) + (255,)
 
+    return vote(big)
+
+
+def vote(big: Image.Image) -> Image.Image:
+    """Step a supersampled drawing down to 16x16 by what most of a cell is.
+
+    A vote rather than a resize because the result has to land back on the
+    four colours an icon in this set is allowed -- transparent, black and the
+    two palette shades -- and any resampling filter but NEAREST invents
+    colours between them.  NEAREST alone would decide a curve by which side of
+    a threshold one sample landed on, which is what makes a 16-pixel circle
+    come out square-shouldered.
+    """
+    s = SUPERSAMPLE
+    pixels = big.load()
     out = Image.new("RGBA", (SIZE, SIZE), CLEAR)
     small = out.load()
     for oy in range(SIZE):
@@ -227,6 +243,51 @@ def disc(dark: tuple, light: tuple, rim: tuple = None) -> Image.Image:
                     tally[colour] = tally.get(colour, 0) + 1
             small[ox, oy] = max(tally.items(), key=lambda kv: kv[1])[0]
     return out
+
+
+# ------- the surfboard
+#
+# A PLACEHOLDER, and the only icon in this folder that is one.  Gen 1 carries
+# a SURFBOARD item and nothing anywhere has ever drawn it -- Polished Crystal
+# has no board, and neither does any other pack this could be taken from -- so
+# what is here is a board-shaped thing in the set's own idiom rather than a
+# borrowed icon that means something else: a pointed ellipse laid on the
+# diagonal, black-outlined, lit from the top left, in the MYSTIC WATER's own
+# two shades.  It is meant to be replaced by hand.
+#
+# No stringer down the middle and no fin.  Both were tried; at sixteen pixels
+# a stringer in the light shade is invisible and one in the dark shade breaks
+# the board into two halves, and a fin is a single pixel that reads as dirt.
+BOARD_SHADES = ((90, 90, 214), (156, 222, 255))
+BOARD_HALF_WIDTH = 0.21
+BOARD_HALF_HEIGHT = 0.45
+BOARD_ANGLE = -40
+
+
+def surfboard(dark: tuple, light: tuple) -> Image.Image:
+    s = SUPERSAMPLE
+    n = SIZE * s
+    big = Image.new("RGBA", (n, n), CLEAR)
+    pen = ImageDraw.Draw(big)
+    centre = (n - 1) / 2.0
+    half_w, half_h = BOARD_HALF_WIDTH * n, BOARD_HALF_HEIGHT * n
+    inset = s
+
+    pen.ellipse((centre - half_w, centre - half_h,
+                 centre + half_w, centre + half_h), fill=BLACK)
+    pen.ellipse((centre - half_w + inset, centre - half_h + inset,
+                 centre + half_w - inset, centre + half_h - inset),
+                fill=dark + (255,))
+    # the lit deck: the same shape pulled up and left, one light source
+    lift = s
+    pen.ellipse((centre - half_w + inset, centre - half_h + inset,
+                 centre + half_w - inset - lift, centre + half_h - inset - lift),
+                fill=light + (255,))
+
+    # Drawn upright and turned, rather than drawn on the diagonal: an ellipse
+    # is the one shape whose nose and tail come out symmetrical either way,
+    # and NEAREST keeps the four colours through the rotation.
+    return vote(big.rotate(BOARD_ANGLE, resample=Image.NEAREST))
 
 
 def main(argv: list[str]) -> int:
@@ -257,6 +318,9 @@ def main(argv: list[str]) -> int:
         disc(dark, light).save(out / ("tm_" + name.lower() + ".png"))
         disc(dark, light, SILVER).save(out / ("hm_" + name.lower() + ".png"))
         written += 2
+    surfboard(*BOARD_SHADES).save(out / "surfboard.png")
+    written += 1
+
     normal = TYPE_SHADES["NORMAL"]
     disc(normal[0], normal[1]).save(out / "tm.png")
     disc(normal[0], normal[1], SILVER).save(out / "hm.png")

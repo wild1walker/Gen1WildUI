@@ -665,10 +665,16 @@ do
   -- because a coiled rope is the shape a cable has.
   ok(pathOf("LINK_CABLE"), "the LINK CABLE has an icon of its own")
 
-  -- No icon is an ordinary answer, not an error: nothing in the pack reads as
-  -- a surfboard, and a badge is never in a list this mod draws.
-  eq(pathOf("SURFBOARD"), nil, "an item with no icon resolves to nothing")
-  eq(pathOf("BOULDERBADGE"), nil, "and so does an item with no record at all")
+  -- The one drawn placeholder: nothing anywhere has ever drawn Gen 1's
+  -- SURFBOARD, so make_item_icons.py draws a board-shaped one in the set's
+  -- own idiom rather than borrowing an icon that means something else.
+  eq(pathOf("SURFBOARD"), "modules/Gen1ItemInfo/assets/items/surfboard.png",
+     "the SURFBOARD has its placeholder")
+
+  -- No icon is an ordinary answer, not an error: a badge is never in a list
+  -- this mod draws, and an item a mod added is not in this folder.
+  eq(pathOf("BOULDERBADGE"), nil, "an item with no icon resolves to nothing")
+  eq(pathOf("SOMEMOD_WIDGET"), nil, "and so does an item this set never saw")
   eq(icons.of(game, nil), nil, "a nil id is not a crash")
 
   -- An item that names its own wins, and a path that is not there falls back

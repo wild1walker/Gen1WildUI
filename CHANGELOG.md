@@ -58,8 +58,10 @@ with somewhere to put one.
 
 `tools/make_item_icons.py` rebuilds the whole folder from a checkout of the
 Polished Crystal pack, and is where the choice of which of their icons stands
-for which Gen 1 item is written down. SURFBOARD has none: nothing in the pack
-reads as a board, and a wrong icon on a row is worse than no icon.
+for which Gen 1 item is written down. The SURFBOARD is the one placeholder:
+nothing anywhere has ever drawn Gen 1's, so the script draws a board-shaped
+thing in the set's own idiom — black outline, two shades, lit from the top
+left — rather than borrowing an icon that means something else.
 
 **BAG follows Gen1ModernBag to 1.10.0**, which is where the bag half of this
 lives. It also fixes the money being printed twice: gen1recomp's item-box path
