@@ -343,44 +343,6 @@ do
   eq(mod.hooked[1].priority, 90, "with its priority intact")
 end
 
--- ------------------------------------------------------- publish
-
-do
-  io.write("a feature publishes an API on the bundle's own exports\n")
-  local mod = fakeMod()
-  local optionset = OptionSet.new()
-  local registry = Registry.new(mod, {})
-  local context = { mod = mod, optionset = optionset, registry = registry,
-                    shared = {} }
-  local one = { id = "statuscolours", label = "STATUS COLOURS",
-                dir = "StatusColours" }
-  local two = { id = "other", label = "OTHER", dir = "Other" }
-  local a = Facade.new(one, context)
-  local b = Facade.new(two, context)
-
-  local api = { keyFor = function() end }
-  eq(a.publish("statusColours", api), true, "the first publish is taken")
-  eq(mod.exports.statusColours, api,
-    "and lands where the engine's own mod.find looks")
-  ok(a.exports.statusColours == nil,
-    "publish is not the same table as the feature's sibling exports")
-
-  eq(b.publish("statusColours", { other = true }), false,
-    "a second feature cannot publish the same name")
-  eq(mod.exports.statusColours, api, "and the first one still answers")
-
-  eq(a.publish("statusColours", api), true,
-    "the same feature may publish the same name again")
-
-  mod.exports.features = { taken = true }
-  eq(a.publish("features", {}), false,
-    "the runtime's own exports are not overwritable")
-  eq(mod.exports.features.taken, true, "and survive the attempt")
-
-  eq(a.publish("", {}), false, "a nameless publish is refused")
-  eq(a.publish(nil, {}), false, "and so is a nil one")
-end
-
 -- --------------------------------------------------- options_changed events
 
 do

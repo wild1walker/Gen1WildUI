@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.0
+
+The status tint is removed from the party list and the box, at the author's
+request, along with the rest of the status colour work across the suite.
+
+- **PARTY MENU** → [Gen1Party](https://github.com/wild1walker/Gen1Party) 1.7.0
+- **POKEMON BOX** → [Gen1BillsBox](https://github.com/wild1walker/Gen1BillsBox)
+  1.5.0
+
+Icons draw as they always did and the palette zone under them is the species
+colours again. Both mods' source is byte-identical to the release before the
+tint went in, so nothing else moved with it.
+
+`mod.publish` is gone from this bundle's runtime too. It was added for the
+feature that is being removed, it never had another caller here, and the two
+bundles keep their runtime byte-identical.
+
 ## 1.8.1
 
 The status tint on a POKéMON reaches **full-colour icon art** now, in the party

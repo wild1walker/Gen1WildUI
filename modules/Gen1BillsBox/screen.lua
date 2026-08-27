@@ -715,57 +715,6 @@ return function(mod)
   -- Answering at all is not optional: this screen is opaque, so with no
   -- opinion of its own the topmost state that HAS one is the overworld
   -- underneath, and the box would come out wearing the map's palette.
-  -- ------- the status tint
-  --
-  -- Gen1WildQOL's STATUS COLOURS feature owns one table of "what does this
-  -- condition look like", so the box, the party and the dex all wear the same
-  -- purple for poison and the same grey for fainted rather than three tables
-  -- drifting apart.  It is asked here rather than copied; without that mod
-  -- installed there is no tint and the cell is the species colours exactly as
-  -- before.
-  --
-  -- Memoised only when found.  A negative is re-probed, because load order is
-  -- not this mod's to know and a permanent no would be decided by whichever of
-  -- us loaded first.
-  local statusApi
-  local function statusColours()
-    if statusApi then return statusApi end
-    local ok, found = pcall(function() return mod.find("gen1_wild_qol") end)
-    local api = ok and found and found.exports and found.exports.statusColours
-    if type(api) == "table" then statusApi = api end
-    return statusApi
-  end
-
-  -- The condition as a draw colour, from the same mod that owns the palette
-  -- one.  A palette zone reaches only art that goes through the shade-remap
-  -- pass, and a full-colour icon pack sits that pass out by design -- so the
-  -- zone below tints nothing at all for anyone running one.  Drawing the icon
-  -- in a colour reaches both: LOVE multiplies an image by the current colour,
-  -- so white is the untouched icon and this shifts its hue while keeping its
-  -- own light and dark.  nil means draw it as it is.
-  local function statusDrawColour(mon)
-    if type(mon) ~= "table" then return nil end
-    local api = statusColours()
-    if not api or type(api.drawColour) ~= "function" then return nil end
-    local ok, colour = pcall(api.drawColour, mon)
-    if not ok or type(colour) ~= "table" then return nil end
-    return colour
-  end
-
-  local function statusTinted(colors, mon)
-    if not colors or type(mon) ~= "table" then return colors end
-    local api = statusColours()
-    if not api then return colors end
-    local live = api.active
-    if type(live) == "function" and not live() then return colors end
-    local ok, key = pcall(api.keyFor, mon)
-    if not ok or not key then return colors end
-    local applied
-    ok, applied = pcall(api.apply, colors, key)
-    if not ok or type(applied) ~= "table" then return colors end
-    return applied
-  end
-
   function Screen:sgbPalettes(game)
     local ok, zones = pcall(function()
       local P = require("src.render.PaletteFX")
@@ -776,7 +725,7 @@ return function(mod)
         -- full-colour art is re-blit unshaded over this pass, so a species
         -- palette under it would be paint nobody ever sees
         if fullColourRect(game, mon) then return end
-        local colors = statusTinted(P.monPal(game.data, mon.species), mon)
+        local colors = P.monPal(game.data, mon.species)
         local zone = colors and P.zone(colors, tx1, ty1, tx2, ty2)
         if zone then out[#out + 1] = zone end
       end
@@ -1550,15 +1499,7 @@ return function(mod)
 
   function Screen:drawIcon(mon, x, y, selected)
     if not mon then return end
-    -- White is "draw it as it is"; a status replaces it with the colour that
-    -- condition wears, which reaches full-colour art as well as the palette
-    -- zone does not.
-    local tint = statusDrawColour(mon)
-    if tint then
-      love.graphics.setColor(tint[1], tint[2], tint[3], 1)
-    else
-      love.graphics.setColor(1, 1, 1, 1)
-    end
+    love.graphics.setColor(1, 1, 1, 1)
     pcall(PartyMenu.drawIcon, self.game, mon, x, y, false, 0,
           selected and self:animAlt() or false)
     -- full-colour art must sit out the shade remap, or the pass repaints it
