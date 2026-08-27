@@ -25,8 +25,10 @@ itself. Nothing is all-or-nothing.
 | **BAG** | [Gen1ModernBag](https://github.com/wild1walker/Gen1ModernBag) — seven pockets, auto-sorting, favorites, search, no capacity limit |
 | **MENU LAYOUT** † | [Gen1MenuManager](https://github.com/wild1walker/Gen1MenuManager) — reorder the START and PC menus, hide rows, pin field moves |
 | **MOD MANAGER** † | [Gen1ModMenu](https://github.com/wild1walker/Gen1ModMenu) — the mod manager redrawn in the game's own OPTION-screen idiom |
+| **ITEM INFO** ‡ | what every item is, in the mart, in the item PC and on an ABOUT row in the bag — and those screens redrawn to have somewhere to put it |
+| **ELEVATOR PANEL** ‡ | the lift's WHICH FLOOR? list as a small panel against the edge, with the car still on the screen behind it |
 
-All nine ship on.
+All eleven ship on.
 
 † Also in [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL). These two
 are not really visual overhauls — they are the furniture everything else is
@@ -35,9 +37,10 @@ both bundles and exactly one of them sets it up; see
 [Features in both bundles](#features-in-both-bundles).
 
 ‡ Maintained in this repository rather than tracked. The source is under
-`maintained/`, edits go straight in, and nothing syncs it from anywhere. The
-credit for what it does still belongs to the person named in
-[Credits](#credits).
+`maintained/`, edits go straight in, and nothing syncs it from anywhere. For
+`BATTLE INTRO`, which began as somebody else's mod, the credit for what it
+does still belongs to the person named in [Credits](#credits); `ITEM INFO` and
+`ELEVATOR PANEL` were written here.
 
 ## The menu
 

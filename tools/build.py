@@ -64,9 +64,19 @@ EXCLUDE_FILES = {
     # repository and commit a gitlink instead of the files.
     ".git", ".gitignore", ".gitattributes", ".gitmodules",
     ".luarc.json", ".modkitignore", ".gen1wild",
-    "mod.card", "manifest.json", "bench.lua", "build.lua",
+    "mod.card", "manifest.json",
     "convert.py", "palettize.py", "recolor.py",
 }
+
+# Not excluded, and worth saying why, because they were: `build.lua` and
+# `bench.lua` read like build furniture and are not.  Gen1WildQOL learned
+# this the hard way -- Gen151 ships both as RUNTIME modules and gives up on
+# the whole feature when build.lua is missing, so stripping it switched ALL
+# 151 off on every install while its options row still said it was on.  No
+# mod tracked here ships either file today; the rule is kept the same in both
+# bundles so a future one cannot inherit the outage.  A .lua file in a mod's
+# root is mod code; a real build script in these repositories is Python under
+# tools/, which EXCLUDE_DIRS and EXCLUDE_SUFFIXES already drop.
 EXCLUDE_SUFFIXES = {".py", ".ps1", ".sh", ".yml", ".yaml"}
 
 # Documentation worth carrying: a licence and an attribution notice travel with

@@ -148,6 +148,46 @@ return {
       aliases = { "Gen1ModernBag", "gen1_modern_bag" },
     },
 
+    -- ---- the screens nothing else had got to
+    --
+    -- Two mods rather than one, because they are two things.  ITEM INFO is
+    -- about items -- what they are, and the three screens that had nowhere to
+    -- say it.  ELEVATOR PANEL is about a lift.  Folding the lift into a mod
+    -- named for items would have made both names lie.
+    --
+    -- Both install last, and on purpose.  Each one wraps a widget
+    -- constructor rather than overriding a screen id -- there is no id on a
+    -- mart list, a PC list or a lift panel to override -- so going on late
+    -- puts their wrapper on the outside of anything an earlier feature
+    -- wrapped, and an earlier feature that replaces one of those widgets
+    -- outright is still the thing they decorate.
+
+    {
+      id = "iteminfo",
+      priority = 1200,
+      dir = "Gen1ItemInfo",
+      entry = "main.lua",
+      label = "ITEM INFO",
+      description = "WHAT EVERY ITEM IS, IN THE MART, IN THE ITEM PC AND ON AN ABOUT ROW IN THE BAG -- AND THOSE SCREENS REDRAWN TO HAVE SOMEWHERE TO PUT IT.",
+      enabledKey = "enabled",
+      default = true,
+      maintained = true,
+      aliases = { "Gen1ItemInfo" },
+    },
+
+    {
+      id = "elevator",
+      priority = 1200,
+      dir = "Gen1Elevator",
+      entry = "main.lua",
+      label = "ELEVATOR PANEL",
+      description = "THE LIFT'S WHICH FLOOR? LIST AS A SMALL PANEL AGAINST THE EDGE, WITH THE CAR STILL ON THE SCREEN BEHIND IT.",
+      enabledKey = "enabled",
+      default = true,
+      maintained = true,
+      aliases = { "Gen1Elevator" },
+    },
+
     -- ---- the furniture
     --
     -- These two are in Gen1WildQOL as well, and deliberately.  They are not

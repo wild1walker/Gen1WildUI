@@ -1,5 +1,56 @@
 # Changelog
 
+## 1.10.0
+
+**Every item says what it is now**, and four screens that had nowhere to say it
+are redrawn.
+
+Two new features, both maintained here rather than tracked:
+
+- **ITEM INFO** — a description for every item in the game, on the item
+  itself. The mart's BUY and SELL lists carry it in the clerk's box, following
+  the cursor, which is what finally replaces *Take your time.* The item PC's
+  WITHDRAW, DEPOSIT and TOSS lists carry it in the same box. And the bag's item
+  menu grows an **ABOUT** row that prints it.
+- **ELEVATOR PANEL** — the lift's `WHICH FLOOR?` full-screen list becomes a
+  small panel against the right edge with every floor on it at once, and the
+  car you are standing in stays on the screen behind it.
+
+Both ship on and both switch off live, with no relaunch.
+
+### Where the descriptions live
+
+On `data.items[id].description` — the field Gen 2's own extractor writes for
+Gold and Crystal, under the name it writes it under. So this is not a private
+table only ITEM INFO can read: anything that wants to show an item description
+reads it off the item the way it would on a Gen 2 cart, whether or not this
+bundle is the thing that put it there. Item records are extensible by design,
+so nothing is taken away — an item gains a field and keeps every one it had.
+
+Eighty-one are written by hand, two lines and eighteen glyphs each, which is
+what a Gen 1 text box holds. The fifty-five machines are described from the
+move they carry rather than by hand, so a mod that retunes what TM26 teaches
+does not leave a description lying. `tests/iteminfo_test.lua` holds the line
+budget: a description that would wrap to a third line is a failing build, not
+a truncated sentence, because the box shows the last two lines of what it is
+given and a third line would eat the first one silently.
+
+### The chrome
+
+The four lists get the frame the rest of the suite uses: a header box with the
+title in it (and the money at a mart, where the vanilla screen floats a
+separate box in the corner), the rows ruled to the same margins Gen1Dex and
+Gen1Party keep, a mark at each end when there is more above or below, and the
+game's own text box along the bottom.
+
+Nothing about how any of them *works* changed. Each list is built exactly as
+the engine builds it and then has `draw` and `update` swapped; the input, the
+scrolling, the quantity selector, the yes/no confirm, what a purchase costs
+and what a toss refuses are all the engine's own code, untouched. The mart's
+BUY / SELL / QUIT counter keeps the shop showing around it, because that
+screen was never opaque and seeing the room you are standing in is the best
+thing about it.
+
 ## 1.9.0
 
 The status tint is removed from the party list and the box, at the author's
