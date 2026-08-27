@@ -19,27 +19,27 @@
 -- ------- the geometry is Menu's, exactly
 --
 -- Not a private layout that looks a bit like one.  src/ui/Menu.lua is what
--- every boxed choice in this game is drawn by, and its three rules are the
--- ones that make a box look like it belongs here:
+-- every boxed choice in this game is drawn by, and its two rules are the ones
+-- that make a box look like it belongs here:
 --
 --   * rows are TWO tiles apart, not one.  A one-tile pitch fits more floors
 --     in and reads as a list that has been squashed, because nothing else in
 --     the game is spaced that way;
 --   * the choices anchor to the BOTTOM interior row and the slack falls as a
 --     blank row under the top border (draw_start_menu.asm, and the comment
---     in Menu:draw).  That blank row is what stops the first choice touching
---     the title;
---   * a title on the top border knocks out EXACTLY the glyphs it needs and
---     no more, so the rule runs up to the word and continues after it.
+--     in Menu:draw).
 --
--- The first version of this file got all three wrong: one-tile rows, choices
--- from the top, and a knock-out padded by a tile at each end -- which, in a
--- box this narrow, erased the whole top rule and left FLOOR floating between
--- two corner ornaments.
+-- The first version of this file got both wrong -- one-tile rows and choices
+-- from the top -- and carried a FLOOR title on its border besides.
 --
--- The box is sized so the title has a tile of rule on each side of it, which
--- is what `titleGlyphs + 4` buys: two corners, the word, and one column
--- spare at each end.
+-- ------- there is no title on it
+--
+-- There was, and it earned nothing.  A box of floor numbers that opens when
+-- you read a lift's button plate, in a lift, is not ambiguous; the word only
+-- ever said what the rows already said, and it cost the box three tiles of
+-- width and a rule that had to be knocked out to make room for it.  Without
+-- it the panel is as wide as its widest floor and no wider, which is what a
+-- panel against the edge of the screen should be.
 --
 -- ------- what is NOT done here
 --
@@ -56,19 +56,16 @@ local SCREEN_TILES_W, SCREEN_TILES_H = 20, 18
 
 -- One tile of margin off the right edge and off the top.
 local MARGIN = 1
-local LABEL = "FLOOR"
 local ROW_STEP = 2              -- tiles, the pitch every Gen 1 menu uses
 
 -- Two borders, the cursor's column and one spare at the right, around the
--- widest floor token; and for the title, two borders and a column of rule
--- at each end around the word.
+-- widest floor token.
 local ROW_CHROME = 4
-local TITLE_CHROME = 4
 
--- A top border carries a one-pixel white margin above its rule, and Gen 1
--- glyphs ink rows 0-6 of their cell, so a label drawn at the tile's own y
--- puts ink on that margin.  One pixel lower lands it between the two.
-local WINDOW_EDGE = 1
+-- Narrow is the point, but a box under six tiles stops reading as a box.  No
+-- Gen 1 lift reaches it -- B1F is the widest token in the game, which is
+-- seven -- so this only ever catches a modded lift with one-glyph floors.
+local MIN_TW = 6
 
 return function(mod)
   local Font = mod.ui.Font
@@ -100,16 +97,14 @@ return function(mod)
     return #tostring(text or "")
   end
 
-  -- Wide enough for the widest floor token, and never narrower than the word
-  -- on its border needs to keep a column of rule at each end.
+  -- As wide as the widest floor token and no wider.
   local function widthFor(items)
     local widest = 0
     for _, item in ipairs(items) do
       local n = glyphs(item.label)
       if n > widest then widest = n end
     end
-    return math.min(SCREEN_TILES_W,
-      math.max(widest + ROW_CHROME, glyphs(LABEL) + TITLE_CHROME))
+    return math.min(SCREEN_TILES_W, math.max(widest + ROW_CHROME, MIN_TW))
   end
 
   -- How many floors a box can show and still sit inside the screen with its
@@ -128,22 +123,6 @@ return function(mod)
     return SCREEN_TILES_W - tw - MARGIN, MARGIN, tw, th, visible
   end
 
-  -- Knock the border line out from under the label: glyphs are drawn as a
-  -- mask, so a label printed straight onto a border has the rule running
-  -- through the letters.  Painting the run white first leaves the line
-  -- either side of the word and nothing behind it.  Exactly the glyph run
-  -- and not a pixel more -- which is what src/ui/Menu.lua's own title does,
-  -- and what leaves a rule to either side in a box this narrow.
-  local function borderLabel(text, tx, ty, tw)
-    local width = Font.width(text)
-    local slack = math.max(0, (tw - 2) * 8 - width)
-    local x = (tx + 1) * 8 + math.floor(slack / 16) * 8
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.rectangle("fill", x, ty * 8, width, 8)
-    love.graphics.setColor(0, 0, 0, 1)
-    Font.draw(text, x, ty * 8 + WINDOW_EDGE)
-  end
-
   local function draw(self)
     local items = self.items or {}
     local tx, ty, tw, th, visible = geometry(items)
@@ -151,7 +130,6 @@ return function(mod)
     love.graphics.setColor(0, 0, 0, 1)
     Font.drawBox(tx, ty, tw, th)
     love.graphics.setColor(0, 0, 0, 1)
-    borderLabel(LABEL, tx, ty, tw)
 
     -- Menu:draw's rowY: count back from the bottom interior row, so a box
     -- with slack in it puts the blank row at the TOP.

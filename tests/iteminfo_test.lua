@@ -110,8 +110,44 @@ local function fakeUI()
       new = function(game, text) return { game = game, text = text } end,
       paginate = function(text) return { { text } } end,
     },
-    ListMenu = { new = function() return {} end },
+    ListMenu = {
+      new = function(game, title, items, opts)
+        return {
+          game = game, title = title, items = items or {},
+          kind = (opts and opts.kind) or title,
+          index = 1, scroll = 0, rows = 7, isOpaque = true,
+          draw = function() end, update = function() end,
+        }
+      end,
+    },
   }
+end
+
+-- Enough of love.graphics for a box and some glyphs.  The drawing is the part
+-- that needs a running game; what a test can watch is WHAT was drawn and
+-- WHERE, which is exactly where the panel's geometry went wrong twice.
+local drawn
+
+local function watchDraws(ui)
+  drawn = { boxes = {}, text = {}, codes = {}, rects = {} }
+  love = {
+    graphics = {
+      setColor = function() end,
+      rectangle = function(_, x, y, w, h)
+        drawn.rects[#drawn.rects + 1] = { x = x, y = y, w = w, h = h }
+      end,
+    },
+  }
+  ui.Font.drawBox = function(tx, ty, tw, th)
+    drawn.boxes[#drawn.boxes + 1] = { tx = tx, ty = ty, tw = tw, th = th }
+  end
+  ui.Font.draw = function(text, x, y)
+    drawn.text[#drawn.text + 1] = { text = text, x = x, y = y }
+  end
+  ui.Font.drawCode = function(code, x, y)
+    drawn.codes[#drawn.codes + 1] = { code = code, x = x, y = y }
+  end
+  return drawn
 end
 
 local function fakeMod(options)
@@ -457,29 +493,31 @@ do
   ok(not isPanel("BUY"), "and nothing else is")
   ok(not isPanel(nil), "a list with no title is not a crash")
 
-  -- ---- wide enough for the word on its border, with rule left over
+  -- ---- as wide as its widest floor and no wider
   --
-  -- FLOOR is five glyphs; a box of nine spends two on corners, leaves one
-  -- column of rule at each end and centres the word in the six between.
+  -- There is no title on the box any more, so nothing but the floors decides
+  -- the width: two borders, the cursor's column and one spare.
 
-  eq(widthFor({ { label = "1F" }, { label = "B1F" } }), 9,
-     "a normal lift is as wide as its border label needs")
+  eq(widthFor({ { label = "1F" }, { label = "B1F" } }), 7,
+     "a lift is as wide as its widest floor token")
+  eq(widthFor({ { label = "1F" }, { label = "5F" } }), 6,
+     "CELADON's two-glyph floors make the narrowest box")
   eq(widthFor({ { label = "MEZZANINE" } }), 13,
      "a modded lift with long names is as wide as it needs to be")
-  eq(widthFor({}), 9, "a lift with no floors still draws a box")
+  eq(widthFor({}), 6, "a lift with no floors still draws a box")
 
-  local FLOOR_GLYPHS = 5
   for _, items in ipairs({
     { { label = "1F" } },
     { { label = "1F" }, { label = "2F" }, { label = "3F" } },
     { { label = "B4F" } },
   }) do
     local tw = widthFor(items)
-    -- the centred, exactly-knocked-out label leaves (tw - 2 - glyphs)
-    -- columns of rule, split either side; one column each is the minimum
-    -- that reads as a titled box rather than a gap between two corners
-    ok(tw - 2 - FLOOR_GLYPHS >= 2,
-       ("a box %d wide leaves rule either side of FLOOR"):format(tw))
+    local widest = 0
+    for _, item in ipairs(items) do
+      if #item.label > widest then widest = #item.label end
+    end
+    -- border, cursor, the token, a spare column, border
+    ok(tw >= widest + 4, "the widest floor fits with its cursor beside it")
   end
 
   -- ---- every floor visible where there is room, scrolling where there is not
@@ -520,6 +558,43 @@ do
   -- The regression this rewrite is for: one-tile rows.
   local _, _, _, th5 = geometry(floors(5))
   eq(th5, 12, "five floors is twelve tiles, not seven")
+
+  -- ---- and what actually reaches the screen
+  --
+  -- CELADON's five floors, drawn.  This is the guard for the header coming
+  -- back and for the row pitch collapsing again: both were things the code
+  -- believed it was doing right, and only a draw disagrees.
+
+  watchDraws(mod.ui)
+  local panel = ListMenu.new({}, "WHICH FLOOR?", floors(5), {})
+  panel.index = 4
+  panel:draw()
+
+  eq(#drawn.boxes, 1, "one box, and only one")
+  eq(drawn.boxes[1].tw, 6, "six tiles wide -- no title to make room for")
+  eq(drawn.boxes[1].th, 12, "twelve tall")
+  eq(drawn.boxes[1].tx, 13, "against the right edge, one tile of margin off")
+
+  eq(#drawn.text, 5, "five floors printed, and nothing else")
+  for _, printed in ipairs(drawn.text) do
+    ok(printed.text ~= "FLOOR",
+       "the header is gone (found " .. tostring(printed.text) .. ")")
+  end
+  eq(drawn.text[1].text, "1F", "the first floor first")
+  eq(drawn.text[5].text, "5F", "the last floor last")
+
+  for i = 2, #drawn.text do
+    eq(drawn.text[i].y - drawn.text[i - 1].y, 16,
+       "row " .. i .. " is sixteen pixels below the one above it")
+  end
+  eq(drawn.text[1].y, (1 + 12 - 2 - 4 * 2) * 8,
+     "the first row leaves a blank row under the top border")
+  ok(drawn.text[5].y + 8 <= (1 + 12 - 1) * 8,
+     "and the last row is clear of the bottom border")
+
+  eq(#drawn.codes, 1, "one cursor")
+  eq(drawn.codes[1].y, drawn.text[4].y, "on the row it is pointing at")
+  eq(drawn.codes[1].x, drawn.text[1].x - 8, "one column left of the labels")
 end
 
 print(("iteminfo: %d passed, %d failed"):format(passed, failed))
