@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.12.0
+
+**A rule between the item icons and the names, and room either side of it.**
+
+An icon sat flush against the first letter of the word beside it, which made
+the picture read as part of the name rather than as its own column. There is a
+tile of air between them now, with a one-pixel black rule down the middle of
+it: three pixels clear of the icon, four clear of the word.
+
+The rule is drawn a row at a time, the full height of a row, so consecutive
+rows join into one continuous line and the line stops where the list does — a
+mart shelf of two items gets two rows of rule, not a rule down an empty
+half-screen. Every row gets one, `CANCEL` included: it divides two columns
+rather than decorating an item, and a rule with gaps in it where a row happens
+to have no picture reads as damage.
+
+The mart's and the item PC's lists already had that tile — the icon sits at
+x = 16 and the name at x = 40 — so there the rule is all that is new. `BAG`
+follows Gen1ModernBag to 1.11.0, where the bag's window grows a second tile at
+the left to make the same room: tiles 2,2–19,12 rather than 3,2–19,12, with the
+cursor at x = 24, the icon from x = 32 and the rule at x = 51. It is still the
+pop-up over the overworld it has always been, two tiles in from the screen edge
+rather than four, and every column that predates the icons — the name, the
+quantity, the more-arrow, the pocket name and the money — is still exactly
+where it was.
+
+Either `ITEM ICONS` off is still that screen as 1.10.4 drew it: no rule, no
+icons.
+
+---
+
 ## 1.11.1
 
 **The item icons line up with the words now.**

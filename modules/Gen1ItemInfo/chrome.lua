@@ -96,6 +96,25 @@ return function(mod)
   -- them come any closer together.
   C.ICON_DY = -4
 
+  -- ------- and the rule between the two columns
+  --
+  -- The icon and the name are two columns of different kinds of thing, and
+  -- the tile between them was doing the whole job of saying so.  A one-pixel
+  -- black rule down the middle of that tile says it properly: three pixels of
+  -- air on the icon's side, four on the name's, and a picture that can no
+  -- longer read as the first letter of the word beside it.
+  --
+  -- Drawn a row at a time, the full sixteen pixels of the row, so consecutive
+  -- rows join into one continuous line and the line stops where the list
+  -- does.  A pocket of two items gets two rows of rule, not a rule down an
+  -- empty half-screen.
+  --
+  -- Every row gets one, CANCEL included: it is a column divider, not a
+  -- decoration on an item, and a rule with gaps in it where a row happens to
+  -- have no picture reads as damage.
+  C.ICON_W = 16
+  C.ICON_RULE_X = C.ICON_X + C.ICON_W + 3
+
   -- Four rows of 16 pixels in the 72 the body has, centred in it: the same
   -- four the vanilla mart and PC lists show, at the same pitch, so a player
   -- who knows where the fourth row is still finds it there.
@@ -113,6 +132,12 @@ return function(mod)
 
   function C.rowY(row)
     return C.ROW_TOP + (row - 1) * C.ROW_STEP
+  end
+
+  -- The column rule beside one row.  Black, one pixel, the row's full height.
+  function C.iconRule(y)
+    C.black()
+    love.graphics.rectangle("fill", C.ICON_RULE_X, y, 1, C.ROW_STEP)
   end
 
   -- Right-align a string to a pixel column, and hand back where it starts so
