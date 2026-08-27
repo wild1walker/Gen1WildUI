@@ -10,7 +10,7 @@ return {
   ["Gen1ItemInfo"] = "maintained",
   ["Gen1MenuManager"] = "0.2.8",
   ["Gen1ModMenu"] = "0.9.0",
-  ["Gen1ModernBag"] = "1.9.4",
+  ["Gen1ModernBag"] = "1.10.0",
   ["Gen1Party"] = "1.7.0",
   ["WidescreenBattleIntro"] = "maintained",
 }

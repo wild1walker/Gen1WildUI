@@ -56,6 +56,25 @@ return function(mod)
   C.CURSOR_X = 8
   C.LABEL_X = 16
 
+  -- ------- and the margins a row with an icon keeps instead
+  --
+  -- The icon takes the two tiles after the cursor and the label starts a tile
+  -- after it, which is the clearance the cursor already has on the other
+  -- side.  What that costs is the price column: a name from 40 has 112 pixels
+  -- to the right margin, and a ¥2100 and the tile between them take fifty of
+  -- them, which leaves eight glyphs and cuts SUPER POTION in half.
+  --
+  -- So a row with an icon drops its right-hand number to the row's second
+  -- line.  There is one -- rows are sixteen pixels apart and a glyph is
+  -- eight -- and it is where the game itself puts the number when a list has
+  -- an icon-sized gap on the left: the bag prints a name and then its count
+  -- underneath (home/list_menu.asm, and ListMenu's own item box).  Nothing is
+  -- truncated on any row of any of these screens as a result, which was not
+  -- true before the icons and is the point.
+  C.ICON_X = 16
+  C.ICON_LABEL_X = 40
+  C.RIGHT_SUB_Y = 8
+
   -- Four rows of 16 pixels in the 72 the body has, centred in it: the same
   -- four the vanilla mart and PC lists show, at the same pitch, so a player
   -- who knows where the fourth row is still finds it there.
