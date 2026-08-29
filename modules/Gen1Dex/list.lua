@@ -297,7 +297,13 @@ return function(mod, DexData, C, Area)
     end
 
     if i == self.index then
-      Font.drawCode(Theme.cursor, CURSOR_X, textY)
+      -- Hollow while the side menu is up: the engine's own list does this to
+      -- say the cursor it is watching is the other one
+      -- (engine/menus/pokedex.asm PlaceUnfilledArrowMenuCursor), and the row
+      -- reading as live under a menu that owns the d-pad is a lie about
+      -- which one UP moves.
+      Font.drawCode(self.hollowIndex == i and Theme.cursorHollow or Theme.cursor,
+                    CURSOR_X, textY)
     end
   end
 

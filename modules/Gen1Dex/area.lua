@@ -613,14 +613,75 @@ return function(mod, C)
   -- what makes this a two-line wrap rather than the index arithmetic it used
   -- to take from the outside: a dex list is free to sort, filter or replace
   -- its rows, and the moment it does, position N stops meaning species N.
+  -- ------- the box the side menu never had
+  --
+  -- The vanilla dex prints DATA / CRY / AREA / QUIT permanently into the
+  -- block down the right of its screen, so PokedexMenu's side menu draws the
+  -- cursor and those labels alone -- "the block is already on screen", as its
+  -- own comment puts it, and it is, because the vanilla list drew it.
+  --
+  -- This list does not.  The right of the screen is where the names run, and
+  -- SEEN / OWN moved into a footer box, so there is no block for a menu to be
+  -- the cursor on: on a discovered entry the engine's menu came up as four
+  -- bare words floating over the list, the last of them printed across the
+  -- footer, with QUIT past the bottom of the screen.
+  --
+  -- One box, drawn where this mod's own menus are drawn.  Bottom-aligned on
+  -- the last row of the body, so two entries sit exactly where they always
+  -- have and four grow UPWARD into the list rather than down through the
+  -- footer.  Clamped to the top of the body for Yellow's five, which fill it.
+  local FOOTER_TY = C.FOOTER_TY                 -- 15: first row of the footer
+  local BODY_TOP_TILE = C.BODY_TOP / 8          -- 3:  first row under the header
+
+  local function sideMenu(game, entries)
+    local th = #entries * 2 + 2
+    local ty = math.max(BODY_TOP_TILE, FOOTER_TY - 1 - th)
+    return Menu.new(game, entries, { tx = 12, ty = ty, tw = 8, th = th })
+  end
+
   function A.wireList(game, list, opts)
     if type(list) ~= "table" then return list end
-    if not C.option("area_unseen", true) then return list end
 
+    local unseenMenu = C.option("area_unseen", true)
     local baseChoose = list.onChoose
+
+    -- A discovered entry: the engine's menu, in a box.
+    --
+    -- Rather than rebuild DATA and CRY -- they are the engine's, Yellow adds
+    -- PRNT to them, and every one of them is a closure over state this mod
+    -- does not have -- chooseEntry is RUN and the menu it pushes is taken.
+    -- Everything else it does still happens on the way past, which is the
+    -- hollow cursor it leaves on the chosen row; the entries that come back
+    -- are its own, so what a press does is unchanged.  Only the box is ours.
+    local function boxedEngineMenu(item, dexList)
+      if not baseChoose then return end
+      local stack = game.stack
+      if type(stack) ~= "table" or type(stack.push) ~= "function" then
+        return baseChoose(item, dexList)
+      end
+      local realPush, captured = stack.push, nil
+      stack.push = function(_, screen) captured = screen end
+      local ok, err = pcall(baseChoose, item, dexList)
+      stack.push = realPush
+      if not ok then
+        mod.log:warn("the dex side menu did not build: %s", tostring(err))
+        return
+      end
+      local entries = type(captured) == "table" and captured.items or nil
+      if type(entries) ~= "table" or #entries == 0 then
+        -- Something other than a menu, or a menu with no rows: hand back
+        -- whatever it was rather than swallow the press.  An unboxed menu
+        -- still works; a press that does nothing is worse.
+        if captured ~= nil then stack:push(captured) end
+        return
+      end
+      stack:push(sideMenu(game, entries))
+    end
+
     local choose
     choose = function(item, dexList)
-      if item.value then
+      if item.value then return boxedEngineMenu(item, dexList) end
+      if not unseenMenu then
         if baseChoose then return baseChoose(item, dexList) end
         return
       end
@@ -649,8 +710,10 @@ return function(mod, C)
             if opts and opts.onCancel then opts.onCancel() end
           end },
       }
-      game.stack:push(Menu.new(game, entries,
-        { tx = 12, ty = 8, tw = 8, th = #entries * 2 + 2 }))
+      -- The chosen row goes hollow while this is up, the way the engine's own
+      -- side menu leaves it; PokedexMenu:update clears it on the way back.
+      dexList.hollowIndex = dexList.index
+      game.stack:push(sideMenu(game, entries))
     end
 
     -- Marked so a bench -- this mod's, or a content mod's -- can say in one
@@ -659,7 +722,10 @@ return function(mod, C)
     -- handler was replaced" decides the fix, and guessing between them from a
     -- bug report is what cost a release.
     list.onChoose = choose
-    list.__gen1dexArea = true
+    -- The probe's marker means "AREA on an undiscovered entry is wired", so
+    -- it is set only when it is.  The boxed menu above is wired either way --
+    -- a broken box is not an option this mod offers.
+    list.__gen1dexArea = unseenMenu or nil
     list.__gen1dexChoose = choose
     return list
   end
