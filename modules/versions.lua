@@ -8,7 +8,7 @@ return {
   ["Gen1Dex"] = "1.9.0",
   ["Gen1Elevator"] = "maintained",
   ["Gen1ItemInfo"] = "maintained",
-  ["Gen1MenuManager"] = "0.3.1",
+  ["Gen1MenuManager"] = "0.3.2",
   ["Gen1ModMenu"] = "0.9.0",
   ["Gen1ModernBag"] = "1.11.1",
   ["Gen1Party"] = "1.7.0",

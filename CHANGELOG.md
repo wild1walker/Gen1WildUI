@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.19.2
+
+**Three things the layout editor drew that were not true** (Gen1MenuManager
+0.3.2).
+
+Its empty page ran off its own box — `NOTHING TO ARRANGE` is exactly eighteen
+glyphs and the interior is eighteen tiles, so starting it a column in put the
+last two on the border. Its title carried `<` and `>`, which are not in the
+Game Boy font, so they drew as nothing and only pushed the title right; the
+page count (`1/3`) says the same thing in glyphs the font has. And a row the
+menu is not offering read `ON`, when switching it on cannot put it there —
+those read `----` now, the same as a pin you have not unlocked.
+
 ## 1.19.1
 
 **The layout editor drew a hint over its own frame** (Gen1MenuManager 0.3.1).

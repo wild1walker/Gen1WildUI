@@ -88,6 +88,9 @@ return function(mod, Layout, Pins, contexts)
               key = key, label = row.label or row.id, kind = "row",
               on = not layout.hidden[key],
               locked = protected[key] or false,
+              -- not in the list the menu last built, so it is not on offer
+              -- where the player is standing
+              absent = true,
             }
           end
         end
@@ -289,24 +292,47 @@ return function(mod, Layout, Pins, contexts)
       return entry.on and " PIN" or "  --"
     end
     if entry.locked then return "LOCK" end
+    -- A catalog row the menu is not offering right now: FLY without the HM in
+    -- the party, FLASH in daylight, a repel with none in the bag.  Switching
+    -- it on cannot put it on the menu, because what keeps it off is the game
+    -- and not the layout -- so it must not read ON, which is a promise this
+    -- screen cannot keep.  The same four dashes a pin uses for "not yours
+    -- yet", and for the same reason.
+    if entry.absent then return "----" end
     return entry.on and "  ON" or " OFF"
   end
 
   function Screen:draw()
     Font.drawBox(0, 0, COLS, ROWS)
     love.graphics.setColor(0, 0, 0, 1)
-    -- The title says which menu, and carries the arrows that walk between
-    -- them.  On the title rather than on a second footer line: row ROWS-1 is
-    -- the box's own bottom border, so a hint drawn there lands ON the frame
-    -- and comes out as a smear -- which is exactly what a second line did.
-    -- There is one line for hints and it is full.
-    local title = self.ctx.title
-    if #(self.keys or {}) > 1 then title = "< " .. title .. " >" end
-    Font.draw(title, 8, 8)
+    -- The title says which menu, and how many there are to walk between.
+    --
+    -- Not a second footer line: row ROWS-1 is the box's own bottom border, so
+    -- a hint drawn there lands ON the frame and comes out as a smear.  And
+    -- not "< TITLE >" either: `<` and `>` are not in the Game Boy font
+    -- (charmap.asm), so they drew as nothing at all and the only visible
+    -- effect was the title sitting two columns further right than it should.
+    --
+    -- "2/3" is three glyphs the font does have, right-aligned where nothing
+    -- else is, and it says the thing that matters: this is one page of
+    -- several.
+    Font.draw(self.ctx.title, 8, 8)
+    local keys = self.keys or {}
+    if #keys > 1 then
+      local at = 1
+      for i, key in ipairs(keys) do
+        if key == self.key then at = i break end
+      end
+      local page = ("%d/%d"):format(at, #keys)
+      Font.draw(page, (COLS - 1 - #page) * 8, 8)
+    end
 
     if #self.entries == 0 then
-      Font.draw("NOTHING TO ARRANGE", 16, FIRST_ROW * 8)
-      Font.draw(self.ctx.emptyHint, 16, (FIRST_ROW + 2) * 8)
+      -- From tile 1, not tile 2.  The box's interior is tiles 1 to 18 and
+      -- "NOTHING TO ARRANGE" is exactly 18 glyphs, so starting a column in
+      -- put its last two characters on and past the right border.
+      Font.draw("NOTHING TO ARRANGE", 8, FIRST_ROW * 8)
+      Font.draw(self.ctx.emptyHint, 8, (FIRST_ROW + 2) * 8)
       love.graphics.setColor(1, 1, 1, 1)
       return
     end
