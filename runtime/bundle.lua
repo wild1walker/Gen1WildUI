@@ -37,6 +37,25 @@ function Bundle.install(mod, spec, features)
   local Registry = assert(loadRuntime("registry"), "runtime/registry.lua did not load")
   local Menu = assert(loadRuntime("menu"), "runtime/menu.lua did not load")
   local Claims = assert(loadRuntime("claims"), "runtime/claims.lua did not load")
+  -- Optional, and deliberately so: a bundle installed outside a sealed cart
+  -- needs none of it, and a tree built before this file existed should lose
+  -- the remembering rather than the boot.
+  local Settings = loadRuntime("settings")
+
+  -- Before anything reads an option.  A sealed cart has just replaced every
+  -- pinned mod's options with what it pins (Loader:_applyCart), so what the
+  -- player chose is put back here -- into the same table the mod manager
+  -- reads, so nothing ends up with two answers.  This bundle is first in the
+  -- cart's load order, which is what puts it ahead of the mod whose option is
+  -- read at load time.
+  if type(Settings) == "table" then
+    local ok, restored = pcall(Settings.restore, mod)
+    if ok and (restored or 0) > 0 then
+      mod.log:info("%d remembered setting(s) put back after the cart's seal",
+                   restored)
+    end
+    pcall(Settings.watch, mod)
+  end
 
   local loader = Loader.new(mod)
   local optionset = OptionSet.new()

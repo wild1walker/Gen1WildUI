@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.20.0
+
+**Your settings survive a reboot again.** Wild Green is a sealed cart, and a
+sealed cart's per-mod options are not the player's: the loader rebuilds them on
+every boot out of what the cart pins and discards the stored values. Unsealing
+is not the answer — online play requires the seal — so the bundle remembers
+what you chose in its own cache, which that merge does not touch, and puts it
+back as it installs, before anything reads it.
+
+It restores into the same table the mod manager reads, so the manager, this
+suite's menu and the mods themselves cannot disagree. Nothing touches the cart
+file, which is what online matches on.
+
 ## 1.19.2
 
 **Three things the layout editor drew that were not true** (Gen1MenuManager
