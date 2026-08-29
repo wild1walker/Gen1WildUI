@@ -465,6 +465,59 @@ return function(mod, C)
     return true
   end
 
+  -- ------- flying from a map you opened to read
+  --
+  -- The AREA screen is the town map.  If the party can FLY and the cursor is
+  -- over somewhere flyable, then the answer to "can I go there" is yes, and a
+  -- screen that shows you the place and then makes you close it, open the
+  -- START menu and pick FLY to reach the same map again is a screen being
+  -- pedantic about which door you came in by.
+  --
+  -- Everything about WHICH towns qualify is the engine's rule, rebuilt here
+  -- because buildFlyList is a local in TownMap: visited, has a fly warp, and
+  -- is a fly town (engine/menus/town_map.asm LoadTownMap_Fly, mirrored from
+  -- src/ui/TownMap.lua).  Nothing is widened -- a town this says yes to is a
+  -- town the FLY screen would have offered.
+  local function flyTargets(game)
+    local data = game and game.data
+    if type(data) ~= "table" then return nil end
+    local field = data.field or {}
+    local visited = (game.save and game.save.visited) or {}
+    local flyWarps = field.flyWarps or {}
+    local order = field.flyOrder
+    if type(order) ~= "table" then return nil end
+    local okMap, Map = pcall(require, "src.world.Map")
+    if not (okMap and type(Map) == "table"
+            and type(Map.isFlyTown) == "function") then
+      return nil
+    end
+    local out = {}
+    for _, mapId in ipairs(order) do
+      local def = data.maps and data.maps[mapId]
+      if visited[mapId] and flyWarps[mapId] and def
+          and Map.isFlyTown(def) then
+        out[mapId] = true
+      end
+    end
+    return out
+  end
+
+  -- The overworld has to be under this screen for a flight to land anywhere.
+  -- Reached by index rather than by popping and hoping: a stack that does not
+  -- have it (a dex opened from somewhere else, a screen another mod pushed
+  -- between) leaves A doing what it always did rather than half-unwinding
+  -- something on a guess.
+  local function overworldUnder(game)
+    local stack = game and game.stack
+    local ow = game and game.overworld
+    local states = type(stack) == "table" and stack.states or nil
+    if not (ow and type(states) == "table") then return nil end
+    for _, state in ipairs(states) do
+      if state == ow then return ow end
+    end
+    return nil
+  end
+
   -- Which town maps this steers: the ones drawn as a map.
   --
   -- FLY included.  Its cursor walks `locs`, which LoadTownMap_Fly has already
@@ -708,6 +761,68 @@ return function(mod, C)
         if play then play() end
       end
 
+      -- A over a town you can fly to, with the hint down, IS a flight.  With
+      -- the hint up A means "I have read this" and takes the strip down; the
+      -- press after that is this one.
+      --
+      -- Every condition is a reason to fall through rather than to fail: no
+      -- FLY in the party, indoors, the cursor on somewhere unflyable, no
+      -- overworld under the screen -- any of them and A closes the screen the
+      -- way it always did.  Nothing here reports an error, because none of
+      -- them is one.
+      local function flyFromHere(self)
+        if not C.option("area_fly", true) then return false end
+        local g = self.game or game
+        local ow = overworldUnder(g)
+        if not ow then return false end
+        if type(ow.partyKnows) ~= "function"
+            or type(ow.flyTo) ~= "function" then
+          return false
+        end
+        local okKnows, knows = pcall(ow.partyKnows, ow, "FLY")
+        if not (okKnows and knows) then return false end
+        -- outdoors only, the same gate the field-move menu uses
+        local okMap, Map = pcall(require, "src.world.Map")
+        local okDefaults, FieldDefaults = pcall(require, "src.core.FieldDefaults")
+        if okMap and okDefaults and type(Map.isOutside) == "function"
+            and ow.map and ow.map.def then
+          local okOut, outside = pcall(Map.isOutside, ow.map.def,
+            FieldDefaults.field(g.data, "outsideTilesets"))
+          if not (okOut and outside) then return false end
+        end
+        local targets = flyTargets(g)
+        if not targets then return false end
+        local here = self.locs and self.locs[self.sel]
+        if not here then return false end
+        -- byMap points every map at its town's square, so the cursor's loc is
+        -- matched by identity rather than by name: two towns may share a name
+        -- in a translated build, and no two share a square.
+        local byMap = self.byMap or {}
+        local mapId
+        for id, loc in pairs(byMap) do
+          if loc == here and targets[id] then mapId = id break end
+        end
+        if not mapId then return false end
+
+        -- Down to the overworld, then fly.  Popping rather than asking the
+        -- dex to close itself: the screens above are this screen and whatever
+        -- opened it, and the flight is leaving all of them behind.
+        local stack = g.stack
+        local guard = 0
+        while stack:top() and stack:top() ~= ow and guard < 16 do
+          stack:pop()
+          guard = guard + 1
+        end
+        if stack:top() ~= ow then return false end
+        pressSound()
+        local okFly = pcall(ow.flyTo, ow, mapId)
+        if not okFly then
+          mod.log:warn("FLY from the AREA map did not take off for %s",
+            tostring(mapId))
+        end
+        return true
+      end
+
       screen.update = function(self, dt)
         local input = self.game.input
         -- A on the AREA screen closes it (TownMap:update).  While the hint is
@@ -744,6 +859,9 @@ return function(mod, C)
             self:moveList(input:wasPressed("down") and 1 or -1)
           end
           return baseUpdate(self, dt)
+        elseif input:wasPressed("a") and flyFromHere(self) then
+          -- flown; the screen is gone and the overworld is doing the rest
+          return
         elseif input:wasPressed("start") then
           -- and START brings it back, because dismissing a hint you have not
           -- finished reading should not mean leaving the screen and coming in

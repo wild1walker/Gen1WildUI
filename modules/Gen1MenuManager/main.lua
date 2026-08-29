@@ -63,6 +63,13 @@ return function(mod)
     -- the game itself uses, which is what the editor lists either way.
     { key = "short_names", type = "toggle", label = "SHORT NAMES",
       default = true },
+    -- The manager's row on the SELECT field menu.  Off by default, unlike the
+    -- other two: that menu earns its place by being short and by being only
+    -- what is usable where you stand, and it is arranged from the OPTION
+    -- screen without it.  On for anyone who would rather have the editor a
+    -- press away from the menu it edits.
+    { key = "select_row", type = "toggle", label = "SELECT ROW",
+      default = false },
   })
 
   -- ------- persistence
@@ -108,8 +115,14 @@ return function(mod)
     -- still reaches the editor from an otherwise empty menu.  Turn the
     -- shortcut off and the manager row becomes the only route, so it locks.
     function ctx.protected()
-      if mod.options:get("select_shortcut") then return {} end
-      return { [Layout.MANAGER] = true }
+      local locked = {}
+      -- A context may name rows that must always be reachable whatever the
+      -- shortcut is doing -- the field menu's way out, for one.
+      for _, key in ipairs(spec.alwaysProtect or {}) do locked[key] = true end
+      if not mod.options:get("select_shortcut") then
+        locked[Layout.MANAGER] = true
+      end
+      return locked
     end
 
     return ctx
@@ -123,6 +136,20 @@ return function(mod)
     pc = makeContext({
       saveKey = "pc_layout", cacheFile = "pc_layout.txt", pins = false,
       title = "PC MENU", emptyHint = "OPEN A PC FIRST",
+    }),
+    -- The overworld SELECT menu -- the field-move popup Gen1WildQOL's EASY HM
+    -- USE puts there.  It is not an engine menu and has no engine hook: it is
+    -- built fresh on every press out of what is usable on this tile, with this
+    -- party, in this bag, and the mod that builds it publishes a registry to
+    -- hand the rows round.  This joins that registry rather than wrapping
+    -- anything (see "the field menu" below).
+    --
+    -- CANCEL is protected: B closes the menu too, but a way out you can SEE is
+    -- not the same as one you have to know about.
+    select = makeContext({
+      saveKey = "select_layout", cacheFile = "select_layout.txt", pins = false,
+      title = "SELECT MENU", emptyHint = "PRESS SELECT FIRST",
+      alwaysProtect = { "I:cancel" },
     }),
   }
 
@@ -343,6 +370,61 @@ return function(mod)
     end
     return arrange("start", game, built, extra)
   end, 1000)
+
+  -- ------- the field menu
+  --
+  -- The overworld SELECT menu is not the engine's.  Gen1WildQOL's EASY HM USE
+  -- builds it, and it has no `ui.*` hook to wrap because it is not an engine
+  -- screen -- it is a question asked again on every press about what is usable
+  -- on this tile, with this party, in this bag.
+  --
+  -- So that mod publishes a registry instead and this joins it.  Which is the
+  -- same arrangement in the other direction: everywhere else this mod runs
+  -- OUTERMOST on a hook so it sees the finished list; here the registry hands
+  -- it the finished list directly, and the answer it gives back is the
+  -- arranged one.
+  --
+  -- Silent when there is nothing to join.  A player running this mod without
+  -- that one -- or with the standalone Quality of Life, which has no registry
+  -- -- simply has no SELECT context to arrange, and being told so on every
+  -- boot would be noise about a menu they do not have.
+  --
+  -- Rows there carry ids, which Layout.keysFor already prefers over labels
+  -- (it does the same for Gold's PC rows): an id is neither localized nor
+  -- rewritten when the bag's best repel changes, and both are true of the
+  -- labels on that menu.
+  local FIELD_MENU_NAMES = { "FieldMenu", "qol_easy_interactions",
+                             "Gen1WildQOL", "QualityOfLife" }
+
+  local function fieldMenuRegistry()
+    if type(mod.find) ~= "function" then return nil end
+    for _, name in ipairs(FIELD_MENU_NAMES) do
+      local ok, handle = pcall(mod.find, name)
+      if not ok then
+        local okSelf, handleSelf = pcall(mod.find, mod, name)
+        handle = okSelf and handleSelf or nil
+      end
+      local registry = type(handle) == "table" and handle.exports
+        and handle.exports.fieldMenu
+      if type(registry) == "table" and type(registry.provide) == "function" then
+        return registry
+      end
+    end
+    return nil
+  end
+
+  mod.events:once("mods.loaded", function()
+    local registry = fieldMenuRegistry()
+    if not registry then return end
+    registry.provide(function(game, ow, rows)
+      local extra = {}
+      if mod.options:get("select_row") then
+        extra[#extra + 1] = managerRow(game, "select", false)
+      end
+      return arrange("select", game, rows, extra)
+    end, mod.id)
+    mod.log:info("the SELECT field menu is arrangeable")
+  end)
 
   mod.hooks:wrap("ui.pc.items", function(next, game, items)
     local built = next(game, items)
