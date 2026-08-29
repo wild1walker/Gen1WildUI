@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.19.0
+
+**`A` on the AREA map flies you there** (Gen1Dex 1.9.0). The AREA screen *is*
+the town map: if the party can `FLY` and the cursor is over somewhere flyable,
+closing it to open the START menu and pick `FLY` to reach the same picture
+again is the screen being pedantic about which door you came in by. With the
+hint down, `A` over a flyable town is the flight.
+
+Which towns qualify is the game's own rule — visited, has a fly warp, is a fly
+town — so a town this says yes to is one the `FLY` screen would have offered.
+No `FLY` in the party, indoors, the cursor on somewhere unflyable: any of them
+and `A` closes the screen the way it always did. New row: `FLY FROM AREA`.
+
+**And the menu editor walks between three menus** (Gen1MenuManager 0.3.0). The
+overworld `SELECT` field menu can be arranged now, alongside the START and PC
+menus; `LEFT` and `RIGHT` step between them in the editor.
+
 ## 1.18.0
 
 **FLY is a map, not a list drawn on a map** (Gen1Dex 1.8.0).

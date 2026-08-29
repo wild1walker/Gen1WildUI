@@ -101,12 +101,28 @@ return function(mod, Layout, Pins, contexts)
     return entries
   end
 
+  -- The menus this screen can arrange, in the order LEFT and RIGHT walk them.
+  -- Filtered to the ones that exist, so a build without one of them simply
+  -- has a shorter cycle rather than a dead step in it.
+  local ORDER = { "start", "pc", "select" }
+
+  local function cycleKeys()
+    local keys = {}
+    for _, key in ipairs(ORDER) do
+      if contexts[key] then keys[#keys + 1] = key end
+    end
+    return keys
+  end
+
   function Screen.new(game, opts)
     opts = opts or {}
     local self = setmetatable({}, Screen)
     self.isOpaque = true
     self.game = game
-    self.ctx = contexts[opts.context or "start"] or contexts.start
+    self.keys = cycleKeys()
+    self.key = contexts[opts.context or "start"] and (opts.context or "start")
+      or "start"
+    self.ctx = contexts[self.key] or contexts.start
     self.onCancel = opts.onCancel
     self.entries = buildEntries(self.ctx, game)
     self.index = 1
@@ -155,7 +171,26 @@ return function(mod, Layout, Pins, contexts)
   function Screen:update()
     local input = self.game.input
     if #self.entries == 0 then
+      -- an empty menu is still one you can step off: LEFT and RIGHT are how
+      -- you reach the menus that are not empty
+      if input:wasPressed("left") or input:wasPressed("right") then
+        self:cycle(input:wasPressed("right") and 1 or -1)
+        return
+      end
       if input:wasPressed("b") or input:wasPressed("a") then self:leave() end
+      return
+    end
+    -- LEFT and RIGHT walk between the menus this screen can arrange.  The
+    -- editor is opened on one of them from a row that knows which; this is
+    -- what makes the other two reachable from the OPTION screen, which has
+    -- one row for the whole mod and no room for three.
+    --
+    -- Not while a row is held: a grab is a modal thing -- the row is in your
+    -- hand -- and carrying it onto a different menu is not a move anyone
+    -- means to make.
+    if not self.grabbed
+        and (input:wasPressed("left") or input:wasPressed("right")) then
+      self:cycle(input:wasPressed("right") and 1 or -1)
       return
     end
     if input:wasPressed("up") then
@@ -180,6 +215,24 @@ return function(mod, Layout, Pins, contexts)
       end
     end
     self:clampScroll()
+  end
+
+  -- Step to the next menu and rebuild against it.  The cursor starts at the
+  -- top rather than where it was: the row that was under it belongs to the
+  -- menu being left, and there is no honest place to carry that position to.
+  function Screen:cycle(step)
+    local keys = self.keys or {}
+    if #keys < 2 then return end
+    local at = 1
+    for i, key in ipairs(keys) do
+      if key == self.key then at = i break end
+    end
+    self.key = keys[(at - 1 + step) % #keys + 1]
+    self.ctx = contexts[self.key]
+    self.entries = buildEntries(self.ctx, self.game)
+    self.index = 1
+    self.scroll = 0
+    self.grabbed = false
   end
 
   function Screen:leave()
@@ -229,6 +282,9 @@ return function(mod, Layout, Pins, contexts)
 
     Font.draw(self.grabbed and "A:DROP" or "A:MOVE", 8, (ROWS - 2) * 8)
     Font.draw("SEL:ON/OFF", 9 * 8, (ROWS - 2) * 8)
+    if #(self.keys or {}) > 1 then
+      Font.draw("< >:MENU", 8, (ROWS - 1) * 8)
+    end
     love.graphics.setColor(1, 1, 1, 1)
   end
 

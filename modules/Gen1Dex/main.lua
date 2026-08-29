@@ -94,6 +94,15 @@ return function(mod)
     -- turned them off.
     { key = "area_hints", type = "toggle", label = "AREA HINTS",
       default = true },
+    -- A over a town you can FLY to, on the AREA map, IS a flight.  The
+    -- screen is the town map; if the party can fly and the cursor is over
+    -- somewhere flyable, making you close it and come back through the START
+    -- menu to reach the same map is the screen being pedantic about which
+    -- door you came in by.  Off leaves A closing the screen, which is what it
+    -- did before -- and it closes it anyway whenever a flight is not
+    -- available, so nothing is ever swallowed.
+    { key = "area_fly", type = "toggle", label = "FLY FROM AREA",
+      default = true },
     -- The nickname prompt after a catch keeps the screen it interrupted --
     -- the dex entry for a species the dex has never held, the battle it was
     -- caught on for anything else -- rather than the white field AskName
