@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.15.1
+
+**The Pokédex side menu has a box again** (Gen1Dex 1.5.3). A on a POKéMON you
+had met came up as four bare words -- `DATA`, `CRY`, `AREA` -- floating over
+the list, with `QUIT` printed across the SEEN and OWN counts and past the
+bottom of the screen. A on one you had *not* met opened a properly boxed
+two-row menu, which is what made this look like the discovered entries were
+the broken ones.
+
+Both were the same omission. The vanilla dex prints those four labels
+permanently into the block down the right of its screen, so the engine's side
+menu draws the labels and the cursor and nothing else -- there is already a
+block under them. This list has no such block: the right of the screen is
+where the names run, and SEEN / OWN moved into a footer box.
+
+The engine's menu is now taken and put in a box of the mod's own, bottom
+aligned on the last row of the list. Nothing about what a press does changes:
+the rows are the engine's own, not copies of them. The row the menu was opened
+on also reads as hollow underneath it now, the way the vanilla list draws it.
+
 ## 1.15.0
 
 **`OPTIONS > MODS` is now `OPTIONS > WILD GREEN`.** The suite's door used to
