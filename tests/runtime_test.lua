@@ -917,6 +917,48 @@ do
   eq(partial["gen1wild_mod_menu"], "gen1_wild_ui", "independently of the other")
 end
 
+-- --------------------------------------------- the cards the shipped list uses
+--
+-- Both halves of the suite declare the same cards in the same order, because
+-- either half can end up hosting the merged menu (runtime/menu.lua) and a
+-- player who opens GEN1WILD UI should not get a differently-ordered version of
+-- the screen GEN1WILD QOL would have shown.  The literal below is that
+-- agreement written down; the other half's suite carries the same one, so
+-- editing one repo's cards without the other fails here.
+
+do
+  io.write("every feature names one of the cards, and both halves agree on them\n")
+
+  local registry = load_("features.lua")
+  local groups = registry.spec.groups
+  ok(type(groups) == "table", "the spec declares its cards")
+
+  local declared, order = {}, {}
+  for i, group in ipairs(groups or {}) do
+    declared[group.id] = group.label
+    order[i] = group.id
+  end
+  eq(table.concat(order, ","), "world,pokemon,battles,items,saving,setup",
+     "the cards, in the order both halves draw them")
+
+  -- The labels are drawn on the card, so they are part of the agreement too.
+  eq(declared.world, "OUT IN THE WORLD", "world reads as a place")
+  eq(declared.setup, "MOD SETUP", "and the furniture says what it is")
+
+  local homeless = {}
+  for _, feature in ipairs(registry.features) do
+    if not (feature.group and declared[feature.group]) then
+      homeless[#homeless + 1] = feature.id
+    end
+  end
+  eq(table.concat(homeless, ","), "",
+     "every shipped feature sits on a card rather than loose on the top level")
+
+  -- The card the other loaded mods go under is built by the menu, not declared
+  -- here; a group of the same id would shadow it.
+  ok(declared.other_mods == nil, "nothing declares the card the menu reserves")
+end
+
 -- ------------------------------------------------------------------ done
 
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))

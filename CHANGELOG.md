@@ -1,5 +1,82 @@
 # Changelog
 
+## 1.14.0
+
+**Everything the suite can change is now one row on the game's own OPTION
+screen**, nested in folder cards, and the other half of the suite's settings
+are on it too.
+
+Everything was reachable before this and almost none of it was findable. The
+bundle deliberately put no row on the OPTION screen -- the reasoning was that a
+mod's settings live under `MODS` -- so the Pokedex's own settings were at
+`MODS > GEN1WILD UI > OPTIONS > POKEDEX`: three screens deep, behind a name
+that is a repository rather than a thing, and with a fifty-fifty guess about
+which half of the suite owned them. Installing both halves gave you two
+separate lists to guess between.
+
+### The door
+
+One row on the `OPTION` screen, next to `MODS`. It is named after the cart when
+a cart is running -- `WILD GREEN`, which is what was installed and what the
+launcher calls it -- and after this bundle when one half is installed on its
+own, where calling it `WILD GREEN` would be naming something that is not there.
+
+Both halves add that row under one shared id, so the first one there wins and
+the second finds it already present: one door, not two identical ones. The
+`MODS > GEN1WILD UI > OPTIONS` route still lands on the same screens for anyone
+who learned it.
+
+### The cards
+
+Behind the door are folder cards -- which is how the game's own OPTION screen
+has nested since it grew `SPEED`, `VIDEO` and `AUDIO` pages. Each says how many
+of its rows are on.
+
+| Card | Rows |
+| --- | --- |
+| `OUT IN THE WORLD` | `ELEVATOR PANEL`, and Gen1WildQOL's `SPRINT`, `EASY HM USE`, `AREA BANNER` |
+| `YOUR POKEMON` | `POKEDEX`, `POKEMON BOX`, `PARTY MENU`, and Gen1WildQOL's `FOLLOWERS`, `REMEMBER MOVES`, `ALL 151` |
+| `BATTLES` | `BACKDROPS`, `BATTLE INTRO`, `BATTLE MENUS`, and Gen1WildQOL's `EXP SHARE`, `CAUGHT MARKER` |
+| `ITEMS AND BAG` | `BAG`, `ITEM INFO` |
+| `SAVING AND SOUND` | Gen1WildQOL's `AUTO SAVE`, `AUTO CONTINUE`, `SOUND` |
+| `MOD SETUP` | `MENU LAYOUT`, `MOD MANAGER` |
+| `OTHER MODS` | every other loaded mod that has settings |
+
+Four rows fit on a screen, which is the point of the exercise: eleven features
+flat was three screenfuls of scrolling to reach one row, and six cards is one
+and a half with three or four rows behind each.
+
+### Both halves, one menu
+
+Gen1WildQOL and Gen1WildUI are one suite split in two for the index's sake, and
+that split was leaking into the menu. Each bundle now publishes a description
+of its own menu and draws the other's rows beside its own, delegating the
+switch to the bundle that owns it and opening that bundle's own settings screen
+on `A`. **Whichever half you open, you see the whole suite.**
+
+With one half installed the lookup finds nothing and the menu is that half's
+own, exactly as before. A sibling released before this exists is also a miss,
+so the two can be updated in either order.
+
+### The rest of what is installed
+
+The last card is every other mod that is loaded and has settings of its own --
+the rest of what a cart pins, plus anything installed by hand. Those rows are
+built from the schema the mod registered, and written back through the same
+tables and the same `mod.options_changed` event the mod manager uses, so a row
+set here and a row set there are the same row.
+
+### `BACKDROPS` came forward
+
+**Gen1Arena 0.20.2.** `MON PAPER` was turning pale battle sprites into a white
+box. It reads a sprite's pixels by drawing it into a scratch canvas, and it was
+doing that from inside the battle's own draw -- under the battle's transform,
+its scissor and its scale -- so the sprite landed off the canvas entirely. What
+came back was a nearly empty image, which passed both of the tests meant to
+catch bad art: few enough colours to look like flat paper, and hollow enough to
+look like line art. The read resets the transform and the scissor now, and its
+tests model the battle transform so a read that forgets it fails there.
+
 ## 1.13.0
 
 Three bundled mods come forward, two of them with bugs you could see.
