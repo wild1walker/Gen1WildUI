@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.16.0
+
+**The `AREA UNKNOWN` slab is gone from the AREA screen** (Gen1Dex 1.6.0).
+
+With no nests to mark, vanilla puts a 17x4 box across the middle of the map.
+On this screen that was the third thing saying so at once: the header above it
+already reads `<NAME> UNKNOWN`, and the strip below carries the half worth
+reading — `EVOLVE CHARMELEON AT LV36`, or whichever answer the species has. So
+a screen that *has* an answer was covering half its own map to say it has none.
+
+Only while the strip is up. `A` puts the hint away for a look at the bare map,
+and with the strip gone that box is the only thing left saying why the map is
+empty — so there it stays, and `START` brings both back together.
+
 ## 1.15.1
 
 **The Pokédex side menu has a box again** (Gen1Dex 1.5.3). A on a POKéMON you
