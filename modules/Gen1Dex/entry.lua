@@ -23,6 +23,15 @@
 -- page keys, and a reader who wants page three should not have to read
 -- page one to get there.
 --
+-- A walks the entry ONCE and then leaves it: past the last page it closes,
+-- where LEFT and RIGHT wrap.  That is the other half of the vanilla habit and
+-- the half it is not safe to drop, because A is the only key a script-pushed
+-- entry can be relied on to get: the lab's starter preview and the Safari
+-- Zone's sign posts all `push_screen DexEntryMenu` and then block until the
+-- screen pops itself (Commands.push_screen), so an A that wraps forever
+-- leaves the player pressing A at a POKéMON they cannot pick.  One key that
+-- always ends somewhere is worth more here than one that only ever advances.
+--
 -- The DEX page is why this is not a port of useful_dex's entry screen: that
 -- one replaces the vanilla page outright and its description goes with it, so
 -- installing it costs you the Pokédex text.  Here the vanilla page IS the
@@ -113,6 +122,9 @@ return function(mod, DexData, C)
   local PAGE_INDEX = { dex = 1, stats = 2, moves = 3 }
   local NEXT_PAGE = { dex = "stats", stats = "moves", moves = "dex" }
   local PREV_PAGE = { dex = "moves", stats = "dex", moves = "stats" }
+  -- where A runs out of entry and closes it.  The page keys still wrap past
+  -- here; only A treats it as the end.
+  local LAST_PAGE = "moves"
 
   -- ------- the type colours are not palette colours
   --
@@ -327,6 +339,14 @@ return function(mod, DexData, C)
     -- the description owns A for as long as it has pages left; see the header
     if self.page == "dex" and self.desc and self.descPage < #self.desc then
       self.descPage = self.descPage + 1
+      return
+    end
+    -- past the last page A leaves, rather than wrapping the way the page keys
+    -- do: see the header.  The movelist's own pages are not walked on the way
+    -- out -- they have UP/DOWN and a PAGE n/m to say so, where the
+    -- description has neither and so has to borrow A.
+    if self.page == LAST_PAGE then
+      self:close()
       return
     end
     self:turnPage(1)

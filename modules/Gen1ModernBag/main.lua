@@ -2145,23 +2145,30 @@ return function(mod)
       {
         key = "opening_pocket",
         type = "choice",
-        label = "Opening Pocket",
+        -- Set in the game's own voice, which is capitals: every other row in
+        -- this mod's own pocket table above, and every row every other mod in
+        -- the set puts in the manager, is written that way.  These were the
+        -- one screen in the suite that was not, which reads as a different
+        -- mod's settings sitting in the middle of the list.  The pocket names
+        -- here are the pocket names from POCKETS, to the character, so the row
+        -- says the same word as the tab it selects.
+        label = "OPENING POCKET",
         default = "medicine",
         choices = {
-          { "Favorites", "favorites" },
-          { "Medicine", "medicine" },
-          { "Balls", "balls" },
-          { "TM / HM", "machines" },
-          { "Battle", "battle" },
-          { "Key Items", "key" },
-          { "Other", "other" },
-          { "Last Used", "last" },
+          { "FAVORITES", "favorites" },
+          { "MEDICINE", "medicine" },
+          { "BALLS", "balls" },
+          { "TM/HM", "machines" },
+          { "BATTLE", "battle" },
+          { "KEY ITEMS", "key" },
+          { "OTHER", "other" },
+          { "LAST USED", "last" },
         },
       },
       {
         key = "hold_scroll_speed",
         type = "choice",
-        label = "Hold Scroll Speed",
+        label = "HOLD SCROLL",
         -- OFF, so a press is a row and nothing repeats on its own.  Any
         -- hold-to-scroll setting has a threshold, and the threshold is the
         -- problem: a press either crosses it or does not, so the same press
@@ -2171,16 +2178,16 @@ return function(mod)
         -- a hold to scroll; none of them is what an unconfigured Bag does.
         default = "off",
         choices = {
-          { "Off", "off" },
-          { "Normal", "normal" },
-          { "Fast", "fast" },
-          { "Very Fast", "very_fast" },
+          { "OFF", "off" },
+          { "NORMAL", "normal" },
+          { "FAST", "fast" },
+          { "VERY FAST", "very_fast" },
         },
       },
       {
         key = "item_icons",
         type = "toggle",
-        label = "Item Icons",
+        label = "ITEM ICONS",
         -- A picture of every item in the column between the cursor and the
         -- name. It is a switch because it is the one setting here that moves
         -- the window: the icons need a column the engine's own does not have,
