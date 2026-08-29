@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.18.0
+
+**FLY is a map, not a list drawn on a map** (Gen1Dex 1.8.0).
+
+The FLY screen already shows the whole of Kanto with a bird on the town you
+have selected — and then walked that selection with `UP` and `DOWN` through the
+fly order. The picture said "pick a place"; the controls said "scroll".
+
+It is steered by direction now, like the other two town maps. Open the map,
+move to the town you want, press `A` to go there.
+
+Which towns are reachable does not change: that set is the game's own, already
+narrowed to the towns you have visited, so everywhere the cursor can reach is
+somewhere `A` can take you.
+
 ## 1.17.0
 
 **The town map moves by direction, not by the story's visit order**
