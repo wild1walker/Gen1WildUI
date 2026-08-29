@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.16.1
+
+**The AREA screen ends on the map** (Gen1Dex 1.6.2).
+
+1.16.0 hid the `AREA UNKNOWN` slab while the hint strip was up and put it back
+when `A` dismissed the strip. That was backwards: dismissing the strip is a
+request to *see the map*, and a slab across the middle is the one thing that
+request cannot have. The route is `DEX`, then `<NAME> UNKNOWN`, then the map —
+and the map is where it ends. The slab is gone from every frame of that screen
+now.
+
+**And your marker is on it.** The player marker lives in the same branch the
+slab was the other half of: with no nests to mark, vanilla puts the slab up
+*instead* of marking where you are standing. That trade made sense while the
+slab covered the map; with it gone the screen is a plain town map, and a plain
+town map has you on it.
+
+Also narrows the stand-in that hides the slab so it catches the slab and only
+the slab — it was matching on screen position alone, which was a net over every
+path the engine's draw can take.
+
 ## 1.16.0
 
 **The `AREA UNKNOWN` slab is gone from the AREA screen** (Gen1Dex 1.6.0).
