@@ -465,14 +465,23 @@ return function(mod, C)
     return true
   end
 
-  -- Which town maps this steers: the ones drawn as a map.  A build with no
-  -- background art falls through to a list of names that already walks itself
-  -- with UP and DOWN, and FLY is its own mechanic -- its cursor cycles the
-  -- visited destinations in fly order and A flies to the one it is on, so
-  -- direction is not what that d-pad means.
+  -- Which town maps this steers: the ones drawn as a map.
+  --
+  -- FLY included.  Its cursor walks `locs`, which LoadTownMap_Fly has already
+  -- narrowed to the towns you have actually visited, and `flyMapIds` is
+  -- indexed by that same `sel` -- so moving the cursor by direction instead of
+  -- by fly order changes where it goes and nothing else.  A still flies to
+  -- whatever is under it, and it is still only ever over somewhere you can fly
+  -- to, which is what stops "pick a spot on the map" from meaning "pick a spot
+  -- and be told no".
+  --
+  -- A build with no background art is left out: TownMap falls through to a
+  -- list of names there, and the engine sets mode to "list" itself when any
+  -- fly destination is missing coordinates.  A list is walked with a list's
+  -- own keys.
   local function steerable(screen)
     return type(screen) == "table" and screen.mode == "grid"
-      and screen.bg ~= nil and not screen.fly
+      and screen.bg ~= nil
       and type(screen.locs) == "table" and #screen.locs > 1
   end
 
@@ -511,17 +520,25 @@ return function(mod, C)
       local screen = baseTownMap(game, opts)
       local species = opts and opts.nestSpecies
 
-      -- ------- the map you open from the bag
+      -- ------- the map you open from the bag, and the one FLY opens
       --
-      -- Same screen, same picture, and until now a different d-pad: the
-      -- engine walks its cursor along the story's visit order with UP and
-      -- DOWN and ignores LEFT and RIGHT, so moving around Kanto meant
-      -- stepping through a list that has nothing to do with where anything
-      -- is.  It is steered here the way the AREA map is steered below,
-      -- because one map should navigate one way however it was opened.
+      -- Same screen, same picture, and until now a different d-pad on each:
+      -- the plain viewer walks its cursor along the story's visit order with
+      -- UP and DOWN and ignores LEFT and RIGHT, and FLY walks the fly order
+      -- the same way.  Both meant stepping through a list that has nothing to
+      -- do with where anything is.  They are steered here the way the AREA map
+      -- is steered below, because one map should navigate one way however it
+      -- was opened.
       --
-      -- Only the d-pad.  B still closes it, the banner is still the engine's,
-      -- and nothing is drawn over it -- this screen is not this mod's to
+      -- FLY becomes what it already looks like: open the map, move to the town
+      -- you want, press A to go there.  The cursor still only visits towns you
+      -- have been to -- that set is the engine's `locs` on this screen and is
+      -- not widened -- so everywhere the cursor can reach is somewhere A can
+      -- take you.
+      --
+      -- Only the d-pad.  B still closes it, A is still the engine's (which on
+      -- FLY is the flight itself), the banner is still the engine's, and
+      -- nothing is drawn over either screen -- neither is this mod's to
       -- redress, only to make navigable.
       if not species and type(screen) == "table" then
         local basePlainUpdate = screen.update or TownMap.update
