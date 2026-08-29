@@ -969,6 +969,102 @@ do
   ok(declared.other_mods == nil, "nothing declares the card the menu reserves")
 end
 
+-- ------------------------- the settings a sealed cart would otherwise eat
+--
+-- Loader:_applyCart rebuilds loader.modOptions on every boot out of what the
+-- CART pins and throws the stored values away, for any seal that is not
+-- "open".  Online requires the seal ("sealed" exactly), so unsealing is not
+-- the answer -- the answer is to remember what the player chose somewhere the
+-- merge does not reach, and put it back before anything reads it.
+--
+-- Back into the SAME table the mod manager reads, which is what stops this
+-- being a second source of truth.
+
+do
+  io.write("a player's settings survive the cart's seal\n")
+
+  local Settings = load_("runtime/settings.lua")
+
+  -- a cache that behaves like the engine's: bytes in, bytes out, and empty
+  -- until something writes it
+  local files = {}
+  local handlers = {}
+  local logged = {}
+  local loader = { modOptions = {} }
+  local mod = {
+    id = "gen1_wild_qol",
+    cache = {
+      read = function(_, name) return files[name] end,
+      write = function(_, name, bytes) files[name] = bytes return true end,
+    },
+    events = { on = function(_, name, fn)
+      handlers[name] = handlers[name] or {}
+      table.insert(handlers[name], fn)
+    end },
+    log = { info = function() end,
+            warn = function(_, f) logged[#logged + 1] = tostring(f) end },
+    world = { game = { mods = loader } },
+  }
+  local function emit(name, ev)
+    for _, fn in ipairs(handlers[name] or {}) do fn(ev) end
+  end
+
+  ok(Settings.watch(mod), "the bundle listens for option changes")
+
+  -- the player changes three things, on three different mods, through
+  -- whichever screen -- they all end in the same event
+  emit("mod.options_changed", { mod = "wild_green", key = "player", value = "red" })
+  emit("mod.options_changed", { mod = "gen1_wild_qol", key = "sprint_speed", value = 3 })
+  emit("mod.options_changed", { mod = "gen1_wild_ui", key = "arena_enabled", value = false })
+  ok(files["settings.txt"] ~= nil, "and remembers them outside the option table")
+
+  -- ...and now the cart boots: the seal has replaced every pinned mod's
+  -- options with what it pins, which here is one value and nothing else
+  loader.modOptions = { wild_green = { ribbon = true } }
+
+  local restored = Settings.restore(mod)
+  eq(restored, 3, "every remembered value is put back")
+  eq(loader.modOptions.wild_green.player, "red",
+     "including the one the seal made impossible: PLAYER survives the boot")
+  eq(loader.modOptions.wild_green.ribbon, true,
+     "and the cart's own pin is left alone where the player never touched it")
+  eq(loader.modOptions.gen1_wild_qol.sprint_speed, 3, "a number comes back a number")
+  eq(loader.modOptions.gen1_wild_ui.arena_enabled, false,
+     "and false comes back false rather than missing")
+
+  -- into loader.modOptions, which is what the engine's own mod manager reads
+  -- (ManagerState:modOptionsTable -> options.modOptions) -- so the manager,
+  -- this suite's menu and the mods themselves cannot disagree
+  ok(loader.modOptions.wild_green.player == "red",
+     "and it is the table every screen reads, so none of them disagree")
+
+  -- an unchanged value is not rewritten: the cache is touched when a choice
+  -- is made, not on every event that echoes one
+  local before = files["settings.txt"]
+  files["settings.txt"] = "TOUCHED"
+  emit("mod.options_changed", { mod = "wild_green", key = "player", value = "red" })
+  eq(files["settings.txt"], "TOUCHED", "re-choosing the same value writes nothing")
+  files["settings.txt"] = before
+
+  -- the event carries the mod TABLE from a facade and the id from the
+  -- manager; a setting remembered under the wrong name is one forgotten
+  emit("mod.options_changed", { mod = { id = "wild_green" }, key = "name", value = false })
+  local reread = Settings.read(mod)
+  eq(reread.wild_green.name, false, "an event carrying the mod table is understood too")
+
+  -- a read-only cache costs the memory of the choice, not the choice
+  files = setmetatable({}, { __newindex = function() error("read-only", 0) end })
+  emit("mod.options_changed", { mod = "wild_green", key = "player", value = "green" })
+  ok(#logged > 0, "a cache that cannot be written says so rather than raising")
+
+  -- and with no game yet there is no loader to restore into, which is a
+  -- no-op rather than a crash on a host that loads mods before the game
+  local orphan = { id = "x", cache = mod.cache, world = {},
+                   log = mod.log, events = mod.events }
+  eq(Settings.restore(orphan, { a = { b = 1 } }), 0,
+     "with no loader to write to, nothing is restored and nothing raises")
+end
+
 -- ------------------------------------------------------------------ done
 
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))
