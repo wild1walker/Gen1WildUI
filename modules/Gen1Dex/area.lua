@@ -395,6 +395,87 @@ return function(mod, C)
     return loc.x * 8 + 16, loc.y * 8 + 8
   end
 
+  -- Tink on every cursor step, which is what TownMap:moveList plays.
+  local function moveSound(game)
+    local opts = mod.ui.TextBox.soundOpts(game, "Tink")
+    local play = opts and opts.auto and opts.auto.sound
+    if play then play() end
+  end
+
+  -- Snap the cursor to the nearest location the key actually points at.
+  --
+  -- Done here because TownMap has no grid move to call.  Its own d-pad
+  -- handling is moveList, which walks the list in the ENGINE'S CURSOR ORDER
+  -- (data/maps/town_map_order.asm) with UP and DOWN and ignores LEFT and
+  -- RIGHT entirely -- engine/items/town_map.asm:74 -- and on an AREA screen
+  -- it does not run at all, because the nestSpecies branch answers A and
+  -- nothing else.
+  --
+  -- Cursor order is the order the towns were VISITED in the story, not where
+  -- they are.  Walking it with a d-pad is the map answering a question nobody
+  -- asked: DOWN from Pallet lands wherever the list goes next, which is
+  -- across Kanto as often as not.
+  --
+  -- Nearest IN THAT DIRECTION, not nearest overall: a cone of 45 degrees
+  -- either side of the key, so LEFT off Pallet Town reaches the coast rather
+  -- than the town one row up that happens to be fewer cells away.  Off-axis
+  -- is scored harder than distance so the straight neighbour wins a tie, and
+  -- a key with nothing in front of it does nothing -- the cursor stays where
+  -- it is instead of leaping.
+  local function moveGrid(self, game, dx, dy)
+    local locs = self.locs
+    local from = locs and locs[self.sel]
+    if not (from and from.x and from.y) then return false end
+    local best, bestScore
+    for i, loc in ipairs(locs) do
+      if i ~= self.sel and loc.x and loc.y then
+        local ox, oy = loc.x - from.x, loc.y - from.y
+        local along = ox * dx + oy * dy
+        local across = math.abs(ox * dy) + math.abs(oy * dx)
+        if along > 0 and along >= across then
+          local score = across * 3 + along
+          if not bestScore or score < bestScore then
+            best, bestScore = i, score
+          end
+        end
+      end
+    end
+    if not best then return false end
+    self.sel = best
+    moveSound(game)
+    return true
+  end
+
+  -- One d-pad press, read the same way on every town map this mod steers.
+  -- Returns true when the press was a direction, whether or not the cursor
+  -- had anywhere to go -- a key with nothing in front of it is answered by
+  -- staying put, not by falling through to something else.
+  local function gridStep(self, game)
+    local input = game and game.input
+    if not input then return false end
+    local right = input:wasPressed("right")
+    local left = input:wasPressed("left")
+    local down = input:wasPressed("down")
+    local up = input:wasPressed("up")
+    if not (right or left or down or up) then return false end
+    local dx = (right and 1 or 0) - (left and 1 or 0)
+    local dy = (down and 1 or 0) - (up and 1 or 0)
+    -- LEFT and RIGHT together cancel, and so do UP and DOWN
+    if dx ~= 0 or dy ~= 0 then moveGrid(self, game, dx, dy) end
+    return true
+  end
+
+  -- Which town maps this steers: the ones drawn as a map.  A build with no
+  -- background art falls through to a list of names that already walks itself
+  -- with UP and DOWN, and FLY is its own mechanic -- its cursor cycles the
+  -- visited destinations in fly order and A flies to the one it is on, so
+  -- direction is not what that d-pad means.
+  local function steerable(screen)
+    return type(screen) == "table" and screen.mode == "grid"
+      and screen.bg ~= nil and not screen.fly
+      and type(screen.locs) == "table" and #screen.locs > 1
+  end
+
   -- The selection box the plain town map blinks on the cursor, in AREA mode
   -- where vanilla never drew one.
   local function drawCursor(screen)
@@ -429,6 +510,34 @@ return function(mod, C)
     return function(game, opts)
       local screen = baseTownMap(game, opts)
       local species = opts and opts.nestSpecies
+
+      -- ------- the map you open from the bag
+      --
+      -- Same screen, same picture, and until now a different d-pad: the
+      -- engine walks its cursor along the story's visit order with UP and
+      -- DOWN and ignores LEFT and RIGHT, so moving around Kanto meant
+      -- stepping through a list that has nothing to do with where anything
+      -- is.  It is steered here the way the AREA map is steered below,
+      -- because one map should navigate one way however it was opened.
+      --
+      -- Only the d-pad.  B still closes it, the banner is still the engine's,
+      -- and nothing is drawn over it -- this screen is not this mod's to
+      -- redress, only to make navigable.
+      if not species and type(screen) == "table" then
+        local basePlainUpdate = screen.update or TownMap.update
+        screen.update = function(self, dt)
+          -- Asked per frame rather than captured, for the reason the AREA
+          -- path gives below: the background is loaded by the constructor and
+          -- a caller may still be assembling the screen when this wrap
+          -- returns, so a build with art can look artless from here.
+          if steerable(self) and gridStep(self, self.game or game) then
+            return
+          end
+          return basePlainUpdate(self, dt)
+        end
+        return screen
+      end
+
       if not (species and type(screen) == "table") then return screen end
       -- read per open rather than once at load, so turning AREA HINTS off in
       -- the manager shows up the next time the screen is opened
@@ -582,54 +691,6 @@ return function(mod, C)
         if play then play() end
       end
 
-      -- and Tink on every cursor step, which is what TownMap:moveList plays
-      local function moveSound()
-        local opts = mod.ui.TextBox.soundOpts(game, "Tink")
-        local play = opts and opts.auto and opts.auto.sound
-        if play then play() end
-      end
-
-      -- Snap the cursor to the nearest location the key actually points at.
-      --
-      -- Done here rather than called on the screen because TownMap has no
-      -- grid move to call: its d-pad handling is moveList, which walks the
-      -- list in cursor order with UP and DOWN and ignores LEFT and RIGHT
-      -- (engine/items/town_map.asm:74), and on an AREA screen it does not run
-      -- at all -- the nestSpecies branch answers A and nothing else.  This
-      -- used to call a `moveGrid` that no version of TownMap has ever had, so
-      -- the first d-pad press on the AREA map raised "attempt to call method
-      -- 'moveGrid' (a nil value)" and took the game down with it.
-      --
-      -- Nearest IN THAT DIRECTION, not nearest overall: a cone of 45 degrees
-      -- either side of the key, so LEFT off Pallet Town reaches the coast
-      -- rather than the town one row up that happens to be fewer cells away.
-      -- Off-axis is scored harder than distance so the straight neighbour
-      -- wins a tie, and a key with nothing in front of it does nothing --
-      -- the cursor stays where it is instead of leaping across Kanto.
-      local function moveGrid(self, dx, dy)
-        local locs = self.locs
-        local from = locs and locs[self.sel]
-        if not (from and from.x and from.y) then return false end
-        local best, bestScore
-        for i, loc in ipairs(locs) do
-          if i ~= self.sel and loc.x and loc.y then
-            local ox, oy = loc.x - from.x, loc.y - from.y
-            local along = ox * dx + oy * dy
-            local across = math.abs(ox * dy) + math.abs(oy * dx)
-            if along > 0 and along >= across then
-              local score = across * 3 + along
-              if not bestScore or score < bestScore then
-                best, bestScore = i, score
-              end
-            end
-          end
-        end
-        if not best then return false end
-        self.sel = best
-        moveSound()
-        return true
-      end
-
       screen.update = function(self, dt)
         local input = self.game.input
         -- A on the AREA screen closes it (TownMap:update).  While the hint is
@@ -646,21 +707,23 @@ return function(mod, C)
         elseif canMove(self)
             and (input:wasPressed("up") or input:wasPressed("down")
                  or input:wasPressed("left") or input:wasPressed("right")) then
-          -- the plain map's own snap-to-nearest, sound and all
-          if self.mode == "grid" then
-            local dx = (input:wasPressed("right") and 1 or 0)
-              - (input:wasPressed("left") and 1 or 0)
-            local dy = (input:wasPressed("down") and 1 or 0)
-              - (input:wasPressed("up") and 1 or 0)
-            -- LEFT and RIGHT together, or a key with nothing in front of it,
-            -- leave the cursor alone; UP and DOWN then still walk the list,
-            -- so a d-pad press is never simply swallowed on a map that has
-            -- somewhere to go.
-            if (dx ~= 0 or dy ~= 0) and not moveGrid(self, dx, dy)
-               and dy ~= 0 then
-              self:moveList(dy > 0 and -1 or 1)
-            end
-          else
+          -- The same step the map from the bag takes, so one map navigates
+          -- one way however it was opened.
+          --
+          -- A key with nothing in front of it does nothing, which is what
+          -- moveGrid returning false means and what the note over it
+          -- promises.  UP and DOWN used to fall back to moveList here, so a
+          -- press off an edge of Kanto -- and there are four edges' worth of
+          -- those -- jumped the cursor to wherever the ENGINE'S CURSOR ORDER
+          -- went next (data/maps/town_map_order.asm).  That reads as the map
+          -- navigating by list rather than by direction, because for those
+          -- presses it was.  A cursor that stays put says "nothing that way"
+          -- honestly; one that leaps says nothing at all.
+          if steerable(self) then
+            if gridStep(self, self.game or game) then return end
+          elseif input:wasPressed("up") or input:wasPressed("down") then
+            -- no map art: the engine falls through to a list of names, and a
+            -- list is walked with a list's own keys
             self:moveList(input:wasPressed("down") and 1 or -1)
           end
           return baseUpdate(self, dt)
