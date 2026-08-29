@@ -46,22 +46,36 @@ does still belongs to the person named in [Credits](#credits); `ITEM INFO` and
 
 ```
 OPTION
-  GEN1WILD UI         CONFIGURE
-    BACKDROPS         ON (CONFIGURE)     <- LEFT/RIGHT switches it
-      DIAGNOSTIC      OFF                <- A opens this
-      FIELD TEST      OFF
-      RESET DEFAULTS
-    POKEDEX           ON (CONFIGURE)
-      SPECIES COLOURS ON
-      AREA HINTS      ON
+  WILD GREEN          11 MODS            <- in place of the MODS row
+    POKEMON           ALL 3 ON
+      POKEDEX         ON (CONFIGURE)     <- LEFT/RIGHT switches it
+        SPECIES COLOURS  ON              <- A opens this
+        AREA HINTS    ON
+        ...
+      PARTY MENU      ON (CONFIGURE)
+      POKEMON BOX     ON (CONFIGURE)
+    BATTLE            ALL 3 ON
+      BACKDROPS       ON (CONFIGURE)
       ...
-    PARTY MENU        ON (CONFIGURE)
-    ...
+    ITEMS             ALL 2 ON
+    INTERFACE         ALL 3 ON
+    OTHER MODS        2 MODS             <- anything else that is loaded
+    MOD MANAGER       11 INSTALLED       <- the engine's own MODS screen
 ```
 
-`LEFT`/`RIGHT` switches a feature or changes a setting, `A` opens a feature's
-settings or explains a row, `B` goes back. Every feature screen ends in
-`RESET DEFAULTS`.
+The top row takes the OPTION screen's own `MODS` row rather than sitting next
+to it, and `START > MODS` opens the same screen. It is named after the cart
+when one is running — `WILD GREEN` — and after the bundle (`GEN1WILD UI`) when
+one half is installed on its own. The engine's mod list is `MOD MANAGER` at the
+bottom, one press further in.
+
+The cards are the same six in both halves and in the same order, so the menu
+reads the same way round whichever half you opened. A card with nothing in it
+is not drawn.
+
+`LEFT`/`RIGHT` switches a feature or changes a setting, `A` opens a card, a
+feature's settings, or an explanation of the row, `B` goes back. Every feature
+screen ends in `RESET DEFAULTS`.
 
 A row marked `*` needs a relaunch to take effect, and the footer says so. Every
 feature here except `BACKDROPS` is in that category: their upstream mods have

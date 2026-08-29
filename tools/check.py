@@ -494,9 +494,26 @@ def check_options_screen(problems: Problems, quiet: bool) -> None:
         problems.error("runtime/menu.lua no longer routes MODS > this bundle "
                        "> OPTIONS, which players who learned that route "
                        "still use")
+
+    # The door takes the engine's MODS row rather than sitting next to it, and
+    # the START menu's MODS entry with it.  That is only a move as long as the
+    # manager has somewhere to land: the row on the screen below.  Take that
+    # row away and the two lines above quietly become a removal -- a player
+    # with the suite installed would have no way to reach the mod manager at
+    # all.  The three belong together, so they are checked together.
+    takes_row = 'existing.id == "mods"' in code and "table.remove(out, i)" in code
+    if takes_row and 'kind = "manager"' not in code:
+        problems.error("runtime/menu.lua takes the OPTION screen's MODS row "
+                       "without giving the mod manager a row of its own, so "
+                       "nothing left on screen opens the manager")
+    if takes_row and '"ui.start_menu.items"' not in code:
+        problems.error("runtime/menu.lua takes the OPTION screen's MODS row "
+                       "but leaves START > MODS on the manager, so the two "
+                       "doors named MODS lead to different places")
     if not quiet:
-        print("  options:    one shared row on the OPTION screen; "
-              "MODS route intact")
+        where = "in place of MODS" if takes_row else "beside MODS"
+        print(f"  options:    one shared row on the OPTION screen, {where}; "
+              "manager and MODS route intact")
 
 
 def check_manifest(problems: Problems, quiet: bool) -> None:

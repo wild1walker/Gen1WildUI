@@ -54,18 +54,18 @@ return {
     -- round whichever one the player opened.  A card with nothing in it is not
     -- drawn, so a half that has no features for a card simply does not show it.
     groups = {
-      { id = "world",   label = "OUT IN THE WORLD",
-        description = "WALKING, RUNNING AND THE THINGS ON THE MAP." },
-      { id = "pokemon", label = "YOUR POKEMON",
-        description = "THE POKEMON THEMSELVES, AND THE SCREENS ABOUT THEM." },
-      { id = "battles", label = "BATTLES",
+      { id = "general",   label = "GENERAL",
+        description = "MOVING AROUND, AND THE THINGS THE GAME DOES ON ITS OWN." },
+      { id = "pokemon",   label = "POKEMON",
+        description = "THE POKEMON THEMSELVES AND THE SCREENS ABOUT THEM." },
+      { id = "battle",    label = "BATTLE",
         description = "WHAT A BATTLE LOOKS LIKE AND HOW IT PLAYS." },
-      { id = "items",   label = "ITEMS AND BAG",
-        description = "THE BAG, THE MART AND WHAT EVERY ITEM IS FOR." },
-      { id = "saving",  label = "SAVING AND SOUND",
-        description = "WHEN THE GAME SAVES ITSELF, AND WHAT IT SOUNDS LIKE." },
-      { id = "setup",   label = "MOD SETUP",
-        description = "THE MENUS AND THE MOD MANAGER THE REST IS REACHED THROUGH." },
+      { id = "items",     label = "ITEMS",
+        description = "THE BAG, THE MART, AND WHAT EVERY ITEM IS FOR." },
+      { id = "save",      label = "SAVE",
+        description = "SAVING, AND PICKING UP WHERE YOU LEFT OFF." },
+      { id = "interface", label = "INTERFACE",
+        description = "THE MENUS AND SCREENS EVERYTHING ELSE IS REACHED THROUGH." },
     },
   },
 
@@ -74,7 +74,7 @@ return {
 
     {
       id = "arena",
-      group = "battles",
+      group = "battle",
       priority = 50,
       dir = "Gen1Arena",
       entry = "main.lua",
@@ -87,7 +87,7 @@ return {
 
     {
       id = "widescreen",
-      group = "battles",
+      group = "battle",
       priority = 100,
       dir = "WidescreenBattleIntro",
       entry = "main.lua",
@@ -109,7 +109,7 @@ return {
 
     {
       id = "battlemenus",
-      group = "battles",
+      group = "battle",
       priority = 1100,
       dir = "Gen1BattleUI",
       entry = "main.lua",
@@ -208,7 +208,7 @@ return {
 
     {
       id = "elevator",
-      group = "world",
+      group = "interface",
       priority = 1200,
       dir = "Gen1Elevator",
       entry = "main.lua",
@@ -234,7 +234,7 @@ return {
 
     {
       id = "menus",
-      group = "setup",
+      group = "interface",
       priority = 900,
       dir = "Gen1MenuManager",
       entry = "main.lua",
@@ -251,7 +251,7 @@ return {
 
     {
       id = "modmenu",
-      group = "setup",
+      group = "interface",
       priority = 500,
       dir = "Gen1ModMenu",
       entry = "main.lua",

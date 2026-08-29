@@ -651,6 +651,19 @@ function Menu.new(context)
       }
     end
 
+    -- The mod manager itself, last.  This screen took the OPTION screen's
+    -- MODS row and the START menu's MODS entry, because with the suite
+    -- installed those are the door to the suite's settings rather than to a
+    -- list of zips -- so the list of zips has to be here, or it is nowhere.
+    -- One press further in, which is where somebody who came to enable and
+    -- disable mods rather than to change a setting was heading anyway.
+    rows[#rows + 1] = {
+      kind = "manager",
+      key = "__mod_manager",
+      label = "MOD MANAGER",
+      description = "TURN MODS ON AND OFF, AND IMPORT A MOD ZIP.",
+    }
+
     return rows
   end
 
@@ -712,6 +725,15 @@ function Menu.new(context)
       return cardLabel(entry.members or {})
     end
     if entry.kind == "mod" then return "CONFIGURE" end
+    if entry.kind == "manager" then
+      local loader = Other.loader(game)
+      local ok, status = false, nil
+      if loader and type(loader.status) == "function" then
+        ok, status = pcall(loader.status, loader)
+      end
+      local n = (ok and type(status) == "table") and #(status.available or {}) or 0
+      return ("%d INSTALLED"):format(n)
+    end
     if entry.kind == "action" then return "" end
     if entry.kind == "mod_option" then
       return labelForValue(entry.row, Other.read(game, entry.modId, entry.row))
@@ -774,6 +796,8 @@ function Menu.new(context)
           mod.ui.push(screen.game, entry.screenId)
         elseif entry.kind == "mod" then
           mod.ui.push(screen.game, otherModScreenId, { modId = entry.modId })
+        elseif entry.kind == "manager" then
+          mod.ui.push(screen.game, "ManagerState")
         elseif entry.kind == "feature" then
           if entry.deferredTo then
             local where = BUNDLE_NAMES[entry.deferredTo] or "THE OTHER BUNDLE"
@@ -806,7 +830,7 @@ function Menu.new(context)
 
       local function step(entry, dir)
         if entry.kind == "action" or entry.kind == "card"
-            or entry.kind == "mod" then
+            or entry.kind == "mod" or entry.kind == "manager" then
           return
         end
         if entry.kind == "custom" then
@@ -894,7 +918,10 @@ function Menu.new(context)
 
       local function footerFor(entry)
         if not entry then return "B:BACK" end
-        if entry.kind == "card" or entry.kind == "mod" then return "A:OPEN B:BACK" end
+        if entry.kind == "card" or entry.kind == "mod"
+            or entry.kind == "manager" then
+          return "A:OPEN B:BACK"
+        end
         if entry.kind == "feature" then
           if entry.deferredTo then return "A:INFO B:BACK" end
           if entryRead(entry) ~= false and entry.hasSettings and entry.screenId then
@@ -1080,17 +1107,51 @@ function Menu.new(context)
         end,
         activate = function(g) mod.ui.push(g, rootScreenId) end,
       }
-      -- Next to MODS, which is where a player who went looking for mod
-      -- settings the old way has just been.  Appended if some other mod took
-      -- the MODS row away, so nothing here can orphan the entry.
+      -- IN PLACE OF MODS, not beside it.  MODS is where a player looking for
+      -- mod settings goes, and with this suite installed almost everything
+      -- they will find there is this suite's -- so the row that says MODS and
+      -- opens a manager is the wrong answer to the question they are asking.
+      -- This one is the right answer, and it takes that slot.
+      --
+      -- The manager is not lost.  It is a row of its own on the screen below
+      -- (see managerRow), which is one press further in and where somebody
+      -- who actually wants to enable and disable mods is going anyway.
+      --
+      -- Appended if some other mod already took the MODS row away, so nothing
+      -- here can orphan the entry.
       local at = #out + 1
       for i, existing in ipairs(out) do
         if existing.id == "mods" then
-          at = i + 1
+          at = i
+          table.remove(out, i)
           break
         end
       end
       table.insert(out, at, row)
+      return out
+    end)
+
+    -- And the START menu's MODS entry, for the same reason: with the suite
+    -- installed, that is the door to the suite's settings and not to a list
+    -- of zips.  Retargeted rather than removed -- the entry keeps its name
+    -- and its place, it just arrives somewhere more useful.
+    mod.hooks:wrap("ui.start_menu.items", function(nextLink, game, items)
+      local out = nextLink(game, items)
+      if type(out) ~= "table" then return out end
+      for _, item in ipairs(out) do
+        -- By id where the engine gives one, by label otherwise: another mod
+        -- may have rebuilt the entry, and MODS is what it reads either way.
+        -- The flag is what keeps the other half of the suite from routing an
+        -- entry this half already routed.
+        local isMods = item and not item.__gen1wildRouted
+          and (item.id == "mods"
+               or (type(item.label) == "string" and item.label:upper() == "MODS"))
+        if isMods then
+          item.__gen1wildRouted = true
+          item.onSelect = function() mod.ui.push(game, rootScreenId) end
+          break
+        end
+      end
       return out
     end)
 

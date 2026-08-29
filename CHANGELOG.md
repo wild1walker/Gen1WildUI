@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.15.0
+
+**`OPTIONS > MODS` is now `OPTIONS > WILD GREEN`.** The suite's door used to
+sit next to the engine's `MODS` row; it takes that row's place instead.
+
+Two rows on one screen that both mean "the mods" is a choice the player has no
+way to make. `MODS` opens a list of installed zips, which is the answer to a
+question almost nobody is asking: with this suite installed, nearly everything
+behind it is this suite's, and what they came for is a setting. So the door
+takes the slot, named after the cart when a cart is running -- `WILD GREEN` --
+and after the bundle when one half is installed on its own.
+
+`START > MODS` follows it. The entry keeps its name and its place in the menu
+and lands on the same screens, so the route somebody already knows still works
+and no longer arrives somewhere different from the one on `OPTIONS`.
+
+The mod manager is not lost, it is one press further in: `MOD MANAGER` is a row
+of its own at the bottom of the suite menu, reading how many mods are
+installed. Turning mods on and off was always a trip past the settings, and now
+it is. `tools/check.py` fails the build if the door takes the `MODS` row
+without that row being there to catch it.
+
+**The folder cards say what is on them.** `OUT IN THE WORLD`, `YOUR POKEMON`,
+`BATTLES`, `SAVING & SOUND` and `MOD SETUP` are now `GENERAL`, `POKEMON`,
+`BATTLE`, `ITEMS`, `SAVE` and `INTERFACE`. A card is a signpost, and a signpost
+that has been written to sound like something is one the player has to read
+twice: somebody looking for the battle settings should find a card called
+`BATTLE`, not work out which invented phrase covers battles.
+
+Both halves declare the same six cards in the same order, because either half
+can end up hosting the merged menu; the suites on both sides check that.
+Nothing moved that a setting depends on -- the option keys are unchanged, so
+every switch keeps the value it had.
+
 ## 1.14.1
 
 **The white box behind a battler is gone** (Gen1Arena 0.21.0), and it was two

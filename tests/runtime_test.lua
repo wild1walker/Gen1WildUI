@@ -938,12 +938,22 @@ do
     declared[group.id] = group.label
     order[i] = group.id
   end
-  eq(table.concat(order, ","), "world,pokemon,battles,items,saving,setup",
+  eq(table.concat(order, ","), "general,pokemon,battle,items,save,interface",
      "the cards, in the order both halves draw them")
 
   -- The labels are drawn on the card, so they are part of the agreement too.
-  eq(declared.world, "OUT IN THE WORLD", "world reads as a place")
-  eq(declared.setup, "MOD SETUP", "and the furniture says what it is")
+  -- They are the plain names for what is on them: a player looking for the
+  -- battle settings should not have to guess which invented phrase means
+  -- "battle".
+  eq(declared.general, "GENERAL", "a card says the plain name of what is on it")
+  eq(declared.interface, "INTERFACE", "and so does the last one")
+
+  -- Every card carries the line the menu prints under it.  A card with no
+  -- description is a card that explains nothing about what is behind it.
+  for _, group in ipairs(groups or {}) do
+    ok(type(group.description) == "string" and group.description ~= "",
+       group.id .. " says what is on it")
+  end
 
   local homeless = {}
   for _, feature in ipairs(registry.features) do
