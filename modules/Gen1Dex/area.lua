@@ -474,8 +474,59 @@ return function(mod, C)
         return self.mode == "grid" and self.bg ~= nil
       end
 
+      -- ------- the vanilla no-nests box
+      --
+      -- With nothing to mark, town_map.asm:403 puts a 17x4 box across the
+      -- middle of the map reading AREA UNKNOWN.  On this screen that is the
+      -- third thing saying so at once: the header above it already reads
+      -- "<NAME> UNKNOWN", and the strip below carries the half that is worth
+      -- reading -- what the POKéMON comes from, which the box does not know.
+      -- So a screen that HAS an answer was covering half its own map to say
+      -- it has none.
+      --
+      -- Dropped by not drawing it rather than by painting over it: the map
+      -- underneath would have to be redrawn to hide it, and redrawing the art
+      -- to cover one box is more fragile than not putting the box down.
+      -- Font.drawBox and Font.draw are stood in for across the engine's draw,
+      -- the two calls that make that box are recognised by exactly where they
+      -- land, and everything else on the pass goes through untouched.  Both
+      -- are put back whatever happens, so an error inside the engine's draw
+      -- cannot leave the font module stubbed for the rest of the game.
+      --
+      -- Only while the strip is up.  A puts the hint away for a look at the
+      -- bare map, and with the strip gone the box is the only thing left on
+      -- the screen saying why the map is empty -- so there it stays, and
+      -- START brings both back together.
+      local UNKNOWN_BOX = { 1, 7, 17, 4 }
+      local UNKNOWN_TEXT_X, UNKNOWN_TEXT_Y = 16, 72
+
+      local function drawWithoutUnknownBox(self)
+        local realBox, realDraw = Font.drawBox, Font.draw
+        Font.drawBox = function(tx, ty, tw, th, ...)
+          if tx == UNKNOWN_BOX[1] and ty == UNKNOWN_BOX[2]
+              and tw == UNKNOWN_BOX[3] and th == UNKNOWN_BOX[4] then
+            return
+          end
+          return realBox(tx, ty, tw, th, ...)
+        end
+        -- By position rather than by the string: the engine writes a bare
+        -- literal there, but a build that translates it still puts it in the
+        -- same place, and nothing else in this branch draws on that pixel.
+        Font.draw = function(text, x, y, ...)
+          if x == UNKNOWN_TEXT_X and y == UNKNOWN_TEXT_Y then return end
+          return realDraw(text, x, y, ...)
+        end
+        local ok, err = pcall(baseDraw, self)
+        Font.drawBox, Font.draw = realBox, realDraw
+        if not ok then error(err, 0) end
+      end
+
       screen.draw = function(self)
-        baseDraw(self)
+        if showing and #(self.nests or {}) == 0 then
+          drawWithoutUnknownBox(self)
+        else
+          baseDraw(self)
+        end
         if showing then
           if header then drawHeader(header) end
           -- blinking in time with the map's own nests rather than to a clock
