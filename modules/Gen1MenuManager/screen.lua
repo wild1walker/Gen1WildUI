@@ -68,6 +68,44 @@ return function(mod, Layout, Pins, contexts)
       end
     end
 
+    -- Rows this menu CAN show, that it has not shown yet.
+    --
+    -- A menu built per press out of what is usable on this tile is invisible
+    -- to an editor that only knows what it has seen: arranging FLY would mean
+    -- standing outdoors, with FLY in the party, holding the editor open. So
+    -- the mod that builds such a menu publishes a catalog beside it, and the
+    -- rows in it that are not on screen right now are listed here anyway --
+    -- ordered and switched off in advance, like a pin.
+    if type(ctx.catalog) == "function" then
+      local ok, rows = pcall(ctx.catalog)
+      if ok and type(rows) == "table" then
+        local unseen = {}
+        for _, row in ipairs(rows) do
+          local key = "I:" .. tostring(row.id)
+          if not seen[key] then
+            seen[key] = true
+            unseen[#unseen + 1] = {
+              key = key, label = row.label or row.id, kind = "row",
+              on = not layout.hidden[key],
+              locked = protected[key] or false,
+            }
+          end
+        end
+        -- in the saved order where there is one, so a row sits in the editor
+        -- where it will sit in the menu
+        local rank = {}
+        for i, key in ipairs(layout.order) do rank[key] = i end
+        table.sort(unseen, function(a, b)
+          local ra, rb = rank[a.key], rank[b.key]
+          if ra and rb then return ra < rb end
+          if ra then return true end
+          if rb then return false end
+          return false
+        end)
+        for _, entry in ipairs(unseen) do entries[#entries + 1] = entry end
+      end
+    end
+
     if not ctx.pins then return entries end
 
     local pinEntries = {}
@@ -257,7 +295,14 @@ return function(mod, Layout, Pins, contexts)
   function Screen:draw()
     Font.drawBox(0, 0, COLS, ROWS)
     love.graphics.setColor(0, 0, 0, 1)
-    Font.draw(self.ctx.title, 8, 8)
+    -- The title says which menu, and carries the arrows that walk between
+    -- them.  On the title rather than on a second footer line: row ROWS-1 is
+    -- the box's own bottom border, so a hint drawn there lands ON the frame
+    -- and comes out as a smear -- which is exactly what a second line did.
+    -- There is one line for hints and it is full.
+    local title = self.ctx.title
+    if #(self.keys or {}) > 1 then title = "< " .. title .. " >" end
+    Font.draw(title, 8, 8)
 
     if #self.entries == 0 then
       Font.draw("NOTHING TO ARRANGE", 16, FIRST_ROW * 8)
@@ -282,9 +327,6 @@ return function(mod, Layout, Pins, contexts)
 
     Font.draw(self.grabbed and "A:DROP" or "A:MOVE", 8, (ROWS - 2) * 8)
     Font.draw("SEL:ON/OFF", 9 * 8, (ROWS - 2) * 8)
-    if #(self.keys or {}) > 1 then
-      Font.draw("< >:MENU", 8, (ROWS - 1) * 8)
-    end
     love.graphics.setColor(1, 1, 1, 1)
   end
 
