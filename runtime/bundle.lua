@@ -245,6 +245,18 @@ function Bundle.install(mod, spec, features)
   mod.exports.installed = installed
   mod.exports.deferred = deferred
   mod.exports.optionValue = function(key) return optionset.read(mod, key) end
+  -- The writing half of the pair, so the other bundle's menu can move a switch
+  -- that lives over here rather than only reading it.  Both halves render both
+  -- halves' features (runtime/menu.lua), and a row that could be read but not
+  -- turned would be worse than not showing it at all.
+  mod.exports.optionWrite = function(key, value, game)
+    return optionset.write(mod, key, value, game)
+  end
+  -- What this bundle's features are, in the shape the other half's menu draws
+  -- them in: label, card, master row, and the id of the settings screen this
+  -- bundle registered for each.  Built after noteInstalled, so `installed`
+  -- reports what actually happened this boot.
+  mod.exports.menu = menu.descriptor()
 
   local count, handedOver = 0, 0
   for _, ok in pairs(installed) do if ok then count = count + 1 end end
