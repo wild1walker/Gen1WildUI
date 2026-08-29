@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.20.1
+
+**Pokemon evolve again.** With the bundle installed, nothing ever did — not
+the starter at level 16, not anything else — and there was nothing on screen
+to say why.
+
+BLACK OUTRO fades the battle out by wrapping the one place a battle ends,
+`BattleState:finish`. But the engine calls that more than once: a battle that
+levelled somebody hands the battle screen to the evolutions and *returns*,
+coming back through `finish` a second time once they have played
+(`end_of_battle.asm:42-45`). The fade took that first call for the ending. It
+ran the engine's finish at its own midpoint, at full black — so the evolution
+started behind the black — then, finding the battle still up because that call
+had not left, popped what was on top of it and finished the battle for real.
+What it popped was the evolution.
+
+The hand-off is a false start, the same as the PAY DAY pickup the fade already
+steps aside for. It steps aside for this one now, so the evolution plays on the
+battle screen where the ROM puts it and the fade takes the call that actually
+leaves. `tests/battleoutro_test.lua` stands both calls up and holds it there.
+
 ## 1.20.0
 
 **Your settings survive a reboot again.** Wild Green is a sealed cart, and a
