@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.13.0
+
+Three bundled mods come forward, two of them with bugs you could see.
+
+- **`POKéDEX` to 1.5.2 — the starter you could not pick.** Oak's lab shows the
+  dex entry for a starter *before* it asks whether you want it, and the script
+  blocks until that screen closes itself. The entry's A key advanced DEX →
+  STATS → MOVES and round to DEX again, forever, so a player pressing A at the
+  CHARMANDER they had just been offered got a third page and then the first one
+  back, and nothing ever asked them anything. A now walks the entry once and
+  leaves it. The Safari Zone's signs and the S.S. Anne's Snorlax had the same
+  problem.
+
+  It also fixes a crash: the `AREA` map's cursor called a `moveGrid` on the
+  engine's town map that no version of it has ever had, so the first d-pad
+  press there took the game down. That feature had never worked.
+
+- **`BACKDROPS` to 0.20.1 — some POKéMON went invisible in battle.** Gen 1 pics
+  are matted by flooding white in from the edge of the image, and the flood
+  stops only at ink, so wherever a POKéMON's own white reaches the edge it
+  pours into the body and hollows it out. Against the white field that is
+  invisible; against a backdrop it is a window, and a pale POKéMON — Mew's back
+  pic keeps 145 of the 400 pixels in its own bounding box — read as a bare
+  outline with the scenery showing through it. The new `MON PAPER` row lays the
+  field shade back under any pic that actually lost something. A sprite mod's
+  true-colour replacement art carries its own alpha and is left alone, so a
+  Crystal front and a vanilla back in the same battle are each handled
+  correctly.
+
+  `DIAGNOSTIC` and `FIELD TEST` are developer-only rows now. They are
+  maintenance tools, and the second paints the battlefield flat magenta with
+  nothing on the row to say so.
+
+- **`BAG` to 1.11.1 — the settings are in the game's voice.** `Opening
+  Pocket`, `Hold Scroll Speed` and `Item Icons` were the only rows in the suite
+  written in Title Case. They are capitals now, values with them, and the
+  pocket names match the tabs they select. Display text only; no stored setting
+  moves.
+
 ## 1.12.0
 
 **A rule between the item icons and the names, and room either side of it.**

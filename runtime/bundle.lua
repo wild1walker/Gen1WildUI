@@ -88,9 +88,18 @@ function Bundle.install(mod, spec, features)
   -- at 1100; swapping them because one reads better in a list would be a
   -- silent behaviour change.
   --
-  -- A stable sort, so features sharing a priority keep the order they are
-  -- declared in -- which is how Gen1Party still finds Gen1Dex and
-  -- Gen1BillsBox registered ahead of it.
+  -- A stable sort, so features sharing a priority keep a fixed order -- which
+  -- is how Gen1Party still finds Gen1Dex and Gen1BillsBox registered ahead of
+  -- it.
+  --
+  -- `install_seq` is what fixes it, and it exists so the two orders can move
+  -- independently.  Declaration order was doing both jobs, which meant moving
+  -- a row up the menu silently reordered installation among every feature
+  -- sharing its priority -- a behaviour change bought by an unrelated edit,
+  -- and one nothing would have reported.  A feature that carries the field is
+  -- installed at that rank whatever line it is written on; one that does not
+  -- falls back to declaration order, so a bundle that has never needed to
+  -- reorder its menu is unaffected.
 
   local loadOrder = {}
   for index, feature in ipairs(active) do
@@ -100,6 +109,9 @@ function Bundle.install(mod, spec, features)
     local pa = a.feature.priority or 100
     local pb = b.feature.priority or 100
     if pa ~= pb then return pa < pb end
+    local sa = a.feature.install_seq or a.index
+    local sb = b.feature.install_seq or b.index
+    if sa ~= sb then return sa < sb end
     return a.index < b.index
   end)
 

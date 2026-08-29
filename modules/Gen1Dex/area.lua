@@ -503,6 +503,54 @@ return function(mod, C)
         if play then play() end
       end
 
+      -- and Tink on every cursor step, which is what TownMap:moveList plays
+      local function moveSound()
+        local opts = mod.ui.TextBox.soundOpts(game, "Tink")
+        local play = opts and opts.auto and opts.auto.sound
+        if play then play() end
+      end
+
+      -- Snap the cursor to the nearest location the key actually points at.
+      --
+      -- Done here rather than called on the screen because TownMap has no
+      -- grid move to call: its d-pad handling is moveList, which walks the
+      -- list in cursor order with UP and DOWN and ignores LEFT and RIGHT
+      -- (engine/items/town_map.asm:74), and on an AREA screen it does not run
+      -- at all -- the nestSpecies branch answers A and nothing else.  This
+      -- used to call a `moveGrid` that no version of TownMap has ever had, so
+      -- the first d-pad press on the AREA map raised "attempt to call method
+      -- 'moveGrid' (a nil value)" and took the game down with it.
+      --
+      -- Nearest IN THAT DIRECTION, not nearest overall: a cone of 45 degrees
+      -- either side of the key, so LEFT off Pallet Town reaches the coast
+      -- rather than the town one row up that happens to be fewer cells away.
+      -- Off-axis is scored harder than distance so the straight neighbour
+      -- wins a tie, and a key with nothing in front of it does nothing --
+      -- the cursor stays where it is instead of leaping across Kanto.
+      local function moveGrid(self, dx, dy)
+        local locs = self.locs
+        local from = locs and locs[self.sel]
+        if not (from and from.x and from.y) then return false end
+        local best, bestScore
+        for i, loc in ipairs(locs) do
+          if i ~= self.sel and loc.x and loc.y then
+            local ox, oy = loc.x - from.x, loc.y - from.y
+            local along = ox * dx + oy * dy
+            local across = math.abs(ox * dy) + math.abs(oy * dx)
+            if along > 0 and along >= across then
+              local score = across * 3 + along
+              if not bestScore or score < bestScore then
+                best, bestScore = i, score
+              end
+            end
+          end
+        end
+        if not best then return false end
+        self.sel = best
+        moveSound()
+        return true
+      end
+
       screen.update = function(self, dt)
         local input = self.game.input
         -- A on the AREA screen closes it (TownMap:update).  While the hint is
@@ -525,7 +573,14 @@ return function(mod, C)
               - (input:wasPressed("left") and 1 or 0)
             local dy = (input:wasPressed("down") and 1 or 0)
               - (input:wasPressed("up") and 1 or 0)
-            self:moveGrid(dx, dy)
+            -- LEFT and RIGHT together, or a key with nothing in front of it,
+            -- leave the cursor alone; UP and DOWN then still walk the list,
+            -- so a d-pad press is never simply swallowed on a map that has
+            -- somewhere to go.
+            if (dx ~= 0 or dy ~= 0) and not moveGrid(self, dx, dy)
+               and dy ~= 0 then
+              self:moveList(dy > 0 and -1 or 1)
+            end
           else
             self:moveList(input:wasPressed("down") and 1 or -1)
           end
