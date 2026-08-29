@@ -169,11 +169,29 @@ end
 -- engine's white battleReturn.  lose takes the blackout warp (its own
 -- transition), and the PAY DAY branch is a false start -- finish() comes
 -- back through here a moment later for real.
+--
+-- EvolveAfterBattle is the other false start, and the expensive one.  A
+-- battle that levelled somebody hands the battle screen to
+-- Evolution.checkParty and RETURNS from finish() without leaving; the
+-- evolution plays on the battle screen and calls finish() again when it is
+-- done (BattleState:finish, engine/battle/end_of_battle.asm:42-45).  Fading
+-- on that first call runs the whole evolution at full black -- and then the
+-- fade's own re-drive pops it and finishes the battle for real, so the mon
+-- silently never evolves.  Which is the bug this clause is here for: with
+-- the bundle on, nothing ever evolved.  The first call is not the ending,
+-- so it is not the fade's; the call that actually leaves is.
 local function outroWanted(battle)
   if not (battle and battle.game and battle.game.stack) then return false end
   local result = battle.result or "run"
   if result == "lose" then return false end
   if battle.payDay and result == "win" then return false end
+  -- leveledUp is the engine's own flag for "checkParty has something to
+  -- look at" (BattleState:awardExp), so an award that levelled nobody
+  -- still fades on its first and only call.
+  if not battle.evolutionsChecked and type(battle.leveledUp) == "table"
+     and next(battle.leveledUp) ~= nil then
+    return false
+  end
   return true
 end
 
