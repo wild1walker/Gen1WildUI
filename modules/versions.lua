@@ -2,7 +2,7 @@
 -- modules/<dir>, for the handles runtime/registry.lua hands to
 -- mod.find. Do not edit; rebuild.
 return {
-  ["Gen1Arena"] = "0.20.2",
+  ["Gen1Arena"] = "0.21.0",
   ["Gen1BattleUI"] = "1.5.2",
   ["Gen1BillsBox"] = "1.5.0",
   ["Gen1Dex"] = "1.5.2",

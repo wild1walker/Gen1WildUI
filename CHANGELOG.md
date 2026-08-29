@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.14.1
+
+**The white box behind a battler is gone** (Gen1Arena 0.21.0), and it was two
+bugs standing on top of each other.
+
+The first: the scratch canvas `MON PAPER` measures a sprite in takes the
+window's DPI scale unless it is told not to. On a phone that is 3, so a 56x56
+request is a 168x168 canvas with the sprite in it three times the size — and
+the measurement then read the sprite's own 56x56 out of that, which is its
+top-left *eighteen* pixels, magnified. A corner has few enough colours to look
+like four-shade art and is empty enough to look eaten, so both of the tests
+that decide whether a sprite needs paper passed, and the paper went down in a
+box measured off a corner. On the enemy side that is 14x24 hard against the
+right edge of the pic, which is exactly what the screenshot showed. At DPI
+scale 1 none of it happens, which is why it shipped twice.
+
+The second: the test for "this sprite lost something" was how much of its
+bounding box is not ink, which reads an awkward *shape* as a damaged one. A
+Crystal Koffing is solid on all nine of its frames, but the three that put its
+gas plume out measure 0.51 empty against 0.26 for the other six — so a healthy
+sprite crossed the line three times per animation cycle and the paper blinked
+on and off behind it. What the paper is for is a window *through* the mon, so
+that is what is measured now, and every frame of that Koffing scores 0.00 to
+0.05 by it.
+
 ## 1.14.0
 
 **Everything the suite can change is now one row on the game's own OPTION
