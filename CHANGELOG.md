@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.1
+
+**The layout editor drew a hint over its own frame** (Gen1MenuManager 0.3.1).
+1.19.0 put the `< >:MENU` hint on the row below the existing one — which is the
+box's bottom border, not an interior row — so it smeared across the frame. The
+arrows are on the title now: `< START MENU >`.
+
 ## 1.19.0
 
 **`A` on the AREA map flies you there** (Gen1Dex 1.9.0). The AREA screen *is*

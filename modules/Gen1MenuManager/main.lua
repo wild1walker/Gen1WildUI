@@ -422,7 +422,17 @@ return function(mod)
         extra[#extra + 1] = managerRow(game, "select", false)
       end
       return arrange("select", game, rows, extra)
-    end, mod.id)
+    end, mod.id, { { id = "menu_mgr", label = "MENU MGR" } })
+
+    -- What that menu CAN show, which is not what it is showing.  Its rows
+    -- appear only where they are usable -- FLY outdoors, FLASH in the dark, a
+    -- repel while one is in the bag -- so an editor that lists only what it
+    -- has seen can arrange almost none of it: putting FLY in its place would
+    -- mean standing outdoors with FLY in the party while the editor is open.
+    -- The catalog is how the rows are reachable before they ever appear.
+    if type(registry.catalog) == "function" then
+      contexts.select.catalog = registry.catalog
+    end
     mod.log:info("the SELECT field menu is arrangeable")
   end)
 
