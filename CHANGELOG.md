@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.17.0
+
+**The town map moves by direction, not by the story's visit order**
+(Gen1Dex 1.7.0).
+
+`UP` and `DOWN` fell back to the engine's list walk whenever there was nothing
+in the direction pressed — so a press off any edge of Kanto, and there are four
+edges' worth of those, jumped the cursor to wherever the **cursor order** went
+next. That order is the order the towns come up in the story, not where they
+are, so the cursor leapt across the map for reasons nothing on screen could
+explain. That is what reads as the map cycling a list: for those presses it
+was. A key with nothing in front of it now leaves the cursor where it is.
+
+**And the map you open from the bag is steered the same way.** Same screen,
+same picture, and until now a different d-pad: the engine walks its cursor
+along the visit order with `UP` and `DOWN` and ignores `LEFT` and `RIGHT`
+entirely. One map should navigate one way however it was opened.
+
+Only the d-pad. `B` still closes both, the banner is still the engine's, and
+`FLY` is left alone — its cursor cycles the visited destinations in fly order
+and `A` flies to the one it is on, so direction is not what that d-pad means.
+
 ## 1.16.1
 
 **The AREA screen ends on the map** (Gen1Dex 1.6.2).
