@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.21.0
+
+**`PLAYER` is a row at the top of the menu.** Wild Green's player recolour is
+the reason the cart is called what it is, and reaching it read
+`WILD GREEN > OTHER MODS > MAKE IT GREEN > PLAYER` — three doors deep, behind
+the repository's name rather than the setting's. It is now
+`WILD GREEN > PLAYER`, first in the list, above the cards and above the
+manager. `OTHER MODS` goes back to meaning what a player installed themselves.
+
+The mechanism is `spec.adopted`: mods the cart pins that the suite gives a door
+of their own, named for what the settings are. Both halves declare the same
+list, for the same reason both declare the same cards — either can end up
+hosting the merged menu.
+
 ## 1.20.1
 
 **Pokemon evolve again.** With the bundle installed, nothing ever did — not

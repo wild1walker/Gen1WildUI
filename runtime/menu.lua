@@ -303,6 +303,35 @@ function Menu.new(context)
     end
   end
 
+  -- ---- mods the suite gives a door of their own
+  --
+  -- A mod that is not a feature of either half still lands in this menu,
+  -- under OTHER MODS -- which is right for a mod the player installed
+  -- themselves and wrong for one the CART pins as part of what the game is.
+  -- Wild Green's player recolour is the second kind: it is the reason the
+  -- cart is called what it is, and reaching it meant WILD GREEN > OTHER MODS
+  -- > MAKE IT GREEN > the row, three doors deep and behind a name that is
+  -- the repository's rather than the setting's.
+  --
+  -- `spec.adopted` names those.  Each entry gives the mod's id, the label the
+  -- card wears -- what the settings ARE, not what the mod is called -- and
+  -- its description.  The card is the same `mod` row OTHER MODS builds, so
+  -- it opens the same screen and writes through the same loader; what
+  -- changes is where it sits and what it is called.
+  --
+  -- Both halves declare the same list, for the same reason both declare the
+  -- same cards: either can end up hosting the merged menu.  An id that is
+  -- not loaded simply has no card, so a cart that drops one of these is a
+  -- menu with one fewer row rather than a dead end.
+  local adopted = {}
+  local adoptedId = {}
+  for _, entry in ipairs(spec.adopted or {}) do
+    if type(entry) == "table" and type(entry.mod) == "string" then
+      adopted[#adopted + 1] = entry
+      adoptedId[entry.mod] = entry
+    end
+  end
+
   -- ---- the other half of the suite
   --
   -- Late-bound on purpose: the two bundles load in whatever order the engine
@@ -605,6 +634,9 @@ function Menu.new(context)
   -- this bundle, the other half, or anything either of them absorbed.
   local function suiteIds()
     local skip = { [mod.id] = true }
+    -- an adopted mod has a card of its own; listing it again under OTHER
+    -- MODS would be the same settings behind two different names
+    for id in pairs(adoptedId) do skip[id] = true end
     if type(spec.paired_bundle) == "string" then skip[spec.paired_bundle] = true end
     local other = sibling()
     if other and type(other.descriptor.bundle) == "string" then
@@ -616,6 +648,22 @@ function Menu.new(context)
   local function rootRows(game)
     local entries = allEntries()
     local rows = {}
+
+    -- First, above the cards and above everything else.  These are the rows
+    -- the cart is FOR -- the player's own colour before the dozen switches
+    -- about how the menus behave -- so they open on the first line rather
+    -- than after six folders and a list of other people's mods.
+    for _, entry in ipairs(adopted) do
+      if Other.schema(game, entry.mod) then
+        rows[#rows + 1] = {
+          kind = "mod",
+          modId = entry.mod,
+          key = entry.mod,
+          label = entry.label or entry.mod,
+          description = entry.description,
+        }
+      end
+    end
 
     for _, group in ipairs(groups) do
       local members = groupMembers(group.id, entries)
