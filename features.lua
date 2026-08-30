@@ -48,6 +48,24 @@ return {
     -- This is the hop that keeps that working.
     paired_bundle = "gen1_wild_qol",
 
+    -- Mods the cart pins that get a door of their own at the top of the
+    -- menu, rather than sitting under OTHER MODS with the mods a player
+    -- installed themselves.
+    --
+    -- Wild Green's player recolour is the whole reason the cart is called
+    -- what it is, and reaching it read WILD GREEN > OTHER MODS > MAKE IT
+    -- GREEN > the row -- three doors deep, behind the repository's name
+    -- rather than the setting's.  `label` is what the settings ARE.
+    --
+    -- Both halves declare the same list, for the same reason both declare
+    -- the same cards below: either can end up hosting the merged menu.  An
+    -- id that is not loaded simply has no row.
+    adopted = {
+      { mod = "wild_green", label = "PLAYER",
+        description = "WHAT YOUR CHARACTER WEARS, THE NAMES THE GAME OFFERS, "
+          .. "AND THE TITLE SCREEN." },
+    },
+
     -- The folder cards the menu nests its rows under, in the order they are
     -- drawn.  Both halves of the suite declare the same six, because either
     -- half can end up hosting the merged menu and it should read the same way
