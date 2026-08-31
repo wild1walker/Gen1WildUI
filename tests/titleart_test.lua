@@ -149,7 +149,24 @@ local function titleDraw(state)
            copyImg = state.copyImg, gfInc = state.gfInc }
 end
 
+-- The importer seeds `field.title` with {path} descriptors and the mod reads
+-- the path out of there.  It used to fall back to the cache path itself when
+-- a descriptor was missing, and it may not: modkit's MK301 forbids a mod from
+-- naming those trees, which is right -- that is a path into somebody else's
+-- install for a file this repository has never seen.  So the descriptors are
+-- what a real install has, and a test that wants a picture baked supplies
+-- them the way the importer would.
+local function titleCfg()
+  return {
+    versionRibbon = { path = "assets/generated/title/red_version.png" },
+    copyright = { path = "assets/generated/title/copyright.png" },
+    gamefreakInc = { path = "assets/generated/title/gamefreak_inc.png" },
+    nine = { path = "assets/generated/title/nine.png" },
+  }
+end
+
 local function run(state)
+  if state.title == nil then state.title = titleCfg() end
   seen = nil
   fills = {}
   local real = love.graphics.rectangle

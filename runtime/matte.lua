@@ -355,6 +355,31 @@ function Matte.new(context)
   local PAD = 1
   local keyed = {}
 
+  -- The path a title picture was loaded from, or nil.
+  --
+  -- ------- why there is no fallback here
+  --
+  -- The engine has one: TitleState.lua:245-275 reads each of these out of
+  -- `field.title` and falls back to a hard-coded path into the player's own
+  -- ROM-derived cache when the importer seeded no descriptor.
+  -- This mod mirrored that, and it cannot: modkit's MK301 forbids a mod from
+  -- naming those trees at all -- "ship your own asset under assets/ or
+  -- derive it via assets_transforms" -- and it is a plain string scan over
+  -- every shipped file, comments included,
+  -- precisely so that the rule cannot be met halfway.  Which is right.  The
+  -- engine reads that cache because it is the engine; a mod that hard-codes
+  -- a path into it is reaching into somebody's install for a file this
+  -- repository has never seen and cannot ship.
+  --
+  -- So a picture with no descriptor is simply not baked.  Every caller
+  -- already handles that: `swap` returns false and leaves the engine's own
+  -- image alone, and the copyright line drops `dark` so its row is not
+  -- painted black under letters that were never turned over.  The picture is
+  -- still on screen -- the engine loaded it -- it just does not get a pad.
+  -- `fallback` is for a picture whose file this repository is allowed to
+  -- name: assets/logo/pokemon_logo.png ships with the engine.  The four that
+  -- used to have one are the four that live in the generated trees, and they
+  -- are passed none.
   local function pathOf(entry, fallback)
     if type(entry) == "table" then entry = entry.path end
     if type(entry) == "string" then return entry end
@@ -654,8 +679,7 @@ function Matte.new(context)
 
     swap("logo", pathOf(title.logo, "assets/logo/pokemon_logo.png"),
          function(id) return sticker(id, true, nil) end, true)
-    swap("version", pathOf(title.versionRibbon or title.version,
-                           "assets/generated/title/red_version.png"), keyAll)
+    swap("version", pathOf(title.versionRibbon or title.version), keyAll)
 
     -- ------- the figure, and the ball out of the same sheet
     --
@@ -698,11 +722,9 @@ function Matte.new(context)
     -- So the whole line is baked BEFORE any of it is installed, and the row
     -- goes black only if every file came back.
     local line = {
-      { "copyImg", pathOf(title.copyright,
-                          "assets/generated/title/copyright.png") },
-      { "gfInc", pathOf(title.gamefreakInc,
-                        "assets/generated/title/gamefreak_inc.png") },
-      { "nineImg", pathOf(title.nine, "assets/generated/title/nine.png") },
+      { "copyImg", pathOf(title.copyright) },
+      { "gfInc", pathOf(title.gamefreakInc) },
+      { "nineImg", pathOf(title.nine) },
     }
     local dark, ready = true, {}
     for _, entry in ipairs(line) do
