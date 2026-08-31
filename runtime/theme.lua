@@ -610,21 +610,48 @@ local function watchArt(skirt)
   local base = PaletteFX.markTrueColor
   if type(base) ~= "function" then return false end
   PaletteFX.markTrueColor = function(x, y, w, h)
-    if type(x) == "number" and type(y) == "number"
-        and type(w) == "number" and type(h) == "number"
-        and w > 0 and h > 0
-        -- the world pass blits raw and has no seam to hide
-        and not (type(PaletteFX.spriteRedrawPassActive) == "function"
-                 and PaletteFX.spriteRedrawPassActive()) then
+    -- ------- a skirt only where a mark actually landed
+    --
+    -- This used to decide for itself whether the mark was one to skirt, by
+    -- asking whether the world pass was running -- the world blits raw, has
+    -- no seam to hide, and a skirt there is a black outline drawn round a
+    -- character on a lit map.  That test was right about the world and blind
+    -- to a third case:
+    --
+    --     local rects = currentPass and trueColorRects[currentPass]
+    --     if not rects or w <= 0 or h <= 0 then return end
+    --
+    -- With NO pass current -- setPass(nil), which the engine does around the
+    -- upright pass and while it composes -- markTrueColor drops the mark on
+    -- the floor.  It is not the world pass, so the old test waved it through
+    -- and painted a skirt anyway: a black box with no true-colour rect inside
+    -- it to be the reason for one.  Reported as a black box round the
+    -- overworld character on the way into a battle, in DARK, which is the
+    -- only theme that paints a skirt at all.
+    --
+    -- So the question is not asked any more, it is OBSERVED.  Call the engine
+    -- first and skirt the rect only if the engine kept one -- and skirt the
+    -- rect IT kept, not the one passed in, because a UI-pass mark is shifted
+    -- by markOffsetX on the way in and the skirt was being painted at the
+    -- unshifted x on any wide layout.
+    --
+    -- Now a skirt cannot exist without the mark it belongs to, whichever pass
+    -- is running and whether or not there is one.
+    local list = type(PaletteFX.trueColorRects) == "function"
+      and PaletteFX.trueColorRects("ui") or nil
+    local before = type(list) == "table" and #list or nil
+    local result = base(x, y, w, h)
+    if before and #list > before then
+      local landed = list[#list]
       local colour = skirt()
-      local list = colour and artList() or nil
-      if list and #list < ART_CAP then
-        local rect = { x = x, y = y, w = w, h = h }
-        list[#list + 1] = rect
-        paintSkirt(colour, rect, list, artClip())
+      local ours = colour and artList() or nil
+      if ours and #ours < ART_CAP then
+        local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h }
+        ours[#ours + 1] = rect
+        paintSkirt(colour, rect, ours, artClip())
       end
     end
-    return base(x, y, w, h)
+    return result
   end
   local assigned = pcall(function() PaletteFX[MARK_MARK] = true end)
   return assigned and true or false

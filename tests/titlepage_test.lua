@@ -389,6 +389,50 @@ end
 -- ------------------------------- the ring, and what it must not cut
 
 do
+  io.write("a skirt only where the engine kept the mark\n")
+  do
+    -- The engine's own rule, and the whole reason this case exists:
+    --
+    --     local rects = currentPass and trueColorRects[currentPass]
+    --     if not rects or w <= 0 or h <= 0 then return end
+    --
+    -- No pass current, no rect recorded.  The wrapper used to paint a skirt
+    -- anyway -- it asked only whether the WORLD pass was running, and "not
+    -- the world" is true of no-pass too -- so a mark made between passes left
+    -- a black box with no true-colour rect inside it to be the reason for
+    -- one.  That is the box a player reported round the overworld character
+    -- on the way into a battle, in DARK, the only theme that paints a skirt
+    -- at all.
+    local PaletteFX = package.loaded["src.render.PaletteFX"]
+    local passes, current = { ui = {}, world = {} }, nil
+    PaletteFX.trueColorRects = function(name) return passes[name] or {} end
+    PaletteFX.spriteRedrawPassActive = function() return current == "world" end
+    PaletteFX.markTrueColor = function(x, y, w, h)
+      local rects = current and passes[current]
+      if not rects or w <= 0 or h <= 0 then return end
+      rects[#rects + 1] = { colors = false, x = x, y = y, w = w, h = h }
+    end
+
+    local themed = themeOver()
+    themed.install()
+    themed.write("dark")
+
+    local function skirted(pass)
+      current = pass
+      fills = {}
+      PaletteFX.markTrueColor(40, 40, 16, 16)
+      return #fills > 0
+    end
+
+    ok(skirted("ui"), "a UI-pass mark is skirted, which is what a skirt is for")
+    ok(not skirted("world"),
+      "a world-pass mark is not -- the world blits raw, with no seam to hide "
+      .. "and a character on a lit map to draw a black ring round")
+    ok(not skirted(nil),
+      "and a mark made between passes is not, because the engine kept no "
+      .. "rect for it to belong to")
+  end
+
   io.write("the skirt goes round the outside of the art, not through it\n")
   -- One piece of art is not always one rectangle.  TitleState splits the
   -- mon's mark around the player standing in front of it -- a strip above, a

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.22.3
+
+- **The black box around the overworld character on the way into a battle.**
+  `DARK` only, which is the only theme that paints a skirt at all.
+
+  A true-colour mark gets a one-pixel black skirt so the raw art and the shaded
+  page agree at the seam. The wrapper that paints it decided for itself whether
+  a mark deserved one, by asking whether the **world** pass was running — the
+  world blits raw, has no seam to hide, and a skirt there is a black ring drawn
+  round a character on a lit map. That test was right about the world and blind
+  to a third case: with *no* pass current, `markTrueColor` drops the mark
+  entirely, and "not the world" is true of no-pass too. So the skirt was
+  painted around a mark the engine had thrown away — a black box with nothing
+  inside it to be the reason for one.
+
+  The wrapper no longer decides. It calls the engine first and skirts a rect
+  only if the engine kept one, and skirts **the rect the engine kept** rather
+  than the one passed in — a UI-pass mark is shifted by `markOffsetX` on the
+  way in, so the skirt was being painted at the unshifted x on any wide layout.
+
 ## 1.22.2
 
 Carries **Gen1BattleUI 1.6.1**.

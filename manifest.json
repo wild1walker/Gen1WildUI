@@ -1,7 +1,7 @@
 {
   "id": "gen1_wild_ui",
   "name": "Gen1WildUI",
-  "version": "1.22.2",
+  "version": "1.22.3",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
