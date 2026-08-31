@@ -58,6 +58,16 @@ local Renderer = require("src.render.Renderer")
 local Game = require("src.core.Game")
 local Strings = require("src.core.Strings")
 
+-- Guarded, unlike the three above: those three this mod cannot work without,
+-- and Timing is one number it can supply for itself.  The headless suite
+-- stands up the engine modules it needs and should not have to stand up a
+-- constants table to load this file.
+local Timing
+do
+  local ok, module = pcall(require, "src.core.Timing")
+  Timing = (ok and type(module) == "table") and module or {}
+end
+
 -- the vanilla 3-bit wipe selection (BattleTransition.lua, from
 -- battle_transitions.asm GetBattleTransitionID_*): bit 0 trainer, bit 1
 -- enemy at least 3 levels above the lead, bit 2 dungeon map
@@ -157,10 +167,38 @@ end
 local OUTRO_OUT_FRAMES = 36
 local OUTRO_IN_FRAMES = 36
 
+-- ...and the hold between the two halves, at full black.
+--
+-- The engine's own return holds before it fades: the battle screen is torn
+-- down with the palettes whited out, the caller spends `ld c, 10 /
+-- DelayFrames` (home/overworld.asm:351-352) and only THEN does
+-- GBFadeInFromWhite start stepping.  This fade replaces that one and did not
+-- borrow its hold, so it went straight from the last frame of the fade out to
+-- the first of the fade in and was at full black for exactly one frame.
+--
+-- Which is a hold of one frame, and one frame is where two things go wrong.
+--
+-- It is the frame that does all the work -- the cut pops this state off the
+-- stack, runs the engine's own `finish`, and pushes it back -- so it is the
+-- longest frame of the outro before anything else is asked of it.  And it is
+-- the only frame the whole fade is fully covered on, which makes it the only
+-- one anything looking for a covered frame can find: Gen1WildQOL's autosave
+-- asks exactly that question, found this frame, and wrote its save into the
+-- middle of the cut.  Every battle.
+--
+-- Ten frames is the engine's own number for the same pause, so the fade now
+-- reads the way the return it replaces does, the work has a frame to itself,
+-- and a covered moment is a moment rather than an instant.
+local OUTRO_HOLD_FRAMES = Timing.POST_BATTLE_RETURN or 10
+
 -- Veil alpha t frames into one half of the fade: 0 on the battle's live
 -- frame, 1 at the cut, back to 0 when the map is fully up.  Clamped so a
 -- caller cannot overshoot a half.
 local function outroAlpha(phase, t, frames)
+  -- The hold is a phase with no ramp in it: full black, for as long as it
+  -- lasts.  Answered here rather than in the state so the headless suite can
+  -- assert all three halves through one pure function.
+  if phase == "hold" then return 1 end
   local a = (phase == "out") and (t / frames) or (1 - t / frames)
   return math.max(0, math.min(1, a))
 end
@@ -206,10 +244,12 @@ local BattleOutro = {}
 BattleOutro.__index = BattleOutro
 BattleOutro.isOpaque = false -- the battle (out) / map (in) draws underneath
 
-local function outroFade(game, battle, onMidpoint, outFrames, inFrames)
+local function outroFade(game, battle, onMidpoint, outFrames, inFrames, holdFrames)
   return setmetatable({
     game = game, battle = battle, onMidpoint = onMidpoint,
-    frames = outFrames, inFrames = inFrames, t = 0, phase = "out",
+    frames = outFrames, inFrames = inFrames,
+    holdFrames = holdFrames or OUTRO_HOLD_FRAMES,
+    t = 0, phase = "out",
   }, BattleOutro)
 end
 
@@ -235,9 +275,13 @@ function BattleOutro:update()
     -- itself -- then the battle closes behind the black, pushing the
     -- engine's white battleReturn over the map.  Re-push over it so the
     -- map comes up out of black, not out of white.
-    self.phase = "in"
+    --
+    -- Into the HOLD, not straight into the fade in: this frame is the one
+    -- that does all of the above, and the black has to outlast it.  See
+    -- OUTRO_HOLD_FRAMES.
+    self.phase = "hold"
     self.t = 0
-    self.frames = self.inFrames
+    self.frames = self.holdFrames
     stack:pop()
     if self.onMidpoint then self.onMidpoint() end
     -- Another fade mod may have wrapped BattleState:finish too
@@ -262,6 +306,15 @@ function BattleOutro:update()
     end
     self.engineReturn = top
     stack:push(self)
+    return
+  end
+  if self.phase == "hold" then
+    -- The black has held; now bring the map up out of it.  Nothing else
+    -- happens here -- the cut already did all of it -- which is exactly the
+    -- point of the hold being its own phase.
+    self.phase = "in"
+    self.t = 0
+    self.frames = self.inFrames
     return
   end
   -- Fade-in done: the engine's white return never got to update under our
@@ -410,7 +463,8 @@ return function(mod)
       self.wsbBattleOutro = true
       local game = self.game
       game.stack:push(outroFade(game, self, function() inner(self) end,
-                                OUTRO_OUT_FRAMES, OUTRO_IN_FRAMES))
+                                OUTRO_OUT_FRAMES, OUTRO_IN_FRAMES,
+                                OUTRO_HOLD_FRAMES))
     end
     BattleState.wsbBattleOutroHook = true
   end

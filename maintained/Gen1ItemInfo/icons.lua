@@ -49,6 +49,7 @@
 -- without this mod being told.  What is here is the fallback, not the rule.
 
 return function(mod)
+
   local W, H = 16, 16
   local DIR = "assets/items/"
 
@@ -62,6 +63,121 @@ return function(mod)
 
   local C = { W = W, H = H }
 
+  -- ------- the paper an icon sits on
+  --
+  -- These icons are pictures drawn ON PAPER.  All 106 draw their line work in
+  -- pure black on transparency and carry no white at all -- the page is a
+  -- POKe BALL's lower half, the white inside a TOWN MAP, the gap in a
+  -- BICYCLE's frame -- so the paper is part of the picture rather than a
+  -- background it happens to sit on.  On a dark page it has to come from
+  -- somewhere, and the somewhere is here: the paper is BAKED INTO THE ART at
+  -- load, as the icon's own silhouette.
+  --
+  -- Grow, flood, keep what the flood could not reach:
+  --
+  --   1. every opaque pixel grows by one in all eight directions.  That is
+  --      the sticker edge, and it is also what CLOSES the outline -- these
+  --      outlines are not closed, because on white paper they never had to
+  --      be, and a bare flood leaks straight out through the gaps.  (It does:
+  --      over the real POKe BALL a plain fill caught six pixels of 256.)
+  --   2. flood the outside of the grown shape in from the border.
+  --   3. anything the flood could not reach is inside the item.  Paint it
+  --      opaque white.
+  --
+  -- One pixel of growth and not two.  Two closes bigger gaps but swells the
+  -- shape until several icons fill their whole cell, which is the square this
+  -- is here to stop being.  At one, none of the 106 fills its cell; the
+  -- median covers about 70% of it, so every icon keeps a shape of its own.
+  --
+  -- Baked rather than drawn behind: it is one image and one draw, and the
+  -- light page cannot tell (white on white).
+  --
+  -- THE BAKE IS HALF OF IT, and 0.14.0 shipped only that half.  It gives the
+  -- icon paper of its own shape; it says nothing about the rest of the 16x16
+  -- CELL, and the cell is what `markTrueColor` hands the renderer.  A marked
+  -- rect is re-blitted RAW from the canvas, so whatever the screen cleared
+  -- that cell to comes back with it -- and every screen these icons appear on
+  -- clears to white.  Black silhouette, white paper, and a white square around
+  -- it after all, sourced from the page instead of from a rectangle this file
+  -- drew.
+  --
+  -- So the cell is painted the colour it is going to END UP first, and the
+  -- icon goes on top of that.  Both halves: the matte is the cell, the bake is
+  -- the paper, and what is left is a sticker on a page.
+  local function bakePaper(data)
+    local w, h = data:getDimensions()
+    if w <= 0 or h <= 0 then return false end
+
+    local function solid(x, y)
+      local _, _, _, a = data:getPixel(x, y)
+      return a > 0
+    end
+
+    -- 1. grow
+    local grown = {}
+    for y = 0, h - 1 do
+      for x = 0, w - 1 do
+        if solid(x, y) then
+          for dy = -1, 1 do
+            for dx = -1, 1 do
+              local nx, ny = x + dx, y + dy
+              if nx >= 0 and ny >= 0 and nx < w and ny < h then
+                grown[ny * w + nx] = true
+              end
+            end
+          end
+        end
+      end
+    end
+
+    -- 2. flood the outside
+    local outside, queue, head = {}, {}, 1
+    local function push(x, y)
+      if x < 0 or y < 0 or x >= w or y >= h then return end
+      local key = y * w + x
+      if outside[key] or grown[key] then return end
+      outside[key] = true
+      queue[#queue + 1] = x
+      queue[#queue + 1] = y
+    end
+    for x = 0, w - 1 do push(x, 0); push(x, h - 1) end
+    for y = 0, h - 1 do push(0, y); push(w - 1, y) end
+    while head < #queue do
+      local x, y = queue[head], queue[head + 1]
+      head = head + 2
+      push(x - 1, y); push(x + 1, y); push(x, y - 1); push(x, y + 1)
+    end
+
+    -- 3. what it could not reach is the item's own paper
+    local painted = false
+    for y = 0, h - 1 do
+      for x = 0, w - 1 do
+        if not outside[y * w + x] and not solid(x, y) then
+          data:setPixel(x, y, 1, 1, 1, 1)
+          painted = true
+        end
+      end
+    end
+    return painted
+  end
+
+  -- The pixels of a file, or nil.  Two ways in because a mod reaches
+  -- love.image directly on one build and through the engine's own resolver on
+  -- another; either answers, and neither answering is not fatal -- the icon
+  -- loads without its paper and draws the way it did before this existed.
+  local function pixelsOf(path)
+    if love and love.image and love.image.newImageData then
+      local ok, data = pcall(love.image.newImageData, path)
+      if ok and data then return data end
+    end
+    local okAssets, Assets = pcall(require, "src.render.Assets")
+    if okAssets and type(Assets) == "table" and Assets.imageData then
+      local ok, data = pcall(Assets.imageData, path)
+      if ok and data then return data end
+    end
+    return nil
+  end
+
   -- Every path asked for, hit or miss.  `false` is a file that is not there,
   -- and it is cached as hard as an image is: a pocket of fifty items with no
   -- icon would otherwise ask the filesystem for fifty missing files on every
@@ -71,8 +187,20 @@ return function(mod)
   local function load(path)
     local cached = images[path]
     if cached ~= nil then return cached or nil end
-    local ok, image = pcall(love.graphics.newImage, path)
-    if ok and image then
+    local image
+    -- through the pixels, so the item's own paper is baked in before the
+    -- image is made
+    local data = pixelsOf(path)
+    if data then
+      pcall(bakePaper, data)
+      local ok, made = pcall(love.graphics.newImage, data)
+      if ok and made then image = made end
+    end
+    if not image then
+      local ok, made = pcall(love.graphics.newImage, path)
+      if ok and made then image = made end
+    end
+    if image then
       -- Pixel art inside a 160x144 frame that is integer-scaled afterwards;
       -- anything but nearest turns a 16-pixel icon to soup.
       pcall(image.setFilter, image, "nearest", "nearest")
@@ -102,6 +230,9 @@ return function(mod)
     return shipped(kind)
   end
 
+  -- for tests/itemicons_test.lua
+  C.bakePaper = bakePaper
+
   -- The icon for an item, or nil.  Nil is an ordinary answer -- a badge has
   -- no icon, and neither does an item a mod added -- and the row is drawn
   -- without one.
@@ -122,12 +253,30 @@ return function(mod)
     return shipped(id:lower())
   end
 
+  -- What a shade-0 pixel in this cell ENDS UP as: black on a dark page, white
+  -- on a light one.  Asked of the theme rather than of its name, so a theme
+  -- that grows another answer needs no change here, and absent on a build with
+  -- no theme -- which is the white every screen already cleared to.
+  local function matte(x, y, w, h)
+    local theme = type(mod.theme) == "function" and mod.theme() or nil
+    local colour = theme and type(theme.matte) == "function"
+      and theme.matte() or nil
+    if type(colour) ~= "table" then return end
+    love.graphics.setColor(colour[1] / 255, colour[2] / 255, colour[3] / 255, 1)
+    love.graphics.rectangle("fill", x, y, w, h)
+  end
+
   -- White before the image or its colours come out multiplied by whatever the
   -- caller last set -- black leaves a silhouette, which is exactly what the
   -- chrome around these rows is drawing in.  Black again on the way out, so a
   -- caller can keep drawing text without knowing this happened.
   function C.draw(image, x, y)
     if not image then return end
+    -- The cell first, then the icon's own paper on top of it (see bakePaper).
+    -- Only ever inside a rectangle about to be marked: a dark rectangle
+    -- anywhere else is shade-3 pixels, which the theme would map to the
+    -- page's INK and put a hole in the page.
+    matte(x, y, W, H)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(image, x, y)
     if PaletteFX and PaletteFX.markTrueColor then

@@ -1,5 +1,81 @@
 # Changelog
 
+## 1.22.0
+
+Everything the nightly channel built since 1.21.0, in one release. The channel
+cut 109 builds getting here; this is what survived them.
+
+**`UI THEME` is a row on the game's own `OPTION` screen: `LIGHT`, `DARK` or
+`COLORFUL`.** Every page this suite draws is black and white, and a theme swaps
+the four colours the SGB pass gives a zone rather than redrawing anything — so
+`DARK` is the page reversed, paper for ink, and `COLORFUL` tints each page by
+what the screen is. Nothing is repainted, nothing is re-baked, and a screen
+that draws itself correctly in `LIGHT` is correct in `DARK` for free.
+
+The reach is the whole suite and the game underneath it: the `START` menu, the
+bag's windows, the `CONTINUE` menu into its corners, dialogue over the map with
+the `YES`/`NO` beside it, the location banner, the town map, the save dialog,
+the battle menus. A screen's own zones splice in above the page and below its
+own, so a screen that wants a colour still gets it — the battle keeps its
+colours in `DARK`, and a box over a battle no longer repaints the battle.
+
+`COLORFUL` is work in progress and the row says so.
+
+**`INSPECT` on the town map: stand on a place and ask what lives in it.** `A` on
+a location opens a small menu — `INSPECT`, and `FLY` when there is somewhere
+under the cursor to fly to. `INSPECT` lists what lives there, richest share
+first, read off the live encounter tables rather than a table of its own, with
+the same rarity cuts the `AREA` strip uses. `A` on a row opens that POKéMON's
+`AREA` map.
+
+All three maps answer `A` that way — the one from the `BAG`, the one `FLY`
+opens, and the `AREA` screen. And all three steer by direction: the cursor
+walks Kanto with the d-pad instead of walking the story's visit order, which is
+what `UP` and `DOWN` used to mean on a map.
+
+**The dex stops handing over names you have not earned.** A caught BULBASAUR
+printed `EVOLVES / LEVEL 16 / IVYSAUR`, which gives away the next two names of
+every line in the game. An `AREA` screen opened on something undiscovered
+printed its name twice — once in the header, once in the caption under the map
+(`EVOLVE SQUIRTLE AT LV16` for a WARTORTLE you met in the wild without ever
+meeting a SQUIRTLE). Every one of those goes through one predicate now and
+prints `?????` until you have met it. The row still says HOW and WHEN; it is
+the name that is withheld, not the answer.
+
+**`ITEM INFO` reaches the mart.** `BUY` and `SELL` had no descriptions, no icons
+and no ball column — the feature claimed lists by their title, and a mart list
+has none. It claims them by the shape of the screen instead.
+
+**Item icons sit on paper of their own shape.** They are pictures drawn *on*
+paper, not on a white square: all 106 are baked by growing the line work and
+flooding what the outside cannot reach, so an icon keeps its own outline
+against any page. In `DARK` they used to come out as coloured blobs.
+
+**`ELEVATOR PANEL`.** The lift's `WHICH FLOOR?` full-screen list becomes a
+menu the size of the choices in it.
+
+Smaller things, each of which was somebody noticing:
+
+- Bill's PC measured a colour icon's width by its height, so wide sprites were
+  clipped to a square.
+- `EDGE TO EDGE` stopped smearing the bars around a wide battle.
+- The party screen gets a band and a card per POKéMON.
+- The dex list's caught balls sat on the box's border; so did `INSPECT`'s last
+  row, and its header ran through its own frame.
+- `INSPECT` never said there was more of the list below. Six rows fill the box
+  exactly, and a seventh was off the bottom with nothing on screen to say so.
+- Party rows were one tile apart where everything else in the game is two.
+- The level-up stat box came up over a blank text box.
+- The location banner no longer flashes white on its way out.
+- The editor's `SELECT MENU` page is only there when there is a `SELECT` menu
+  to arrange.
+- Choices ran from the top, so the slack fell at the bottom.
+- The title screen's logo, figure, POKé BALL and mon each keep their own white
+  padding, and the copyright row underneath is not covered by it.
+
+**The release is smaller.** Tests, tools, sources and the changelog no longer
+ride inside the mod a player installs.
+
 ## 1.21.0
 
 **`PLAYER` is a row at the top of the menu.** Wild Green's player recolour is

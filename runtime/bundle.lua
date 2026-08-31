@@ -37,6 +37,10 @@ function Bundle.install(mod, spec, features)
   local Registry = assert(loadRuntime("registry"), "runtime/registry.lua did not load")
   local Menu = assert(loadRuntime("menu"), "runtime/menu.lua did not load")
   local Claims = assert(loadRuntime("claims"), "runtime/claims.lua did not load")
+  -- Optional for the same reason Settings is: a tree built before this file
+  -- existed should lose the themes rather than the boot.
+  local Theme = loadRuntime("theme")
+  local Matte = loadRuntime("matte")
   -- Optional, and deliberately so: a bundle installed outside a sealed cart
   -- needs none of it, and a tree built before this file existed should lose
   -- the remembering rather than the boot.
@@ -237,6 +241,55 @@ function Bundle.install(mod, spec, features)
     end
   end
 
+  -- ---- 2b. the UI theme
+  --
+  -- Before the schema is handed over, because its row goes into that schema,
+  -- and after the features have run, because its `render.zones` hook should
+  -- sit outside theirs -- a feature that adds zones of its own has added them
+  -- by the time the theme swaps their colours.
+  local theme
+  if type(Theme) == "table" and type(Theme.new) == "function" then
+    local ok, built = pcall(Theme.new, context)
+    if ok and type(built) == "table" then
+      local installed, problem = pcall(built.install)
+      if installed then
+        theme = built
+        context.theme = built
+        -- and the one thing a zone cannot reach: the white page inside a
+        -- true-colour rectangle, on the screens this suite does not own.
+        -- After the theme, because it reads the theme; guarded separately,
+        -- because a themed build with no mattes is a build with white boxes
+        -- on four screens and a themed build with no theme is a build with
+        -- no themes at all.
+        if type(Matte) == "table" and type(Matte.new) == "function" then
+          local madeOk, mattes = pcall(Matte.new, context)
+          if madeOk and type(mattes) == "table" then
+            local mattedOk, problem = pcall(mattes.install)
+            if not mattedOk then
+              mod.log:warn("true-colour mattes not installed: %s",
+                           tostring(problem))
+            end
+            -- and the title screen, whose white page is the same problem
+            -- reached from the other side: painted rather than repaired.
+            -- Guarded on its own so a screen that will not patch does not
+            -- take the other four down with it.
+            local groundOk, groundProblem = pcall(mattes.installTitle)
+            if not groundOk then
+              mod.log:warn("title ground not installed: %s",
+                           tostring(groundProblem))
+            end
+          else
+            mod.log:warn("true-colour mattes not built: %s", tostring(mattes))
+          end
+        end
+      else
+        mod.log:warn("UI theme not installed: %s", tostring(problem))
+      end
+    else
+      mod.log:warn("UI theme not built: %s", tostring(built))
+    end
+  end
+
   -- ---- 3. one schema, once
 
   optionset.define(mod)
@@ -251,6 +304,7 @@ function Bundle.install(mod, spec, features)
     isGen2 = context.isGen2,
     customRows = context.customRows,
     deferred = deferred,
+    theme = theme,
   })
   for _, feature in ipairs(active) do
     menu.noteInstalled(feature, installed[feature.id] == true)
@@ -263,6 +317,31 @@ function Bundle.install(mod, spec, features)
   mod.exports.bundle = spec.id
   mod.exports.installed = installed
   mod.exports.deferred = deferred
+  -- What the theme's last frame saw: boxes recorded, panels produced, zones
+  -- handed in.  Published for the nightly bench and nothing else -- a build
+  -- with no theme answers three zeroes rather than nothing, so a caller never
+  -- has to know whether the theme installed.
+  mod.exports.themeProbe = function()
+    if type(theme) ~= "table" or type(theme.probe) ~= "function" then
+      return 0, 0, 0
+    end
+    local ok, boxes, panels, zones = pcall(theme.probe)
+    if not ok then return 0, 0, 0 end
+    return boxes or 0, panels or 0, zones or 0
+  end
+
+  -- And the one the box-screen ring is being chased with: how many
+  -- true-colour rects the last frame that had any carried, and what the theme
+  -- called itself while it carried them.
+  mod.exports.themeArtProbe = function()
+    if type(theme) ~= "table" or type(theme.artProbe) ~= "function" then
+      return 0, "-", false
+    end
+    local ok, count, word, page = pcall(theme.artProbe)
+    if not ok then return 0, "-", false end
+    return count or 0, word or "-", page and true or false
+  end
+
   mod.exports.optionValue = function(key) return optionset.read(mod, key) end
   -- The writing half of the pair, so the other bundle's menu can move a switch
   -- that lives over here rather than only reading it.  Both halves render both

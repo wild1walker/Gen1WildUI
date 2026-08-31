@@ -11,6 +11,12 @@ return {
     "backdrops" },
   differences = {
     added = {
+      "a UI THEME row on the game's own OPTION screen: LIGHT, DARK or "
+        .. "COLORFUL. Every page this suite draws is black and white, and a "
+        .. "theme swaps the four colours the SGB pass gives a zone rather "
+        .. "than redrawing anything -- so DARK is the page reversed, paper "
+        .. "for ink, and COLORFUL tints each page by what the screen is. "
+        .. "COLORFUL is work in progress and says so in the row",
       "a GEN1WILD UI row on the OPTION screen: one row per feature, "
         .. "switched on or off there, with that feature's own settings one "
         .. "press of A away",

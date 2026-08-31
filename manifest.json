@@ -1,7 +1,7 @@
 {
   "id": "gen1_wild_ui",
   "name": "Gen1WildUI",
-  "version": "1.21.0",
+  "version": "1.22.0",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -47,5 +47,5 @@
     "engine_internals"
   ],
   "github": "wild1walker/Gen1WildUI",
-  "description": "The visual half of the Gen1Wild suite in one mod: battle backdrops, the battle intro, the battle menus, the Pokedex, the box, the party menu, the bag, menu layout and the mod manager. Every feature switches on and off by itself."
+  "description": "The visual half of the Gen1Wild suite in one mod: battle backdrops, the battle intro, the battle menus, the Pokedex, the box, the party menu, the bag, menu layout and the mod manager -- plus a UI THEME row on the OPTION screen: LIGHT, DARK, or COLORFUL (work in progress). Every feature switches on and off by itself."
 }

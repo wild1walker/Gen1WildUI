@@ -1067,5 +1067,561 @@ end
 
 -- ------------------------------------------------------------------ done
 
+
+-- --------------------------------------------------------------- UI THEME
+
+local Theme = load_("runtime/theme.lua")
+
+-- The zone lists the hook has to tell apart, in the shapes the states that
+-- build them actually return.
+local function greysZone()
+  return { colors = { { 255, 255, 255 }, { 170, 170, 170 }, { 85, 85, 85 },
+                      { 0, 0, 0 } }, x = 0, y = 0, w = 160, h = 144 }
+end
+
+local function menuZones()
+  -- a black-and-white page with a species-coloured icon panel on it, which is
+  -- what the party menu returns
+  return {
+    greysZone(),
+    { colors = { { 255, 255, 255 }, { 255, 200, 100 }, { 180, 90, 20 },
+                 { 0, 0, 0 } }, x = 16, y = 24, w = 16, h = 16 },
+  }
+end
+
+local function overworldZones()
+  -- terrain palettes, never whole-screen greys
+  return {
+    { colors = { { 255, 239, 255 }, { 148, 222, 148 }, { 82, 148, 82 },
+                 { 0, 0, 0 } }, x = 0, y = 0, w = 160, h = 144 },
+  }
+end
+
+local function titleZones()
+  return {
+    { colors = { { 255, 255, 255 }, { 230, 197, 0 }, { 148, 156, 148 },
+                 { 41, 99, 181 } }, x = 0, y = 0, w = 160, h = 64 },
+    { colors = { { 255, 255, 255 }, { 247, 247, 140 }, { 140, 189, 82 },
+                 { 173, 0, 33 } }, x = 0, y = 64, w = 160, h = 16 },
+  }
+end
+
+local function hex(c) return ("%02x%02x%02x"):format(c[1], c[2], c[3]) end
+
+-- A theme instance over a real optionset, so reads and writes go the way they
+-- go in a running game.
+local function themeOver(mod)
+  local optionset = OptionSet.new()
+  local theme = Theme.new({ mod = mod, optionset = optionset })
+  theme.defineRow()
+  return theme, optionset
+end
+
+do
+  io.write("a screen the suite registers is one of ours\n")
+  -- The bug: SELECT MENU, the layout editor and everything else this bundle
+  -- registers stayed white in a dark game.  The theme knows a page two ways --
+  -- a marker on the instance, or one of the engine's own UI classes -- and a
+  -- screen a mod registers is neither: a plain table with no class to match.
+  -- So the registry marks them, once, instead of a list here that rots.
+  local Facade = load_("runtime/facade.lua")
+
+  local registered = {}
+  local screens = {
+    register = function(self, id, factory) registered[id] = factory end,
+  }
+  local mod = fakeMod()
+  mod.content = { screens = screens }
+
+  local facade = Facade.new({ id = "only", dir = "Only" },
+                            { mod = mod, shared = {} })
+
+  facade.content.screens:register("Opaque", {
+    new = function() return { isOpaque = true, what = "a page" } end,
+  })
+  facade.content.screens:register("Overlay", {
+    new = function() return { what = "a box over the map" } end,
+  })
+
+  local page = registered["Opaque"].new()
+  ok(page.gen1wildTheme ~= nil,
+    "an opaque screen is marked, so the theme takes it as the page")
+  eq(page.what, "a page", "and the instance is otherwise the feature's own")
+
+  -- The limit is the whole safety of this: the marker makes the theme
+  -- synthesise a whole-screen page when the state declares no palettes, which
+  -- over a map would darken the map with the box.
+  local overlay = registered["Overlay"].new()
+  eq(overlay.gen1wildTheme, nil,
+    "a screen that is not opaque is left alone -- it reaches the theme as a "
+    .. "panel or not at all")
+
+  -- and a screen that already says what it is keeps its own answer
+  facade.content.screens:register("Named", {
+    new = function() return { isOpaque = true, gen1wildTheme = "settings" } end,
+  })
+  eq(registered["Named"].new().gen1wildTheme, "settings",
+    "a screen that names itself is not overwritten")
+
+  -- the registry is otherwise untouched
+  facade.content.screens:register("Plain", "not a factory")
+  eq(registered["Plain"], "not a factory",
+    "and anything that is not a factory goes through as it came")
+end
+
+do
+  io.write("the theme only answers for pages\n")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+
+  eq(theme.read(), "light", "LIGHT is the default")
+
+  local zones = menuZones()
+  eq(theme.apply({}, zones), zones, "LIGHT hands the list straight back")
+  eq(hex(zones[1].colors[1]), "ffffff", "...unchanged")
+
+  theme.write("dark")
+  eq(theme.read(), "dark", "and the row remembers")
+
+  -- With no stack to walk, the list itself is all there is to go on, and
+  -- neither of these is a page: one is a map's terrain palette and the other
+  -- is the title screen's lettered bands.
+  local world = overworldZones()
+  theme.apply({}, world)
+  eq(hex(world[1].colors[1]), "ffefff",
+    "the overworld's terrain palette is not a page")
+
+  local title = titleZones()
+  theme.apply({}, title)
+  eq(hex(title[1].colors[4]), "2963b5",
+    "and neither is the title screen")
+end
+
+do
+  io.write("DARK swaps the two, everywhere on the page\n")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  local zones = theme.apply({}, menuZones())
+  eq(hex(zones[1].colors[1]), "000000", "paper is black")
+  eq(hex(zones[1].colors[4]), "ffffff", "ink is white")
+  eq(hex(zones[1].colors[2]), "555555", "and the two shades between swap")
+  eq(hex(zones[1].colors[3]), "aaaaaa", "...both ways")
+
+  -- the icon panel goes with it, or a white-grounded icon would be a hole
+  -- punched in a black page
+  eq(hex(zones[2].colors[1]), "000000", "a panel inside the page reverses too")
+  eq(hex(zones[2].colors[4]), "ffffff", "...ground for ink")
+
+  -- art is not a palette
+  local withArt = menuZones()
+  withArt[#withArt + 1] = { colors = false, x = 8, y = 8, w = 32, h = 32 }
+  local out = theme.apply({}, withArt)
+  eq(out[3].colors, false, "a true-colour rect is left exactly as it came")
+end
+
+do
+  io.write("a theme never writes into the list it was handed\n")
+  -- The zone tables belong to the state that built them.  Every screen in this
+  -- suite builds fresh, but a screen somebody adds later might hand back a
+  -- list it keeps -- and a cached list written into is a screen that flickers,
+  -- reversed on one frame and reversed back on the next, from a symptom nobody
+  -- could trace.  So the transform is a pure function of its input.
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  local kept = menuZones()
+  local out = theme.apply({}, kept)
+  ok(out ~= kept, "the list that comes back is a new list")
+  ok(out[1] ~= kept[1], "...of new zones")
+  eq(hex(kept[1].colors[1]), "ffffff", "and the one handed in is untouched")
+
+  -- the same list twice, which is what a screen that caches would do
+  local again = theme.apply({}, kept)
+  eq(hex(again[1].colors[1]), "000000",
+    "so the same list themed twice is dark both times, not dark then light")
+end
+
+-- ------- the game's own screens
+--
+-- This is the regression the first version of UI THEME needed and did not
+-- have.  The gate used to ask whether the zone list opened on whole-screen
+-- DMG greys, on the theory that a black-and-white page asks for the identity
+-- palette.  No screen in the engine does: OptionsMenu, ListMenu, ManagerState,
+-- NamingScreen and TrainerCard all ask for MEWMON, the Pokedex asks for
+-- BROWNMON, the party menu for GREENBAR.  So DARK declined every screen in
+-- the game and the OPTION row moved a setting that changed nothing.
+--
+-- The stubs below are the shapes those screens really have: a class, an
+-- instance of it on the stack, and a named palette that is not grey.
+local function engineClass(path)
+  local class = {}
+  class.__index = class
+  package.loaded[path] = nil
+  package.preload[path] = function() return class end
+  return class
+end
+
+-- PAL_MEWMON as the SGB pack carries it: off-white paper, the screen's hue in
+-- the middle, near-black ink.  Every background palette in the pack is built
+-- this way, which is what makes reversing one a dark page.
+local function mewmonZones()
+  return { { colors = { { 255, 239, 255 }, { 255, 132, 132 },
+                        { 132, 0, 0 }, { 0, 0, 0 } },
+             x = 0, y = 0, w = 160, h = 144 } }
+end
+
+do
+  io.write("the game's own screens are pages, though none of them asks for grey\n")
+  local OptionsMenu = engineClass("src.ui.OptionsMenu")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  local options = setmetatable({ sgbPalettes = true }, OptionsMenu)
+  local game = { stack = { states = { options } } }
+
+  local out = theme.apply(game, mewmonZones())
+  eq(hex(out[1].colors[1]), "000000",
+    "the OPTION screen's paper goes black -- the bug the user reported was "
+    .. "this line coming back ffefff")
+  eq(hex(out[1].colors[4]), "ffefff", "and its ink goes to the paper it had")
+  eq(hex(out[1].colors[2]), "840000",
+    "with the screen's own hue kept in the shades between, which is what "
+    .. "reversing a palette buys over painting a black rectangle")
+
+  -- and the frame it was handed is still the frame it was handed
+  local handed = mewmonZones()
+  theme.apply(game, handed)
+  eq(hex(handed[1].colors[1]), "ffefff", "the state's own list is untouched")
+end
+
+do
+  io.write("a page that declares no palettes gets one made for it\n")
+  -- The bag, the shops, Bill's box and the PC are not states: each builds a
+  -- ListMenu and pushes THAT, and ListMenu does declare a palette.  But a
+  -- screen that declares none inherits whatever is underneath -- and it is
+  -- opaque, so those zones are colouring a map nobody can see.  Transforming
+  -- them would invert the world; the page is made instead.
+  local ListMenu = engineClass("src.ui.ListMenu")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  local world = { sgbPalettes = true }
+  local list = setmetatable({}, ListMenu)
+  local game = { stack = { states = { world, list } } }
+
+  local out = theme.apply(game, overworldZones())
+  eq(#out, 1, "the map's zone list does not come through")
+  eq(out[1].w, 160, "a whole-screen page is made instead")
+  eq(out[1].h, 144, "...the size of the screen")
+  eq(hex(out[1].colors[1]), "000000", "black paper")
+  eq(hex(out[1].colors[4]), "ffffff", "white ink")
+end
+
+do
+  io.write("the walk stops at whatever owns the frame\n")
+  local ListMenu = engineClass("src.ui.ListMenu")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  -- a text box over the map owns no palettes, so the map still owns the
+  -- frame -- and the map is not a page
+  local world = { sgbPalettes = true }
+  local textbox = {}
+  local zones = overworldZones()
+  eq(theme.apply({ stack = { states = { world, textbox } } }, zones), zones,
+    "an overlay with nothing to say does not make the overworld a page")
+  eq(hex(zones[1].colors[1]), "ffefff", "...and nothing was written into it")
+
+  -- the same overlay over a page leaves the page themed, which is what keeps
+  -- a confirm box from flashing the OPTION screen back to white
+  local list = setmetatable({ sgbPalettes = true }, ListMenu)
+  local out = theme.apply({ stack = { states = { list, textbox } } },
+                          mewmonZones())
+  eq(hex(out[1].colors[1]), "000000",
+    "but an overlay over a page is stepped over")
+
+  -- a page under something that owns the frame ITSELF is not on screen
+  local battle = { sgbPalettes = true }
+  local under = overworldZones()
+  eq(theme.apply({ stack = { states = { list, battle } } }, under), under,
+    "and a page buried under a screen that owns the frame is not the frame")
+end
+
+do
+  io.write("DARK proves the page is dark before it uses it\n")
+  -- Reversing works because every SGB background palette darkest-ends in
+  -- near-black.  A page that does not -- the suite's own screens open on the
+  -- player's outfit ramp -- reverses into a washed pastel, which is a second
+  -- light mode rather than a dark one.  So the reversal has to measure dark
+  -- or the page falls back to plain black-on-white.
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  local pastel = { { 0xea, 0xf6, 0xea }, { 0xa8, 0xd0, 0xa8 },
+                   { 0x6a, 0x9a, 0x6a }, { 0x8a, 0xb0, 0x8a } }
+  local screen = { gen1wildTheme = "settings", sgbPalettes = true }
+  local out = theme.apply({ stack = { states = { screen } } },
+    { { colors = pastel, x = 0, y = 0, w = 160, h = 144 } })
+  eq(hex(out[1].colors[1]), "000000",
+    "a page whose darkest colour is not dark falls back to black paper")
+  eq(hex(out[1].colors[4]), "ffffff", "and white ink")
+end
+
+do
+  io.write("a menu box over the map is themed by its own rectangle\n")
+  -- The bug this is for: START > OPTION said DARK and the START menu behind
+  -- it was still white.  A menu box owns no palettes, so the engine hands the
+  -- frame to the map underneath -- and the map is not a page, quite rightly,
+  -- so the theme declined the whole frame and the menu with it.  A panel is
+  -- themed by its rect and nothing else, which is what lets a white menu go
+  -- black over a map that does not move.
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  -- src/ui/Menu.lua keeps its box in tx/ty/tw/th, in tiles, and computes it in
+  -- Menu.new.  The START menu is the default: 10 tiles in, 10 wide.
+  local world = { sgbPalettes = true }
+  local start = { tx = 10, ty = 0, tw = 10, th = 12 }
+  local zones = overworldZones()
+  local out = theme.apply({ stack = { states = { world, start } } }, zones)
+
+  eq(#out, 2, "the map's own zone, and one for the menu")
+  eq(hex(out[1].colors[1]), "ffefff", "the map is not touched")
+  eq(out[2].x, 80, "the panel starts where the box starts, in pixels")
+  eq(out[2].y, 0, "...top edge")
+  eq(out[2].w, 80, "and is as wide as the box")
+  eq(out[2].h, 96, "...and as tall")
+  eq(hex(out[2].colors[1]), "000000", "a dark menu is a black box")
+  eq(hex(out[2].colors[4]), "ffffff", "with white type in it")
+
+  -- and the caller's list is still the caller's list
+  eq(#zones, 1, "the frame's own zone list was not written into")
+end
+
+do
+  io.write("a panel is only ever an overlay\n")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  -- A page that happens to carry a box of its own is themed as a PAGE.
+  -- Painting its box again would be a second coat at best, and a box over its
+  -- own content at worst.
+  local page = { gen1wildTheme = "settings", sgbPalettes = true,
+                 tx = 2, ty = 2, tw = 16, th = 12 }
+  local out = theme.apply({ stack = { states = { page } } }, menuZones())
+  eq(#out, 2, "the page is themed, and no panel is added for its own box")
+
+  -- but a menu stacked ON that page still gets one
+  local over = { tx = 0, ty = 0, tw = 8, th = 6 }
+  local stacked = theme.apply({ stack = { states = { page, over } } },
+                              menuZones())
+  eq(#stacked, 3, "a box on top of a page is a panel")
+  eq(stacked[3].w, 64, "...its own rectangle")
+
+  -- a state with no box and no palettes contributes nothing either way
+  local bare = {}
+  local plain = theme.apply({ stack = { states = { page, bare } } },
+                            menuZones())
+  eq(#plain, 2, "and a state with no rectangle is not a panel")
+end
+
+do
+  io.write("a screen with several boxes says where they are\n")
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+  theme.write("dark")
+
+  -- The bag draws two windows over the map, so tx/ty/tw/th on the state
+  -- cannot describe it.  A screen that knows better says so.
+  local world = { sgbPalettes = true }
+  local bag = {
+    gen1wildThemePanels = function()
+      return { { x = 0, y = 16, w = 96, h = 96 },
+               { x = 96, y = 0, w = 64, h = 144 } }
+    end,
+  }
+  local out = theme.apply({ stack = { states = { world, bag } } },
+                          overworldZones())
+  eq(#out, 3, "the map, and one zone per window")
+  eq(out[2].w, 96, "the first window")
+  eq(out[3].x, 96, "and the second")
+
+  -- a screen whose panels raise must not take the frame down with it
+  bag.gen1wildThemePanels = function() error("nope") end
+  local survived = theme.apply({ stack = { states = { world, bag } } },
+                               overworldZones())
+  eq(#survived, 1, "a screen that raises simply contributes no panels")
+end
+
+do
+  io.write("the matte is what a true-colour rectangle sits on\n")
+  -- markTrueColor blits a rectangle RAW so a coloured icon keeps its colours.
+  -- Raw means the white page under it stays white too, which is the white box
+  -- behind every icon on a dark screen.  A screen paints this colour into the
+  -- rectangle before it draws the art, and the box goes with the page.
+  local mod = fakeMod()
+  local theme = themeOver(mod)
+
+  eq(hex(theme.matte()), "ffffff",
+    "under LIGHT it is white, which is what every screen drew before this "
+    .. "existed -- so a build with no theme pays nothing for the call")
+
+  theme.write("dark")
+  eq(hex(theme.matte()), "000000", "and under DARK it is the dark page")
+end
+
+do
+  io.write("a theme that raises stands down instead of taking the frame\n")
+  -- This hook runs on every frame of every screen, and it is the only thing
+  -- in the bundle that does.  A theme is decoration: if it raises, the right
+  -- outcome is the frame it was handed in the colours it already had.
+
+  local Bundle = load_("runtime/bundle.lua", function(name)
+    return load_("runtime/" .. name .. ".lua")
+  end)
+
+  local mod = fakeMod()
+  mod.files["modules/Only/main.lua"] = [[
+    return function(mod)
+      mod.options:define({
+        { key = "enabled", type = "toggle", label = "ONLY", default = true },
+      })
+    end
+  ]]
+  Bundle.install(mod, { id = "gen1_wild_ui", menu_label = "GEN1WILD UI",
+                        screen_id = "Gen1WildUI",
+                        paired_bundle = "gen1_wild_qol" }, {
+    { id = "only", dir = "Only", entry = "main.lua", label = "ONLY",
+      enabledKey = "enabled", default = true, priority = 100 },
+  })
+
+  local wrap
+  for _, hooked in ipairs(mod.hooked) do
+    if hooked.name == "render.zones" then wrap = hooked.fn end
+  end
+  ok(wrap ~= nil, "render.zones is wrapped")
+
+  -- a state whose themeZones raises is already handled; this is the harder
+  -- case -- a stack that raises when it is walked at all
+  local hostile = setmetatable({}, { __index = function() error("no") end })
+  local zones = menuZones()
+  local out
+  ok(pcall(function()
+    out = wrap(function(_, z) return z end, { stack = hostile }, zones)
+  end), "a game the theme cannot read does not take the frame down")
+  eq(out, zones, "and the frame is handed on exactly as it came")
+
+  -- and it stays stood down rather than raising once per frame forever
+  local second = wrap(function(_, z) return z end, { stack = hostile }, zones)
+  eq(second, zones, "the second frame is handed on too")
+end
+
+do
+  io.write("the theme is a row on the game's own OPTION screen\n")
+
+  local Bundle = load_("runtime/bundle.lua", function(name)
+    return load_("runtime/" .. name .. ".lua")
+  end)
+
+  local mod = fakeMod()
+  mod.files["modules/Only/main.lua"] = [[
+    return function(mod)
+      mod.options:define({
+        { key = "enabled", type = "toggle", label = "ONLY", default = true },
+      })
+    end
+  ]]
+  local spec = { id = "gen1_wild_ui", menu_label = "GEN1WILD UI",
+                 screen_id = "Gen1WildUI", paired_bundle = "gen1_wild_qol" }
+  Bundle.install(mod, spec, {
+    { id = "only", dir = "Only", entry = "main.lua", label = "ONLY",
+      enabledKey = "enabled", default = true, priority = 100 },
+  })
+
+  local wrap
+  for _, hooked in ipairs(mod.hooked) do
+    if hooked.name == "ui.options.rows" then wrap = hooked.fn end
+  end
+  ok(wrap ~= nil, "ui.options.rows is wrapped")
+
+  local rows = wrap(function(_, r) return r end, { save = { options = {} } }, {})
+  local themeRow
+  for _, row in ipairs(rows) do
+    if row.id == "gen1wild_ui_theme" then themeRow = row end
+  end
+  ok(themeRow ~= nil, "and puts UI THEME on the OPTION screen")
+  eq(themeRow and themeRow.label, "UI THEME", "under that name")
+  eq(themeRow and themeRow.value(), "LIGHT", "starting on LIGHT")
+
+  local game = { save = { options = {} } }
+  themeRow.step(game, 1)
+  eq(themeRow.value(), "DARK", "one press right is DARK")
+  themeRow.step(game, 1)
+  eq(themeRow.value(), "LIGHT", "and it wraps -- two values, not three")
+  themeRow.step(game, -1)
+  eq(themeRow.value(), "DARK", "left goes the other way")
+
+  -- one row, not two: the other half of the suite may have added it already
+  local twice = wrap(function(_, r) return r end, game, rows)
+  local count = 0
+  for _, row in ipairs(twice) do
+    if row.id == "gen1wild_ui_theme" then count = count + 1 end
+  end
+  eq(count, 1, "a second pass adds no second row")
+end
+
+do
+  io.write("the suite's own screens say they are ours\n")
+
+  local Bundle = load_("runtime/bundle.lua", function(name)
+    return load_("runtime/" .. name .. ".lua")
+  end)
+
+  local mod = fakeMod()
+  mod.files["modules/Only/main.lua"] = [[
+    return function(mod)
+      mod.options:define({
+        { key = "enabled", type = "toggle", label = "ONLY", default = true },
+      })
+    end
+  ]]
+  local spec = {
+    id = "gen1_wild_ui", menu_label = "GEN1WILD UI", screen_id = "Gen1WildUI",
+    paired_bundle = "gen1_wild_qol",
+    groups = {
+      { id = "battle", label = "BATTLES" },
+      { id = "items", label = "ITEMS" },
+    },
+  }
+  Bundle.install(mod, spec, {
+    { id = "only", dir = "Only", entry = "main.lua", label = "ONLY",
+      group = "battle", enabledKey = "enabled", default = true,
+      priority = 100 },
+  })
+
+  local factory = mod.screens["Gen1WildUI"]
+  ok(factory ~= nil, "the suite's root screen is registered")
+  local screen = factory.new({ save = { options = {} } })
+  ok(screen.gen1wildTheme ~= nil,
+    "and marks itself as one of ours -- it opens on MEWMON, not on the "
+    .. "greys, so nothing else would recognise it as a page")
+
+  -- and the marker alone is enough: the theme takes any state that carries
+  -- it, without a table of names to keep current
+  local theme = themeOver(fakeMod())
+  theme.write("dark")
+  local out = theme.apply({ stack = { states = { screen } } }, menuZones())
+  eq(hex(out[1].colors[1]), "000000", "so a screen that says so is themed")
+end
+
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

@@ -64,6 +64,12 @@ love = { graphics = {} }
 -- store the two toggles ride.
 local Game = { stack = nil, mods = { modOptions = {} } }
 
+-- The engine's own post-battle hold, which the outro borrows for its own:
+-- home/overworld.asm:351-352 spends `ld c, 10 / DelayFrames` before
+-- GBFadeInFromWhite starts stepping.
+package.preload["src.core.Timing"] = function()
+  return { POST_BATTLE_RETURN = 10 }
+end
 package.preload["src.core.Strings"] = function() return strings end
 package.preload["src.render.Renderer"] = function()
   return { endFrame = function() end }
@@ -265,6 +271,57 @@ do
   battle:finish()
 
   ok(isFade(game.stack:top()), "the ordinary win fades on its only call")
+end
+
+
+-- ------- the hold at the cut
+
+do
+  io.write("the black holds at the cut instead of turning round on it\n")
+
+  local outroAlpha = exports.outroAlpha
+  eq(outroAlpha("out", 0, 36), 0, "the battle's last live frame is not veiled")
+  eq(outroAlpha("out", 18, 36), 0.5, "half way down is half black")
+  eq(outroAlpha("hold", 0, 10), 1, "the hold is full black from its first frame")
+  eq(outroAlpha("hold", 9, 10), 1, "...to its last")
+  eq(outroAlpha("in", 0, 36), 1, "the fade in starts where the hold left off")
+  eq(outroAlpha("in", 36, 36), 0, "and ends on the map")
+
+  -- The whole shape, driven through the state the way the game drives it.
+  -- What matters is not the length: it is that the fade is at FULL BLACK for
+  -- more than one frame, because one frame is an instant rather than a
+  -- window, and the instant it used to offer was the cut -- the frame that
+  -- pops the fade, runs the engine's finish and pushes it back.  Autosave
+  -- looks for exactly this and used to find only that frame.
+  local game = newGame({})
+  local battle = newBattle(game, {})
+  game.stack:push(battle)
+  battle:finish()
+
+  local fade = game.stack:top()
+  ok(isFade(fade), "the fade is up")
+
+  local blackFrames, cutFrame = 0, nil
+  for i = 1, 400 do
+    if game.stack:top() ~= fade then break end
+    fade:update()
+    if fade:alpha() >= 1 then
+      blackFrames = blackFrames + 1
+      cutFrame = cutFrame or i
+    end
+    if fade.phase == "in" and fade.t > 0 then break end
+  end
+
+  ok(blackFrames > 1,
+     "full black lasts longer than the single frame it used to")
+  -- Eleven, not ten: the hold is ten frames and the CUT is the frame that
+  -- opens it -- the fade flips to "hold" on the same update that pops itself,
+  -- runs the engine's finish and pushes itself back, so that frame is already
+  -- at full black.  Ten is the engine's own pause before its white fade in
+  -- (home/overworld.asm:351-352); the eleventh is the work the pause is for.
+  eq(blackFrames, 11,
+     "the engine's ten-frame pause, plus the cut that opens it")
+  eq(battle.closed, 1, "the battle still closes exactly once, at the cut")
 end
 
 io.write(("battle outro: %d passed, %d failed\n"):format(passed, failed))

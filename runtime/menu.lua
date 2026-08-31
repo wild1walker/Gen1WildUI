@@ -70,6 +70,10 @@ local RESET_ROW = "__reset_defaults"
 -- finds it already there and leaves it alone, so a player with both halves
 -- installed gets one door rather than two identical ones.
 local OPTION_ROW_ID = "gen1wild_options"
+-- The theme row's own id, shared between the two halves for the same reason
+-- the door's is: either half can be the one installed, and two identical rows
+-- on the OPTION screen is worse than one.
+local THEME_ROW_ID = "gen1wild_ui_theme"
 
 -- The card the other loaded mods go under, and the screen that renders one of
 -- them.  The mods are not known until a game is running, so there is one screen
@@ -672,6 +676,11 @@ function Menu.new(context)
           kind = "card",
           key = groupScreenId(group.id),
           screenId = groupScreenId(group.id),
+          -- what the card IS, as declared in features.lua, kept beside the
+          -- screen id it opens.  The id is a string this file built and is not
+          -- meant to be taken apart again, so anything that wants to know what
+          -- a card opens reads this rather than parsing the address.
+          groupId = group.id,
           label = group.label or group.id,
           description = group.description,
           members = members,
@@ -738,6 +747,8 @@ function Menu.new(context)
   local BUNDLE_NAMES = {
     gen1_wild_qol = "GEN1WILD QOL",
     gen1_wild_ui = "GEN1WILD UI",
+    gen1_wild_ui = "GEN1WILD UI",
+    gen1_wild_qol = "GEN1WILD QOL",
   }
 
   local function masterLabel(entry)
@@ -806,6 +817,15 @@ function Menu.new(context)
         scroll = 0,
         isOpaque = true,
         isModOptions = true,
+        -- One of ours.  runtime/theme.lua reads this off the instance: a
+        -- screen that names itself does not have to be recognised by its
+        -- class, and these screens have no engine class to be recognised by.
+        --
+        -- It also opts the page into being themed at all.  The theme's rule
+        -- is "a whole-screen zone of the four DMG greys is a black-and-white
+        -- page"; this one opens on MEWMON instead, deliberately, and would be
+        -- the one screen in the suite a dark mode did not reach.
+        gen1wildTheme = "settings",
       }
 
       screen.rows = screen.entries
@@ -1135,9 +1155,50 @@ function Menu.new(context)
       return spec.menu_label
     end
 
+    -- ---- and the theme
+    --
+    -- A row of its own on the game's own OPTION screen rather than a row
+    -- inside the suite's menu, because that is where it was asked for and
+    -- where it belongs: START > OPTION > UI THEME is one press further than
+    -- the brightness slider on any device made this century, and a player
+    -- looking for a dark mode looks in OPTIONS.  It is also the one setting
+    -- in the suite that is not about a feature -- turning it off does not
+    -- turn anything off -- so it has no card to sit under.
+    --
+    -- It cycles LIGHT / DARK like every other value row on that screen, and
+    -- takes effect on the next frame: the theme is read by the render hook
+    -- rather than settled at load.
+    local function themeRow()
+      local theme = context.theme
+      if not theme then return nil end
+      return {
+        id = THEME_ROW_ID,
+        label = "UI THEME",
+        value = function() return theme.label() end,
+        step = function(g, dir)
+          theme.step(dir or 1, g)
+          return true
+        end,
+      }
+    end
+
     mod.hooks:wrap("ui.options.rows", function(nextLink, game, rows)
       local out = nextLink(game, rows)
       if type(out) ~= "table" then return out end
+
+      -- The theme row goes in first and is answered separately from the door
+      -- below: either half of the suite may already have added one, and the
+      -- door's own dedupe below returns early, which would leave the theme
+      -- unadded on the half that lost that race.
+      local haveTheme = false
+      for _, existing in ipairs(out) do
+        if existing.id == THEME_ROW_ID then haveTheme = true end
+      end
+      if not haveTheme then
+        local row = themeRow()
+        if row then out[#out + 1] = row end
+      end
+
       -- The other half may have got here first: one door, not two.
       for _, existing in ipairs(out) do
         if existing.id == OPTION_ROW_ID then return out end

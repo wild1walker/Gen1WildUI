@@ -26,12 +26,18 @@
 --
 -- ------- how a list is recognised
 --
--- By `kind`, which the engine already stamps for exactly this reason:
--- PlayerPC passes "pc_item_withdraw" / "pc_item_deposit" / "pc_item_toss",
--- and ShopMenu passes none, so ListMenu falls back to the title and the mart
--- lists arrive as "BUY" and "SELL".  Anything else falls straight through
--- untouched, which is most lists in the game -- the bag, the box, the dex,
--- the move learner.
+-- By `kind` where there is one: PlayerPC passes "pc_item_withdraw" /
+-- "pc_item_deposit" / "pc_item_toss" and those three are named outright.
+--
+-- ShopMenu names neither of its two.  This file used to say that ListMenu
+-- "falls back to the title and the mart lists arrive as BUY and SELL", and it
+-- does fall back to the title -- but ShopMenu passes nil for that as well
+-- (`ListMenu.new(game, nil, items, {...})`), so both lists arrive with no
+-- kind at all and went undecorated for as long as that sentence stood.  They
+-- are recognised by their `money` callback instead; see MART below.
+--
+-- Anything else falls straight through untouched, which is most lists in the
+-- game -- the bag, the box, the dex, the move learner.
 --
 -- ------- and the footer
 --
@@ -73,13 +79,52 @@ return function(mod, C, describe, wants, icons)
   -- pcItemCap into three digits overlaps it outright.  Three sibling screens
   -- where the number appears on two of them reads as a bug, so it appears on
   -- none.  BUY and SELL are four glyphs and have the room to spare.
+  local MART = { feature = "mart", money = true }
   local KINDS = {
-    ["BUY"]              = { feature = "mart", money = true },
-    ["SELL"]             = { feature = "mart", money = true },
+    ["BUY"]              = MART,
+    ["SELL"]             = MART,
     ["pc_item_withdraw"] = { feature = "pc" },
     ["pc_item_deposit"]  = { feature = "pc" },
     ["pc_item_toss"]     = { feature = "pc" },
   }
+
+  -- ------- and the two the engine does not name
+  --
+  -- `ListMenu.new(game, title, items, opts)` stamps `kind = opts.kind or
+  -- title`, and `ShopMenu` passes NEITHER: `ListMenu.new(game, nil, items,
+  -- {...})`, twice, with no `kind` in its opts.  Both mart lists therefore
+  -- arrive with `kind = nil`, `KINDS[nil]` misses, and BUY and SELL fall
+  -- through undecorated -- no icons, no header, and no description in the
+  -- clerk's box, which is what a player reported.  The item PC names its
+  -- three, which is exactly why only the mart went quiet.
+  --
+  -- The paragraph at the top of this file says the mart lists "arrive as BUY
+  -- and SELL".  That is what a title fallback would give; it is not what this
+  -- engine passes, and the two named keys above have been dead letters.  They
+  -- stay, because a build that DOES name them is still right.
+  --
+  -- What a mart list is, rather than what it is called: `opts.money` is a
+  -- function.  `ShopMenu` is the only caller of `ListMenu.new` in the engine
+  -- that passes one -- BoxMenu, BagMenu and the battle's item list all pass
+  -- `itemBox` without it -- so the signature is exact, and unlike a title it
+  -- survives translation. BUY and SELL take the same entry, so nothing here
+  -- needs to tell them apart.
+  --
+  -- Recorded under this mod's own key rather than by writing `list.kind`:
+  -- that field is the engine's, and a mod that renames somebody else's screen
+  -- to be recognised by its own code has made the next reader's job harder.
+  local OWN_KIND = "__gen1ItemInfoKind"
+
+  local function kindOf(list)
+    if type(list) ~= "table" then return nil end
+    return KINDS[list.kind] or rawget(list, OWN_KIND)
+  end
+
+  local function markMart(list, opts)
+    if type(list) ~= "table" or KINDS[list.kind] then return end
+    if type(opts) ~= "table" or type(opts.money) ~= "function" then return end
+    list[OWN_KIND] = MART
+  end
 
   -- One marker per patched module, so a second install (a dev hot reload, or
   -- both bundles somehow getting this far) wraps nothing twice.
@@ -98,13 +143,13 @@ return function(mod, C, describe, wants, icons)
   end
 
   local function headerRight(list)
-    local kind = KINDS[list.kind]
+    local kind = kindOf(list)
     if kind and kind.money then return money(list.game) end
     return nil
   end
 
   local function switchedOn(list)
-    local kind = KINDS[list.kind]
+    local kind = kindOf(list)
     if not kind then return false end
     return wants(kind.feature)
   end
@@ -370,13 +415,15 @@ return function(mod, C, describe, wants, icons)
     local baseNew = ListMenu.new
     ListMenu.new = function(game, title, items, opts)
       local list = baseNew(game, title, items, opts)
-      if type(list) ~= "table" or not KINDS[list.kind] then return list end
+      if type(list) ~= "table" then return list end
+      markMart(list, opts)
+      if not kindOf(list) then return list end
       local decorated, result = pcall(decorate, list)
       -- A screen that will not decorate is still a screen: hand back the
       -- engine's own rather than nothing at all.
       if not decorated then
         mod.log:warn("%s did not decorate (%s); it keeps its own chrome",
-          tostring(list.kind), tostring(result))
+          tostring(list.kind or "mart list"), tostring(result))
         return list
       end
       return result
@@ -397,6 +444,8 @@ return function(mod, C, describe, wants, icons)
   M.decorate = decorate
   M.headerRight = headerRight
   M.switchedOn = switchedOn
+  M.markMart = markMart
+  M.kindOf = kindOf
   M.withIcons = withIcons
   M.coveredByPlayerPC = coveredByPlayerPC
   M.PC_MENU = PC_MENU

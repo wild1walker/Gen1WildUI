@@ -413,6 +413,37 @@ do
   eq(screens.headerRight({ kind = "pc_item_withdraw", game = game }), nil,
      "on every one of the three, not two of them")
 
+  -- ------- the mart's two, which the engine names neither of
+  --
+  -- `ShopMenu` builds both with `ListMenu.new(game, nil, items, {...})` and
+  -- no `kind` in its opts, so `kind = opts.kind or title` is nil on both.
+  -- KINDS["BUY"] and KINDS["SELL"] were dead letters and the mart went
+  -- undecorated: no icons, no header, no description in the clerk's box.
+  --
+  -- They are claimed by what a mart list IS instead.  `opts.money` is a
+  -- function on ShopMenu's two and on no other `ListMenu.new` caller in the
+  -- engine -- BoxMenu, BagMenu and the battle's item list pass `itemBox`
+  -- without it -- so the signature is exact and survives translation, which
+  -- a title never did.
+  local nameless = { kind = nil, game = game }
+  eq(screens.kindOf(nameless), nil, "a nameless list starts unclaimed")
+  screens.markMart(nameless, { money = function() return 0 end })
+  ok(screens.kindOf(nameless) ~= nil, "and ShopMenu's money callback claims it")
+  eq(screens.headerRight(nameless), "¥19436",
+     "so it gets the mart's header number after all")
+  ok(screens.switchedOn(nameless), "and the MART SCREENS row switches it")
+
+  local boxList = { kind = nil, game = game }
+  screens.markMart(boxList, { itemBox = true })
+  eq(screens.kindOf(boxList), nil,
+     "itemBox alone is not a mart: BoxMenu, BagMenu and the battle's item "
+     .. "list all pass it and none of them is a shop")
+
+  local named = { kind = "pc_item_toss", game = game }
+  screens.markMart(named, { money = function() return 0 end })
+  eq(screens.kindOf(named).feature, "pc",
+     "and a list the engine DID name keeps the name it was given")
+
   ok(screens.switchedOn({ kind = "BUY" }), "a claimed list is switched on")
   ok(not screens.switchedOn({ kind = "bag" }), "an unclaimed list is not")
   on = false

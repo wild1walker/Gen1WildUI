@@ -18,15 +18,6 @@ local OptionSet = {}
 
 local SEPARATOR = "_"
 
--- `mod.options:define(schema)` is the documented spelling, but a couple of
--- call sites in the wild use `mod.options.define(schema)`.  Both land here, so
--- both have to work: if the first argument is the options table itself, drop
--- it and shift everything along.
-local function shiftSelf(selfTable, a, b)
-  if a == selfTable then return b end
-  return a
-end
-
 local function copyRow(row)
   local out = {}
   for k, v in pairs(row) do out[k] = v end
@@ -110,6 +101,28 @@ function OptionSet.new()
       g.synthesizedMaster = row
     end
     return key
+  end
+
+  -- A row the BUNDLE owns rather than a feature.
+  --
+  -- Unprefixed, because there is no feature to prefix it with and nothing to
+  -- collide with: the prefix exists to keep a dozen mods that each called
+  -- their switch `enabled` apart, and the bundle is not one of them.  It
+  -- lands in the same schema every other row lands in, so it is stored, read,
+  -- defaulted, validated and remembered across a sealed cart's option reset
+  -- exactly like the rest -- runtime/settings.lua works by key and needs no
+  -- teaching about it.
+  --
+  -- It belongs to no group, so the menu does not draw it under a feature's
+  -- card; whoever defines it is responsible for putting it somewhere a player
+  -- can reach.
+  function self.own(row)
+    if type(row) ~= "table" or type(row.key) ~= "string" then return nil end
+    if self.byKey[row.key] then return row.key end
+    local copy = copyRow(row)
+    self.rows[#self.rows + 1] = copy
+    self.byKey[copy.key] = copy
+    return copy.key
   end
 
   -- Take one feature's schema and fold it in.  Returns nothing: the feature
@@ -207,6 +220,8 @@ function OptionSet.new()
     return container.modOptions[modId]
   end
 
+  local writes = 0
+
   local function liveGame()
     if type(self.resolveGame) ~= "function" then return nil end
     local ok, game = pcall(self.resolveGame)
@@ -258,7 +273,24 @@ function OptionSet.new()
   -- what every read above sees first, and the engine's own view, so a value
   -- survives into the next launch even if the save is written by some path
   -- that does not carry modOptions.
+  -- ------- a token a reader can cache against
+  --
+  -- `self.read` is not free -- it walks the live game's save, the mod's own
+  -- option store and the row's fallbacks -- and a caller that asks it many
+  -- times a frame wants to ask it once.  It cannot just remember the answer:
+  -- a value can be written from the bundle's own menu, from the OTHER
+  -- bundle's menu through `mod.exports.optionWrite`, or from the test bench,
+  -- and none of those three goes through the same door.
+  --
+  -- They all go through THIS one.  The number changes on every write, so a
+  -- cache that stores it beside its answer is exact rather than merely
+  -- fresh-ish, and no caller has to know who else can write.
+  function self.generation()
+    return writes
+  end
+
   function self.write(mod, key, value, game)
+    writes = writes + 1
     game = game or liveGame()
     local options = game and game.save and game.save.options
     local raw = self.rawFallback[key]
