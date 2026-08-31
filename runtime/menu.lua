@@ -747,8 +747,6 @@ function Menu.new(context)
   local BUNDLE_NAMES = {
     gen1_wild_qol = "GEN1WILD QOL",
     gen1_wild_ui = "GEN1WILD UI",
-    gen1_wild_ui = "GEN1WILD UI",
-    gen1_wild_qol = "GEN1WILD QOL",
   }
 
   local function masterLabel(entry)
