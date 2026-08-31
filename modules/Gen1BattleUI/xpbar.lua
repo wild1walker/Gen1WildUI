@@ -95,6 +95,38 @@ return function(mod, C)
   --
   -- The HP check behind the flag covers the frame between HP reaching zero
   -- and the flag being set.
+  -- ------- and not while something is standing on the battle
+  --
+  -- `battle.overlay` fires whenever the battle DRAWS, and the battle keeps
+  -- drawing while another state is on top of it -- that is how the level-up
+  -- stat window (PrintStatsBox, a state of its own) appears over the fight
+  -- rather than over nothing.
+  --
+  -- For most of what this mod draws that costs nothing: the state above draws
+  -- second and covers it.  The bar is the exception, because the wide bar's
+  -- fill is marked trueColor and a trueColor rect is spliced onto the pass's
+  -- zone list and RE-BLITS ITS REGION RAW after the pass is composed.  The
+  -- battle and everything pushed over it share one pass and one canvas, so
+  -- that strip comes back over whatever was drawn on top of it in the
+  -- meantime.  Reported as the XP bar showing through the level-up window,
+  -- with a wide battle in the screenshots -- which is the layout that marks
+  -- one.
+  --
+  -- Asked of the STACK rather than of any flag the battle keeps, because what
+  -- matters is not what the battle is doing, it is whether anybody is standing
+  -- in front of it.  A stack that cannot be read leaves the bar drawn: this is
+  -- a guard against covering something, not a licence to blank the HUD if the
+  -- shape of the game is not what is expected here.
+  local function onTop(battle)
+    local stack = battle.game and battle.game.stack
+    if type(stack) ~= "table" or type(stack.top) ~= "function" then
+      return true
+    end
+    local ok, top = pcall(stack.top, stack)
+    if not ok or top == nil then return true end
+    return top == battle
+  end
+
   local function playerHudVisible(battle)
     local player = battle and battle.player
     if type(player) ~= "table" then return false end
@@ -353,17 +385,25 @@ return function(mod, C)
   -- which is the whole reason the bar is in this file: the panel goes down on
   -- top of it and covers exactly as much of it as the panel is wide.  There
   -- is no clip here and there is not meant to be one.
-  function XP.draw(battle)
-    if not C.option("xp_bar", true) then return end
-    if type(battle) ~= "table" or not battle.isBattle then return end
-    if battle.blankForAskName then return end
+  -- Every reason there is not to draw, in one place, so a case can ask the
+  -- question without a canvas to answer it on.
+  function XP.wouldDraw(battle)
+    if not C.option("xp_bar", true) then return false end
+    if type(battle) ~= "table" or not battle.isBattle then return false end
+    if battle.blankForAskName then return false end
     -- Safari has no mon of yours in the fight, the old man demo's player is a
     -- placeholder, showPlayerBack is the send-out before the HUD exists, and
     -- a sliding intro has not put the HUD in place yet.
     if not battle.player or battle.safari or battle.demo
-       or battle.showPlayerBack then return end
-    if (battle.introSlide or 0) ~= 0 then return end
-    if not playerHudVisible(battle) then return end
+       or battle.showPlayerBack then return false end
+    if (battle.introSlide or 0) ~= 0 then return false end
+    if not playerHudVisible(battle) then return false end
+    if not onTop(battle) then return false end
+    return true
+  end
+
+  function XP.draw(battle)
+    if not XP.wouldDraw(battle) then return end
 
     local colorMode = PaletteFX.mode
     local blue = colorMode == "ogred" or colorMode == "gbc"

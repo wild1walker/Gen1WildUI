@@ -367,6 +367,11 @@ return function(mod)
   -- position cannot be out-drawn, only told, so this says where the panel is
   -- and lets it clip.
   mod.exports.panelRect = Grid.panelRect
+  -- Published so a case can ask whether the bar would draw this frame
+  -- without standing up a whole battle to draw it into.  What it answers
+  -- is every refusal in one place -- the option, the layouts with no HUD
+  -- to hang it under, and whether anything is covering the battle.
+  mod.exports.xpBarWouldDraw = XP.wouldDraw
   mod.exports.expPixels = XP.pixels
   -- The ball colours, by item id, so "which mod coloured this ball" is
   -- answerable without an experiment.  Read freely; this mod writes

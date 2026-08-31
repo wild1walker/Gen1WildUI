@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.22.2
+
+Carries **Gen1BattleUI 1.6.1**.
+
+- **The XP bar no longer shows through the level-up pop-up.** `battle.overlay`
+  fires whenever the battle draws, and the battle keeps drawing while another
+  state is on top of it — which is how the level-up stat window appears over
+  the fight at all. The wide layout's bar marks its fill `trueColor`, and a
+  `trueColor` rectangle re-blits its region raw once the pass is composed, so
+  that strip came back over the window after the window had covered it. The bar
+  stands down while anything is standing on the battle.
+
 ## 1.22.1
 
 **`DIAGNOSTIC` and `FIELD TEST` are behind the developer flag again.** 1.22.0
