@@ -601,6 +601,99 @@ local function paintSkirt(colour, rect, rects, clip)
   love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- ------- the one mark that is not a page's art: a sprite's own cell
+--
+-- `SpriteRenderer:draw` reports a trueColor rect for every sprite whose art
+-- is full colour -- `PaletteFX.markTrueColor(x, y, frameWidth, drawHeight)`,
+-- the whole 16-wide cell, transparent pixels and all -- and it does it in
+-- whichever pass happens to be current.  On the map that is the world pass
+-- and the rect is doing its job.
+--
+-- Once per battle it is not.  The battle transition is a state on the stack,
+-- so it draws under the UI pass, and what it draws is `self.world:draw()` --
+-- the whole overworld, sprites included, onto the UI canvas.  Every character
+-- on screen reports its cell into the UI list from inside the wipe, and two
+-- things then happen to that rectangle that were never meant for a sprite:
+-- the renderer splices it onto the UI zone list and re-blits the cell RAW, so
+-- the map showing through the sprite's transparent pixels keeps its DMG
+-- shades while the map around it is colourised, and this theme paints its
+-- one-pixel ring round the edge of it.  A pale square with a black outline,
+-- over the character, for as long as the wipe runs, in DARK -- the only theme
+-- that paints a ring -- and in ADVANCED, the only mode that splices the rect.
+--
+-- Four fixes went at the mark this looked like: the follower's own rect,
+-- rounded outward, then skirted where it had not landed, then reported in the
+-- wrong pass.  All three were real and none of them was this one, because
+-- this mark is not the follower's -- it is the engine's, for every sprite on
+-- the map, and no mod-side gate on a mod's own call could ever reach it.
+--
+-- So it is gated here, where every mark passes through: a sprite cell
+-- reported outside the world pass is dropped before the engine sees it.  That
+-- costs the sprite its true colours for the second the wipe lasts -- it goes
+-- through the palette pass like the map it is standing on, which is what the
+-- rest of the frame is doing anyway -- and buys back the box.  Nothing
+-- changes on the map itself: there the pass IS the world pass and the mark
+-- goes through untouched.
+--
+-- An engine with no pass to report keeps the old behaviour rather than
+-- silently losing marks it has always kept.
+local SPRITE_DEPTH = "__gen1WildSpriteDepth"
+local SPRITE_MARK = "__gen1WildSpriteWatch"
+
+local function spriteDepth()
+  local PaletteFX = paletteFX()
+  local n = PaletteFX and rawget(PaletteFX, SPRITE_DEPTH) or nil
+  return type(n) == "number" and n or 0
+end
+
+local function setSpriteDepth(n)
+  local PaletteFX = paletteFX()
+  if not PaletteFX then return end
+  pcall(function() PaletteFX[SPRITE_DEPTH] = n end)
+end
+
+local function inWorldPass()
+  local PaletteFX = paletteFX()
+  if not PaletteFX then return true end
+  if type(PaletteFX.spriteRedrawPassActive) ~= "function" then return true end
+  local ok, world = pcall(PaletteFX.spriteRedrawPassActive)
+  if not ok then return true end
+  return world and true or false
+end
+
+-- The rule itself, without the engine: a sprite cell reported in a pass that
+-- is not the world's is not a page's art and must not become a zone.
+local function dropsSpriteMark(depth, world)
+  return (tonumber(depth) or 0) > 0 and not world
+end
+
+-- The counter lives on PaletteFX for the reason the rects do: both bundles
+-- carry this file, only the copy that loads first wraps anything, and the
+-- copy that reads has to be able to see what the copy that wrote put there.
+local function watchSprites()
+  local ok, SpriteRenderer = pcall(require, "src.render.SpriteRenderer")
+  if not ok or type(SpriteRenderer) ~= "table" then return false end
+  if rawget(SpriteRenderer, SPRITE_MARK) then return true end
+  local wrapped = false
+  for _, name in ipairs({ "draw", "drawTile" }) do
+    local base = rawget(SpriteRenderer, name)
+    if type(base) == "function" then
+      SpriteRenderer[name] = function(...)
+        local prev = spriteDepth()
+        setSpriteDepth(prev + 1)
+        local a, b, c = base(...)
+        setSpriteDepth(prev)
+        return a, b, c
+      end
+      wrapped = true
+    end
+  end
+  if wrapped then
+    pcall(function() SpriteRenderer[SPRITE_MARK] = true end)
+  end
+  return wrapped
+end
+
 local MARK_MARK = "__gen1WildArtSkirt"
 
 local function watchArt(skirt)
@@ -610,6 +703,9 @@ local function watchArt(skirt)
   local base = PaletteFX.markTrueColor
   if type(base) ~= "function" then return false end
   PaletteFX.markTrueColor = function(x, y, w, h)
+    -- A sprite's own cell, reported from inside the battle wipe: not a page's
+    -- art, never a zone, never a ring.  See SPRITE_DEPTH above.
+    if dropsSpriteMark(spriteDepth(), inWorldPass()) then return end
     -- ------- a skirt only where a mark actually landed
     --
     -- This used to decide for itself whether the mark was one to skirt, by
@@ -1410,6 +1506,10 @@ function Theme.new(context)
       if type(colour) ~= "table" or #colour < 3 then return nil end
       return colour
     end
+    if not watchSprites() then
+      mod.log:info("sprite cells are not being watched; a character can wear "
+        .. "a pale box on the way into a battle")
+    end
     if not watchArt(self.skirt) then
       mod.log:info("true-colour marks are not being watched; art keeps its "
         .. "hairline on a fractional-DPI display")
@@ -1451,6 +1551,7 @@ Theme.luma = luma
 Theme.reversed = reversed
 Theme.overlaps = overlaps
 Theme.recordBox = recordBox
+Theme.dropsSpriteMark = dropsSpriteMark
 
 -- The rect half of the skirt, without the paint: tests/titlepage_test.lua
 -- drives the zone this produces, and painting needs a window.
