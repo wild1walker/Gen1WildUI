@@ -170,6 +170,13 @@ return function(mod)
   -- Nothing else changes: join it and the page is there, catalog and all.
   contexts.select.available = false
 
+  -- Published so the menus this can arrange are visible from outside: which
+  -- ones exist, and whether each is joinable yet.  `select` is the only one
+  -- that is ever unavailable, and it is what joining the field-menu registry
+  -- below switches on -- so this is also the seam the suite drives that
+  -- through, rather than standing up a whole second mod to publish a registry.
+  mod.exports.contexts = contexts
+
   mod.content.screens:register(SCREEN, {
     new = makeScreen(mod, Layout, Pins, contexts).new,
   })

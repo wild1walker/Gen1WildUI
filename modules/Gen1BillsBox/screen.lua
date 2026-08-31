@@ -421,6 +421,23 @@ return function(mod)
   -- the rect drawIcon will cover when it is full colour (mark it and leave it
   -- alone).  drawIcon takes a 16x16 frame out of a taller sheet and draws
   -- anything shorter whole, at whatever size the file is.
+  -- The size a full-colour icon draws at: its own measurements, each clamped
+  -- to the cell.  Split out and published because the clamp is the whole of
+  -- what went wrong and it is pure -- everything around it needs a game, a
+  -- save and a file on disk.
+  --
+  -- Each axis clamps against ITS OWN measurement.  The width used to be
+  -- decided by the height: `w = info.h > ICON and ICON or info.w`.  A sprite
+  -- wider than the cell but no taller kept its full width and was drawn past
+  -- its square, which is the black box a player reported around some POKeMON
+  -- in the box on a dark page.
+  local function iconRect(info)
+    if not (info and info.colour) then return nil end
+    return { w = info.w > ICON and ICON or info.w,
+             h = info.h > ICON and ICON or info.h }
+  end
+  mod.exports.iconRect = iconRect
+
   local function fullColourRect(game, mon)
     if not mon then return nil end
     local hit = iconColour[mon]
@@ -429,11 +446,7 @@ return function(mod)
       if not path or name then
         hit = false
       else
-        local info = scanPath(path)
-        hit = info.colour
-          and { w = info.w > ICON and ICON or info.w,
-                h = info.h > ICON and ICON or info.h }
-          or false
+        hit = iconRect(scanPath(path)) or false
       end
       iconColour[mon] = hit
     end

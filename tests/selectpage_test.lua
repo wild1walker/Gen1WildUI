@@ -57,6 +57,11 @@ local function fakeMod()
     stored = {}, saved = {}, cached = {},
     screens = {}, events_on = {}, logged = {},
     found = {},
+    -- The Loader hands every mod one of these (Loader.lua:1268).  MENU LAYOUT
+    -- publishes its contexts through it as of Gen1MenuManager 0.4.0 -- which
+    -- menus it can arrange, and whether each is joinable yet -- so the
+    -- stand-in needs it to be a table rather than nil.
+    exports = {},
   }
 
   function self:read(path)

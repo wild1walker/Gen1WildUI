@@ -54,15 +54,7 @@ local WIDE_W, WIDE_H = 304, 144
 -- that go away have to take their stored values with them.  A player who
 -- turned FIELD TEST on once to see what it did, and then took an update,
 -- would otherwise keep a magenta battlefield with no row left to turn it off.
--- The nightly channel IS the developer build, so the two diagnostic rows are
--- always here rather than only when the loader was started with dev on.
---
--- That is the difference between this fork and the release it was taken from,
--- and it is the whole reason the rows can be reached from the test bench: a
--- toggle that only exists under a flag nobody running a nightly has set is a
--- toggle nobody running a nightly can use.  On a release build the line
--- upstream reads `mod.developer == true` and both rows go with it.
-local DEV = true
+local DEV = mod.developer == true
 
 local function devOption(key)
   if not DEV then return false end

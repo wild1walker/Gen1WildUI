@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.22.1
+
+**`DIAGNOSTIC` and `FIELD TEST` are behind the developer flag again.** 1.22.0
+was assembled from the nightly channel's fork, and that fork flips Gen1Arena's
+`local DEV = mod.developer == true` to `local DEV = true` on purpose — the
+nightly *is* the developer build, and those rows exist to be reachable from its
+test bench. The flip came across with everything else, so 1.22.0 put two
+debug rows on the arena menu of every stable install. It should not have, and
+the gate is back.
+
+Everything 1.22.0 carried as an overlay now comes from the mod that owns it,
+each of which has cut a release of its own:
+
+| | |
+|---|---|
+| Gen1Dex | 1.9.0 → **1.10.0** |
+| Gen1Arena | 0.21.0 → **0.22.0** |
+| Gen1ModernBag | 1.11.1 → **1.12.0** |
+| Gen1BattleUI | 1.5.2 → **1.6.0** |
+| Gen1BillsBox | 1.5.0 → **1.6.0** |
+| Gen1Party | 1.7.0 → **1.8.0** |
+| Gen1MenuManager | 0.3.2 → **0.4.0** |
+
+`overlays/` is empty again, which is the state it is meant to be in. Nothing a
+player sees changes except the two rows above: `modules/` is byte-identical to
+1.22.0 apart from that gate, Bill's PC clamp being split out as an export, and
+MENU LAYOUT publishing its contexts.
+
+A standalone install of any of those seven now gets the fixes too, which it
+did not while they lived here.
+
 ## 1.22.0
 
 Everything the nightly channel built since 1.21.0, in one release. The channel
