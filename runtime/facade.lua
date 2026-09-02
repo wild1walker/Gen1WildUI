@@ -66,6 +66,12 @@ function Facade.new(feature, context)
   -- both draw into and which should wrap `battle.draw` once rather than twice.
   facade.shared = context.shared
 
+  -- Which voxel mod is installed, if any.  On the facade rather than left to
+  -- each feature because three of them ask, and a fourth fork appearing must
+  -- not mean finding three id lists.  nil on a tree built before this file
+  -- existed, so every caller checks.
+  facade.voxel = context.voxel
+
   -- ---- filesystem
 
   function facade:read(path)

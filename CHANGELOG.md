@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.23.0
+
+- **Voxel support, and it is a work in progress.** It works best with **potato
+  voxel** right now. The other forks — Battle Art Voxel, Dramatic Shape and its
+  variants, and Dramaless Shape — run on the same code path and should work,
+  but are less proven. No voxel mod is required: with none installed, nothing
+  about the bundle changes.
+
+  `runtime/voxel.lua` resolves which fork is present, once for the whole
+  bundle, and hands it to every feature through `mod.voxel`. Three features ask
+  — the XP bar, the battle overlays and the follower — and a fourth fork
+  appearing must not mean finding three id lists. Features check it for nil:
+  absent is the ordinary case.
+
+- **The XP bar draws on a voxel mod's battle again**, following the HUDs onto
+  the fork's world canvas when the fork says it moved them, and taking the
+  classic path in every other case. See Gen1BattleUI 1.7.0.
+
+- **`ARENA` stands down while a voxel mod is drawing the battle.** Its backdrop
+  is for a battle over white paper; behind a diorama it is a second background
+  competing with the first. See Gen1Arena 0.23.0.
+
+- **No inverted square behind the party sprites** under the message box you get
+  when picking the POKeMON you are already using. See Gen1Party 1.8.1.
+
+- **`DARK` no longer themes a wide battle as a page.** `isWhole` served two
+  callers with different tolerances: `pageZones`, reading a page's own list,
+  and `basePage`, which *guesses* whether a stack frame is a page at all.
+  Widening it for the offset layout let `basePage` accept a battle's 160-wide
+  greys band and theme the fight — everything black, no move menu. The loose
+  match is now `wholeAt` and serves `pageZones` only.
+
+- **`tools/check.py` gained two guards**, both for faults that shipped. A local
+  read above its `local` is a global read, nil at run time, and compiles
+  perfectly; that took the whole battle UI down once. And `maintained/` is now
+  compared byte for byte against its copy in `modules/`, because a fix typed
+  into one and not the other passes every other check in the file.
+
+
 ## 1.22.4
 
 - **The pale box with the black ring, round the character on the way into a

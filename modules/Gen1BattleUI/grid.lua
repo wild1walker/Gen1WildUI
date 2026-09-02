@@ -409,8 +409,11 @@ return function(mod, C)
       -- grey; C.onDark lays the matte, lifts the colour and hands back the
       -- mark, and answers nil everywhere that is not a DARK ADVANCED build.
       local mark
+      -- C.MARK_ROW, not C.ROW: the PP line is printed directly under this
+      -- one and the theme's ring would otherwise eat its top row.
       local darkInk, done = C.onDark(ink, { x = x, y = ty,
-                                            w = C.width(text), h = C.ROW })
+                                            w = C.width(text),
+                                            h = C.MARK_ROW })
       if darkInk then ink, mark = darkInk, done end
       C.inked(ink, function() Font.draw(text, x, ty) end)
       if mark then mark() end
@@ -439,8 +442,11 @@ return function(mod, C)
       local text = C.shorten(type_, 64)
       local ink = C.option("type_colour", true) and C.typeInk(def.type)
       local mark
+      -- Nothing is printed under this one, but a marked row is a marked row
+      -- and the two panels should not disagree about how tall one is.
       local darkInk, done = C.onDark(ink, { x = 232, y = 128,
-                                            w = C.width(text), h = C.ROW })
+                                            w = C.width(text),
+                                            h = C.MARK_ROW })
       if darkInk then ink, mark = darkInk, done end
       C.inked(ink, function() Font.draw(text, 232, 128) end)
       if mark then mark() end

@@ -51,6 +51,47 @@ class Problems:
         self.warnings.append(message)
 
 
+# ------- and a local that is read before it is declared
+#
+# `luac -p` and `luajit -bl` both accept it: a name used above its `local` is
+# valid syntax, it is just not that local.  It compiles to a GLOBAL read, which
+# is nil, and calling nil raises at run time on whatever frame reaches it.
+#
+# That shipped.  Gen1BattleUI's battle.overlay called `hookHudSnap()` fifty
+# lines above the `local function hookHudSnap`, so every frame of every battle
+# raised inside the one line of that hook not wrapped in a pcall -- and the mod
+# had already told the engine it owned the battle menu, so the vanilla one
+# stayed hidden too.  The whole battle UI was simply absent, and every test
+# passed, because nothing here stood the file up and ran a frame.
+#
+# The rule is narrow enough to have no judgement in it: a name read as a GLOBAL
+# in a file that also declares it as a LOCAL is a forward reference, always.
+# Legitimate global use is not flagged, because it is not also a local; a local
+# that shadows nothing is not flagged, because it is never read as a global.
+#
+# The one exception is the capture idiom -- `local unpack = unpack or
+# table.unpack` -- where the global read IS the declaration and is the point.
+# Recognised by the name appearing on its own declaration line.
+GGET = re.compile(r'\bGGET\b[^;]*;\s*"([A-Za-z_][A-Za-z0-9_]*)"')
+DECLARES = re.compile(
+    r'^[ \t]*local[ \t]+(?:function[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)(.*)$', re.M)
+
+
+def forward_locals(listing: str, source: str) -> list[str]:
+    """Names this file reads as globals and also declares as locals."""
+    read = set(GGET.findall(listing))
+    if not read:
+        return []
+    declared = set()
+    for name, rest in DECLARES.findall(source):
+        # `local x = x or ...` reads the global on purpose; anything else that
+        # mentions the name on its own line is the same idiom.
+        if name in read and re.search(r'\b' + re.escape(name) + r'\b', rest):
+            continue
+        declared.add(name)
+    return sorted(read & declared)
+
+
 def lua_binary() -> str | None:
     for candidate in ("luajit", "lua5.1", "lua"):
         if shutil.which(candidate):
@@ -82,6 +123,13 @@ def check_lua_syntax(problems: Problems, quiet: bool) -> int:
         if result.returncode != 0:
             detail = (result.stderr or result.stdout).strip().splitlines()
             problems.error(f"{path.relative_to(ROOT)}: {detail[0] if detail else 'did not compile'}")
+        elif binary == "luajit":
+            source = path.read_text(encoding="utf-8", errors="replace")
+            for name in forward_locals(result.stdout, source):
+                problems.error(
+                    f"{path.relative_to(ROOT)}: `{name}` is read above the "
+                    "`local` that declares it, so it is a global there and "
+                    "nil at run time")
         checked += 1
     if not quiet:
         print(f"  lua syntax: {checked} files")
@@ -301,6 +349,73 @@ def check_sources(problems: Problems, features: list[dict], quiet: bool) -> None
 
     if not quiet:
         print(f"  sources:    {tracked} tracked, {owned} maintained here")
+
+
+def check_maintained_copies(problems: Problems, quiet: bool) -> None:
+    """A maintained module and the copy the game loads are the same file.
+
+    `maintained/<Dir>` is the source and `modules/<Dir>` is the copy the
+    bundle actually reads -- runtime/bundle.lua builds every entry path as
+    `modules/<dir>/<entry>`, and tools/pack.py leaves `maintained/` out of the
+    archive entirely.  Two copies, one of them shipped, and in this fork
+    nothing regenerates one from the other: there is no build.py here, so the
+    second copy is made by hand and stays right by hand.
+
+    Which makes the drift silent in the worst direction.  A fix typed into
+    `modules/` alone ships and works, so nothing complains -- and the source
+    it was supposed to have come from quietly no longer contains it.  The next
+    person to refresh the copy from its source, which is the documented
+    direction, reverts the fix and gets no warning either.
+
+    0.24.0 did exactly that.  `OUTRO_HOLD_FRAMES` -- the ten-frame hold at
+    full black that keeps the covered moment in the battle cut from being a
+    single frame, and so keeps Gen1WildQOL's autosave from writing into the
+    middle of it -- went into `modules/WidescreenBattleIntro/main.lua` and
+    never reached `maintained/`.  It sat one hand-copy away from being undone
+    for eight releases, and every check in this file passed the whole time,
+    because check_sources asks only where a feature's source IS, never
+    whether the two copies of it still agree.
+
+    So: byte for byte, both directions.  A file present in one and not the
+    other is the same fault caught a step earlier.
+    """
+    if not MAINTAINED.is_dir():
+        return
+
+    pairs = 0
+    for source_dir in sorted(p for p in MAINTAINED.iterdir() if p.is_dir()):
+        directory = source_dir.name
+        copy_dir = MODULES / directory
+        if not copy_dir.is_dir():
+            problems.error(
+                f"maintained/{directory} has no copy under modules/, so the "
+                "bundle loads nothing for it")
+            continue
+
+        pairs += 1
+        left = {p.relative_to(source_dir)
+                for p in source_dir.rglob("*") if p.is_file()}
+        right = {p.relative_to(copy_dir)
+                 for p in copy_dir.rglob("*") if p.is_file()}
+
+        for missing in sorted(left - right):
+            problems.error(
+                f"maintained/{directory}/{missing} has no counterpart in "
+                f"modules/{directory}; the game never loads it")
+        for extra in sorted(right - left):
+            problems.error(
+                f"modules/{directory}/{extra} is not in "
+                f"maintained/{directory}; the copy the game loads has a file "
+                "its source does not")
+        for shared in sorted(left & right):
+            if (source_dir / shared).read_bytes() != (copy_dir / shared).read_bytes():
+                problems.error(
+                    f"maintained/{directory}/{shared} and "
+                    f"modules/{directory}/{shared} differ; the copy the game "
+                    "loads is not the source it came from")
+
+    if not quiet:
+        print(f"  maintained: {pairs} module(s) match their copy in modules/")
 
 
 def check_module_reads(problems: Problems, quiet: bool) -> None:
@@ -561,6 +676,7 @@ def main() -> int:
     check_features(problems, features, args.quiet)
     check_option_keys(problems, features, args.quiet)
     check_sources(problems, features, args.quiet)
+    check_maintained_copies(problems, args.quiet)
     check_module_reads(problems, args.quiet)
     check_shared(problems, features, args.quiet)
     check_options_screen(problems, args.quiet)

@@ -45,6 +45,10 @@ function Bundle.install(mod, spec, features)
   -- needs none of it, and a tree built before this file existed should lose
   -- the remembering rather than the boot.
   local Settings = loadRuntime("settings")
+  -- Optional for the same reason, and absent is the ordinary case anyway:
+  -- with no voxel mod installed this resolves to nothing and every feature
+  -- that asks gets a silent no.
+  local VoxelRuntime = loadRuntime("voxel")
 
   -- Before anything reads an option.  A sealed cart has just replaced every
   -- pinned mod's options with what it pins (Loader:_applyCart), so what the
@@ -80,6 +84,10 @@ function Bundle.install(mod, spec, features)
     loader = loader,
     isGen2 = detectGen2(),
     shared = {},
+    -- Which voxel mod is installed, if any.  Built once for the bundle: the
+    -- lookup is memoised in there, so a dozen features asking costs one
+    -- `mod.find` sweep rather than a dozen.
+    voxel = type(VoxelRuntime) == "table" and VoxelRuntime.new(mod) or nil,
     -- feature id -> function returning rows an adapter wants on that
     -- feature's screen, for settings that do not live in the option schema.
     customRows = {},
@@ -340,6 +348,19 @@ function Bundle.install(mod, spec, features)
     local ok, count, word, page = pcall(theme.artProbe)
     if not ok then return 0, "-", false end
     return count or 0, word or "-", page and true or false
+  end
+
+  -- Which voxel mod this bundle found, and whether that one moves the battle
+  -- HUDs onto its world canvas -- the one thing the forks disagree about and
+  -- the thing everything drawn beside a HUD turns on.  Published as a
+  -- diagnostic rather than for anything here: nothing in the bundle reads it,
+  -- and a build standing beside no voxel mod answers nil rather than nothing,
+  -- so a caller never has to know whether the resolver is there.
+  mod.exports.voxelProbe = function()
+    if type(context.voxel) ~= "table" then return nil, false end
+    local okId, id = pcall(context.voxel.id)
+    local okSnap, snaps = pcall(context.voxel.snapsHuds)
+    return okId and id or nil, (okSnap and snaps) == true
   end
 
   mod.exports.optionValue = function(key) return optionset.read(mod, key) end

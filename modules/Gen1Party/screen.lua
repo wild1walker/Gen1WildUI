@@ -541,9 +541,57 @@ return function(mod, C)
     love.graphics.rectangle("fill", x, y, w, h)
   end
 
-  local function drawIcon(self, mon, y, selected)
+  -- ------- and not under a box somebody else put on top
+  --
+  -- A marked rectangle is blitted RAW, and raw means raw: whatever happens to
+  -- be in those pixels when the frame is composed, exempt from the palette
+  -- pass.  That is exactly right while the icon is the last thing drawn there,
+  -- and a lie the moment anything is drawn over it.
+  --
+  -- The engine draws over it.  `PartyMenu:refuse` pushes a TextBox -- "<NAME>
+  -- is already out!", the battle switch offering the POKeMON already in the
+  -- fight -- and every message box in this game stands at tile row 12, y=96
+  -- (src/render/TextBox.lua, BOX_TY).  On the ENGINE's party screen that is
+  -- exactly under the sixth row, which is why the engine never had this; on
+  -- THIS one the header box moved every row down by 24, so y=96 lands a row
+  -- and a half INTO the body.  Slot 6's icon and slot 5's HP row end up
+  -- beneath the box, and the sixth icon's mark punched a 16x16 hole of raw
+  -- white page through it -- the box's own paper, un-inverted, with its black
+  -- ink still sitting on it.
+  --
+  -- The matte goes with the mark and is not optional: a black rectangle that
+  -- is NOT marked is shade-3 pixels, which the theme maps to the page's ink
+  -- and puts a hole in the page.  So a covered row loses both, and keeps its
+  -- icon -- drawn through the palette pass like everything else and then
+  -- covered by the box, which is what a row under a box should look like.
+  --
+  -- Read off the covering state rather than assumed: a TextBox carries the
+  -- geometry it was built with (`boxTy`), and the battle's switch prompt is
+  -- one of the callers that passes its own.  A state above that does not say
+  -- where it is falls back to the row every message box in the game uses.
+  local MESSAGE_TY = 12
+
+  local function coverTop(self)
+    local stack = self.game and self.game.stack
+    local states = type(stack) == "table" and stack.states or nil
+    if type(states) ~= "table" then return nil end
+    local above, top = false, nil
+    for i = 1, #states do
+      if states[i] == self then
+        above = true
+      elseif above and type(states[i]) == "table" then
+        local ty = tonumber(states[i].boxTy) or MESSAGE_TY
+        local y = ty * 8
+        if not top or y < top then top = y end
+      end
+    end
+    return top
+  end
+
+  local function drawIcon(self, mon, y, selected, covered)
     -- before the art, and only where the art will be marked
     local rect = fullColour(self.game, mon)
+    if rect and covered and y + rect.h > covered then rect = nil end
     if rect then
       matte(ICON_X, y, rect.w, rect.h)
     end
@@ -586,6 +634,9 @@ return function(mod, C)
     end
     local nameX = ruled and NAME_X or NAME_X_WIDE
     local nameGlyphs = ruled and NAME_GLYPHS or NAME_GLYPHS_WIDE
+    -- Once for the screen, not once a row: the stack does not move between
+    -- two icons of the same frame.
+    local covered = coverTop(self)
 
     for i, mon in ipairs(party) do
       local def = game.data.pokemon[mon.species]
@@ -598,7 +649,7 @@ return function(mod, C)
       -- bar all travel together, so all of them blink together.
       local lifted = selected and carrying(self)
       if not (lifted and not flashOn(self)) then
-        drawIcon(self, mon, y, selected)
+        drawIcon(self, mon, y, selected, covered)
 
         -- cut on a glyph boundary, never a byte one: a nickname can carry
         -- NIDORAN's ♂/♀, which is one glyph across several bytes
@@ -809,6 +860,12 @@ return function(mod, C)
   Party.promptFor = promptFor
   Party.drawInto = draw
 
+  -- `coverTop` is published for tests/partycover_test.lua and nothing else.
+  -- It is the whole of the rule that keeps a marked icon from punching a raw
+  -- hole through somebody else's message box, and it is a stack walk with
+  -- no screen in it -- exactly the shape a headless test can drive, and
+  -- exactly the shape that is wrong quietly if it is wrong.
   return { new = Party.new, geometry = Party.geometry,
-           entryY = Party.entryY, promptFor = Party.promptFor }
+           entryY = Party.entryY, promptFor = Party.promptFor,
+           coverTop = coverTop }
 end

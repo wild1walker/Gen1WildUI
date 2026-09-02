@@ -59,6 +59,31 @@ return function(mod)
 
   -- One row of the tile font, which is also the row a button's label sits on.
   C.ROW = 8
+  -- ------- and the tallest a MARKED row may be
+  --
+  -- One pixel shorter than a row, and that pixel is the whole of it.
+  --
+  -- The theme rings every true-colour mark: runtime/theme.lua emits an
+  -- ART_PAGE zone one pixel larger than the rect on every side, so the raw
+  -- blit and the shaded page agree across the seam the scissor rounds
+  -- outward.  Both ends of that zone are BLACK -- shade 0 AND shade 3 -- which
+  -- is right for the ring itself, where the only canvas is flat black skirt,
+  -- and catastrophic for anything else that lands in it: ink mapped to black
+  -- on a black page is ink that is not there.
+  --
+  -- These rows are eight pixels apart and the glyph cell is eight tall, so a
+  -- full-height mark has nowhere to put its ring except the next row.  It went
+  -- into the move panel's PP line, which is printed directly under the type
+  -- name: the ring's bottom edge is that line's first pixel row, so the top
+  -- stroke of every glyph in it came out black on black and `PP` read as two
+  -- broken uprights.  Dark and ADVANCED only, because that is the only build
+  -- where onDark marks anything at all.
+  --
+  -- A row inked to the cell's last pixel would lose that pixel instead, so
+  -- this is only correct because these rows do not: the gap you can see
+  -- between the type name and the line under it IS the blank row the ring
+  -- goes in.
+  C.MARK_ROW = C.ROW - 1
 
   -- The small face's real height, for the rectangle a coloured label claims.
   -- Falls back to a tile row, which is what the face is standing in for.

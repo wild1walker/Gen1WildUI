@@ -271,9 +271,42 @@ end
 -- and it is the paper everything after it sits on -- which is why it has to
 -- be the FIRST zone: a whole-screen zone further down the list is a panel
 -- laid over a page rather than the page itself.
+-- ------- the GB frame, and the GB frame WHEREVER IT WAS PUT
+--
+-- Two questions, and keeping them apart is the whole of this.
+--
+-- `isWhole` is the strict one: the frame AT THE ORIGIN.  It is what `basePage`
+-- asks, and basePage is a GUESS -- "a list that opens on whole-screen greys is
+-- a black-and-white page whoever built it" -- made when no state on the stack
+-- claimed to be one.  A guess must stay narrow.
+--
+-- `wholeAt` is the loose one: the frame at any x, and where.  A classic
+-- 160x144 screen drawn over a WIDE battle is CENTRED by the engine before this
+-- hook sees it -- Game.lua computes classicOffset = (uiWidth - 160) / 2 and
+-- runs centerClassicZones over the zone owner's list -- so a page's own
+-- whole-screen zone arrives at x = 72, and demanding x = 0 made every such
+-- page fall through to a synthesised zone built at 0: themed at 0..160 while
+-- drawn at 72..232, right third left light and a dark strip over the battle
+-- beside it.
+--
+-- ONLY `pageZones` may use the loose one, because it runs AFTER `pageState`
+-- has already identified the page.  The question there is "where is this
+-- page's frame", not "is this a page at all".
+--
+-- 0.32.9 widened the strict one instead and shipped.  basePage then accepted a
+-- 160-wide band of greys at x = 72 belonging to something that is NOT a page,
+-- reversed it, and battles came out greyscale and garbled with no text box and
+-- no move menu.  tests/battletheme_test.lua is that case and fails on it.
 local function isWhole(zone)
   return type(zone) == "table" and zone.x == 0 and zone.y == 0
     and zone.w == 160 and zone.h == 144
+end
+
+local function wholeAt(zone)
+  if type(zone) ~= "table" then return nil end
+  if type(zone.x) ~= "number" then return nil end
+  if zone.y ~= 0 or zone.w ~= 160 or zone.h ~= 144 then return nil end
+  return zone.x
 end
 
 -- The third way in, kept from this file's first version: a list that opens on
@@ -1062,12 +1095,20 @@ function Theme.new(context)
   -- beneath it -- a page is made instead.  Every class in Theme.PAGES is
   -- opaque, so the list that came up from below is colouring a screen nobody
   -- can see and is the wrong thing to transform.
+  -- `wholeAt` rather than `isWhole`, and only here: pageState has already
+  -- said this state IS the page, so what is left to ask is where its frame
+  -- was put -- x = 72 when the engine centred it over a wide battle.
   local function pageZones(zones, state)
     if state.sgbPalettes and type(zones) == "table"
-        and isWhole(zones[1]) and type(zones[1].colors) == "table" then
+        and wholeAt(zones[1]) and type(zones[1].colors) == "table" then
       return zones
     end
-    return { { colors = GREYS, x = 0, y = 0, w = 160, h = 144 } }
+    -- Synthesised at the same x the list it stands in for was centred to, so
+    -- a page that declares no palettes over a wide battle is themed where it
+    -- is drawn.  Falling back to 0 is right for every frame the engine did
+    -- not centre, which is every classic one.
+    local x = (type(zones) == "table" and wholeAt(zones[1])) or 0
+    return { { colors = GREYS, x = x, y = 0, w = 160, h = 144 } }
   end
 
   -- ------- the matte
@@ -1546,6 +1587,7 @@ end
 -- For the tests, which have no engine to require classes out of.
 Theme.isGreys = isGreys
 Theme.isWhole = isWhole
+Theme.wholeAt = wholeAt
 Theme.basePage = basePage
 Theme.luma = luma
 Theme.reversed = reversed
