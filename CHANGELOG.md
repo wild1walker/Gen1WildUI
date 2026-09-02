@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.26.0
+
+- **The evolution screen goes dark, instead of putting a black ring round the
+  POKeMON.** Same treatment Oak's speech got in 1.24.0: it owns the frame and
+  draws a picture on it, so the old rule left it white — and `DARK` painted its
+  seam-guard ring round the sprite on a white page, which is the only thing you
+  could see.
+
+  It is a themed page now, so the background is black, and the matte paints the
+  page colour under the sprite's mark so the raw re-blit stops bringing the old
+  white page back inside it.
+
+  One wrinkle it exposed: the matte is re-laid after the screen's own page
+  fill, and that test asked for a **160x144** fill. `EvolutionState:draw` opens
+  with **160x96** — rows 0 to 11, the picture area — which wipes the matte just
+  as completely and did not match. The test now asks whether a fill covered the
+  matte, not whether it covered the screen.
+
+
 ## 1.25.0
 
 Re-pinned to **Gen1ModernBag 1.13.0**.

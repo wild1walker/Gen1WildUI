@@ -177,6 +177,12 @@ Theme.PAGES = {
   -- this is a white box on a dark page, and without the page there is nothing
   -- for the matte to match.
   "src.ui.OakSpeech",
+  -- The evolution screen, by the same reasoning: it owns the frame and draws
+  -- a picture on it, so the old rule left it white -- a black ring round the
+  -- mon on a white page, which is the intro's bug on another screen. Its art
+  -- is `trueColor` and marked, so the reversal cannot touch it, and the matte
+  -- puts the page colour under that mark.
+  "src.ui.EvolutionState",
   "src.ui.LeaguePC",
   "src.ui.OptionsMenu",
   "src.mods.ManagerState",

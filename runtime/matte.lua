@@ -151,6 +151,11 @@ Matte.SCREENS = {
   "src.ui.Diploma",
   "src.ui.DexEntryMenu",
   "src.ui.OakSpeech",
+  -- The evolution screen, for the same two reasons and with one wrinkle: its
+  -- page fill is 160x96 (rows 0-11, the picture area) rather than the whole
+  -- frame, which is why the re-lay above asks whether a fill covered the
+  -- matte rather than whether it covered the screen.
+  "src.ui.EvolutionState",
 }
 
 -- The title screen, and the row its copyright line sits on.  `TitleState`
@@ -246,13 +251,34 @@ function Matte.new(context)
       -- the screen has drawn anything else. A screen that does not clear its
       -- own page never triggers this and pays one comparison per rectangle.
       -- Painting the same colour into the same rectangles twice is harmless.
+      -- The test is "did that fill cover where the matte was", not "was it
+      -- the whole screen".  The first shape of this asked for a 160x144 fill
+      -- and so only ever fired for a screen that clears all of it.
+      -- `EvolutionState:draw` opens with 160x96 -- rows 0 to 11, the picture
+      -- area, from evos_moves.asm -- which wipes the matte just as completely
+      -- and did not match.
+      --
+      -- The FIRST overlapping fill is the page: a screen paints its ground
+      -- before it paints anything on it, and the art that follows lands on
+      -- top of the matte this puts back.
+      local function wipes(x, y, w, h)
+        if type(x) ~= "number" or type(y) ~= "number" then return false end
+        if type(w) ~= "number" or type(h) ~= "number" then return false end
+        for _, r in ipairs(rects) do
+          if x < r.x + r.w and r.x < x + w
+             and y < r.y + r.h and r.y < y + h then
+            return true
+          end
+        end
+        return false
+      end
+
       local lg = love.graphics
       local realRect = lg.rectangle
       local relaid = false
       lg.rectangle = function(mode, x, y, w, h, ...)
         local result = realRect(mode, x, y, w, h, ...)
-        if not relaid and mode == "fill"
-            and x == 0 and y == 0 and w == 160 and h == 144 then
+        if not relaid and mode == "fill" and wipes(x, y, w, h) then
           relaid = true
           lg.rectangle = realRect
           for _, rect in ipairs(rects) do paint(colour, rect) end

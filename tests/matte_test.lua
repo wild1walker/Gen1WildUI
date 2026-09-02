@@ -382,5 +382,48 @@ do
   eq(#fills, 1, "and no matte is painted onto white paper")
 end
 
+io.write("a page fill that is not the whole screen still wipes the matte\n")
+do
+  -- EvolutionState:draw opens with a 160x96 fill -- rows 0 to 11, the picture
+  -- area, from evos_moves.asm -- not the whole frame. It erases a matte laid
+  -- under the mon just as completely as a full-screen fill would, and the
+  -- first shape of the re-lay asked for 160x144 and so never fired for it.
+  --
+  -- The question is whether the fill covered the MATTE, not whether it
+  -- covered the screen.
+  local function evolutionDraw(self)
+    drawn = drawn + 1
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.rectangle("fill", 0, 0, 160, 96)   -- its page: rows 0-11
+    PaletteFX.markTrueColor(56, 32, 56, 56)          -- the mon, inside it
+  end
+
+  reset()
+  wrapped(evolutionDraw)({})
+
+  eq(#fills, 4, "two pages and a matte for each, the same as a full-screen one")
+  eq(fills[3].h, 96, "the screen's own fill is the picture area, not the frame")
+  eq(fills[4].x, 56, "and the matte that survives is laid after it")
+  eq(fills[4].y, 32, "...both axes")
+  eq(fills[4].colour[1], 0, "in the page's colour")
+end
+
+-- ------------------------------------------- and a fill that misses it
+do
+  -- A fill somewhere else on the screen is not the page and must not trigger
+  -- the re-lay, or the matte would be re-laid over whatever the screen drew
+  -- in between.
+  local function elsewhere(self)
+    drawn = drawn + 1
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.rectangle("fill", 0, 120, 160, 24)  -- a strip well clear
+    PaletteFX.markTrueColor(56, 32, 56, 56)
+  end
+
+  reset()
+  wrapped(elsewhere)({})
+  eq(#fills, 3, "a fill that misses the matte leaves it alone")
+end
+
 io.write(("\nmatte: %d passed, %d failed\n"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)
