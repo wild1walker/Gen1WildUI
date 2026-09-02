@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.26.1
+
+- **Opening the bag in a battle no longer turns the fight black and white.**
+  `colors = false` is the true-colour opt-out — a raw blit, so the pixels
+  underneath reach the screen untouched. A battle declares one, and that is how
+  its backdrop and its POKeMON keep their colours.
+
+  A `ListMenu` has no palettes of its own, so the zone list handed to the theme
+  while the bag is open still belongs to the fight underneath. The theme was
+  synthesising a whole-screen page over it, throwing that raw list away and
+  reading the battle through four greys.
+
+  A page that brought no palettes of its own now leaves a raw list alone. Its
+  own boxes are themed as panels either way, which is what makes the item list
+  and the `FIGHT` grid dark while the fight behind them keeps its colours.
+
+  Long-standing, not new — the same zones come out of 1.23.0, 1.24.0, 1.24.1
+  and 1.26.0. It shows up now because opening the bag mid-battle is the case
+  nobody had looked at.
+
+
 ## 1.26.0
 
 - **The evolution screen goes dark, instead of putting a black ring round the

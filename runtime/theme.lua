@@ -1158,6 +1158,27 @@ function Theme.new(context)
         and wholeAt(zones[1]) and type(zones[1].colors) == "table" then
       return zones
     end
+    -- ------- and a list that is somebody else's ART
+    --
+    -- `colors = false` is the true-colour opt-out: a RAW blit, so the pixels
+    -- underneath reach the screen untouched.  A battle declares one -- that is
+    -- how its backdrop and its POKeMON keep their colours -- and it owns the
+    -- frame while it does.
+    --
+    -- Open the bag in a battle and the frame is still the battle's: a
+    -- ListMenu has no palettes of its own, so the list handed in here belongs
+    -- to the fight underneath.  Synthesising a whole-screen page over it threw
+    -- that raw list away and read the battle through four greys instead --
+    -- reported as the bag turning everything behind it black and white.
+    --
+    -- A page that brought no palettes must not paint over art it did not draw.
+    -- Its own boxes are themed as PANELS either way, which is what makes the
+    -- item list and the FIGHT grid dark while the fight behind them keeps its
+    -- colours -- and `dark` already leaves a raw zone alone, because art is
+    -- not inverted.
+    if type(zones) == "table" and zones[1] and zones[1].colors == false then
+      return zones
+    end
     -- Synthesised at the same x the list it stands in for was centred to, so
     -- a page that declares no palettes over a wide battle is themed where it
     -- is drawn.  Falling back to 0 is right for every frame the engine did

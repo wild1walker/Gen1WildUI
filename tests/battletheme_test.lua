@@ -137,5 +137,27 @@ do
      "a light frame is the caller's list, whatever is on the stack")
 end
 
+-- ------------------------- a page opened ON a battle keeps the battle's art
+do
+  -- The bag, in a fight. A ListMenu has no palettes of its own, so the zone
+  -- list handed to the theme still belongs to the battle underneath -- and a
+  -- battle's list is `colors = false`, a RAW blit, which is how its backdrop
+  -- and its POKeMON keep their colours.
+  --
+  -- Synthesising a whole-screen page over that threw the raw list away and
+  -- read the fight through four greys: reported as the bag turning everything
+  -- behind it black and white. A page that brought no palettes of its own must
+  -- not paint over art it did not draw; its own boxes are themed as panels
+  -- either way.
+  local t = theme("dark")
+  local bag = { gen1wildTheme = true }        -- a page, and no sgbPalettes
+  local raw = { { colors = false, x = 0, y = 0, w = 160, h = 144 } }
+  local out = t.apply(gameWith({ battleState(), bag }), raw)
+
+  ok(out and out[1], "the frame still has a zone list")
+  eq(out and out[1] and out[1].colors, false,
+     "and the battle's raw blit is still raw, so the fight keeps its colours")
+end
+
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)
