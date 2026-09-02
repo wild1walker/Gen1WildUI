@@ -440,6 +440,28 @@ local function recordBox(tx, ty, tw, th)
   boxes[boxCount] = { x = x, y = y, w = tw * 8, h = th * 8 }
 end
 
+-- ------- is this rectangle standing on a box the theme is going to take
+--
+-- Asked of the boxes recorded SO FAR this frame, which is exactly the right
+-- set: a screen paints a box before it paints what goes in it, so by the time
+-- the art inside it is marked the box is already here.
+--
+-- Containment rather than overlap.  The question is what the art is standing
+-- ON -- what the seam around it will be read through -- and a box that merely
+-- clips a corner of it is not that.
+local function insideBox(rect)
+  if type(rect) ~= "table" then return false end
+  for i = 1, boxCount do
+    local box = boxes[i]
+    if rect.x >= box.x and rect.y >= box.y
+       and rect.x + rect.w <= box.x + box.w
+       and rect.y + rect.h <= box.y + box.h then
+      return true
+    end
+  end
+  return false
+end
+
 -- The boxes drawn since the last call, and the list is emptied by asking.
 local function takeBoxes()
   if boxCount == 0 then return nil end
@@ -750,7 +772,7 @@ end
 
 local MARK_MARK = "__gen1WildArtSkirt"
 
-local function watchArt(skirt, onPage)
+local function watchArt(skirt, shaded)
   local ok, PaletteFX = pcall(require, "src.render.PaletteFX")
   if not ok or type(PaletteFX) ~= "table" then return false end
   if rawget(PaletteFX, MARK_MARK) then return true end
@@ -813,7 +835,7 @@ local function watchArt(skirt, onPage)
       if ours and #ours < ART_CAP then
         local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h }
         ours[#ours + 1] = rect
-        local colour = onPage() and skirt() or nil
+        local colour = shaded(rect) and skirt() or nil
         if colour then paintSkirt(colour, rect, ours, artClip()) end
       end
     end
@@ -1056,6 +1078,39 @@ function Theme.new(context)
   -- a screen that is NOT itself a page: Oak's speech keeps drawing its
   -- portrait underneath the naming screen, and the naming screen is a page.
   self.onPage = onThemedPage
+
+  -- ------- and the narrower question the SKIRT actually has
+  --
+  -- The ring is not about pages.  It hides the hairline a raw-blitted rect
+  -- leaves along its own edge: `Renderer:blitCanvas` scissors each zone and
+  -- rounds outward, so on a fractional-DPI display -- a phone -- the raw
+  -- re-blit bleeds a sliver of whatever the canvas holds just outside the
+  -- mark.  Inside a box that box's PAPER is what bleeds, and on a dark screen
+  -- that is a white hairline down the side of every icon and every coloured
+  -- label.  Painting the ring the page's own colour first is what makes the
+  -- bleed invisible.
+  --
+  -- So the question is "is this art standing on something the theme shades",
+  -- and a page is only one of the two ways to be.  The other is a PANEL: on a
+  -- frame that is not a page every box drawn on it is taken and themed --
+  -- a battle's move box, the bag's item window over a fight -- and the art
+  -- inside one of those has exactly the same seam for exactly the same
+  -- reason.
+  --
+  -- Gating on the page alone was right for as long as the bag's item window
+  -- WAS a page.  It stopped being one in 1.26.2, and the hairline came back
+  -- down the right-hand side of every item icon; the same hairline was beside
+  -- the coloured move type in every battle, where there had never been a page
+  -- to turn it off.
+  --
+  -- What must NOT get a ring is art on a screen the theme leaves alone: the
+  -- intro's portraits on white paper, a character on the map. Neither is
+  -- inside a box, so neither is reached -- which is the whole of why the test
+  -- is containment in a box rather than "is anything themed on this frame".
+  local function shadedUnder(rect)
+    if onThemedPage() then return true end
+    return insideBox(rect)
+  end
 
   -- Every panel on the stack ABOVE whatever owns the frame, bottom up so a
   -- menu over a menu paints in the order the two were drawn.
@@ -1664,7 +1719,7 @@ function Theme.new(context)
       mod.log:info("sprite cells are not being watched; a character can wear "
         .. "a pale box on the way into a battle")
     end
-    if not watchArt(self.skirt, onThemedPage) then
+    if not watchArt(self.skirt, shadedUnder) then
       mod.log:info("true-colour marks are not being watched; art keeps its "
         .. "hairline on a fractional-DPI display")
     end

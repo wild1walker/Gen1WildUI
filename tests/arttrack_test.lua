@@ -1,5 +1,14 @@
 -- Recording where the art is, and ringing it, are two different jobs.
 --
+-- And the ring's own question is narrower than "is this frame a page".  It
+-- hides the hairline a raw-blitted rect leaves along its edge -- the renderer
+-- scissors each zone and rounds outward, so on a fractional-DPI display the
+-- raw re-blit bleeds a sliver of whatever the canvas holds just outside the
+-- mark, and inside a box that is the box's own white PAPER.  A page is only
+-- one of the two ways to have something shaded under the art; the other is a
+-- PANEL, and a battle's move box and the bag's item window over a fight are
+-- both panels.
+--
 -- `watchArt` wraps `markTrueColor` and does both at the same call site, and
 -- for a while it did them behind the same `if`: no skirt colour, no entry in
 -- the list. That is wrong, and wrong in a way no page-level test could see.
@@ -95,7 +104,7 @@ local function gameWith(states)
   return { stack = { states = states, top = function() return states[#states] end } }
 end
 
-io.write("art is recorded wherever it is, and ringed only on a page\n")
+io.write("art is recorded wherever it is, and ringed where it has a seam\n")
 
 -- ONE theme for both cases, on purpose. `watchArt` tags PaletteFX and refuses
 -- to wrap it twice -- the same guard that stops two bundles double-ringing a
@@ -138,6 +147,47 @@ do
   local art = t.artProbe()
   eq(art, 1, "a page records its art too")
   ok(fills > 0, "and here the ring IS painted -- there is a seam to hide")
+end
+
+-- ------------------------------ art standing on a box, on a frame with no page
+do
+  -- The reported case, twice over: the coloured move type inside a battle's
+  -- move box, and an item icon inside the bag's item window while a fight is
+  -- underneath.  Neither frame is a page -- the battle owns it and is a
+  -- picture -- but both boxes are themed as panels, so the art inside one has
+  -- the same seam a page would have given it, and the same ring hides it.
+  local battle = { isBattle = true, sgbPalettes = function() end }
+  local game = gameWith({ battle })
+  runFrame(game)
+
+  -- the box first, the way a screen draws it: paper, then what goes on it
+  Theme.recordBox(1, 11, 10, 4)             -- x 8..88, y 88..120
+  fills = 0
+  FX.markTrueColor(16, 96, 40, 8)           -- the type label, inside it
+  ok(fills > 0, "art inside a box on a bare frame is ringed -- the box is a "
+    .. "panel, and a panel is shaded")
+
+  fills = 0
+  FX.markTrueColor(16, 8, 56, 56)           -- the enemy pic, on the backdrop
+  eq(fills, 0, "and the POKeMON on the backdrop is not: no box under it, so "
+    .. "no seam to hide")
+
+  t.apply(game, nil)                        -- drain the frame
+end
+
+-- ------------------------------------- a box that only clips the art
+do
+  local battle = { isBattle = true, sgbPalettes = function() end }
+  local game = gameWith({ battle })
+  runFrame(game)
+
+  Theme.recordBox(0, 12, 20, 6)             -- x 0..160, y 96..144
+  fills = 0
+  FX.markTrueColor(16, 88, 16, 16)          -- straddles the box's top edge
+  eq(fills, 0, "a box the art only overlaps is not what the art is standing "
+    .. "on, and does not earn it a ring")
+
+  t.apply(game, nil)
 end
 
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))

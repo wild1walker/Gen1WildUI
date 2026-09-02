@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.26.3
+
+- **The white hairline down the right of every item icon, and of every
+  coloured move type, is gone.** It is the seam a raw-blitted rectangle leaves
+  along its own edge: `Renderer:blitCanvas` scissors each zone and rounds
+  outward, so on a fractional-DPI display — a phone — the true-colour re-blit
+  bleeds a sliver of whatever the canvas holds just outside the mark. Inside a
+  box that is the box's own white **paper**, which on a dark screen is a white
+  line beside the art.
+
+  The ring `DARK` paints round a mark is what hides it, and it was asked the
+  wrong question: "is this frame a page". A page is only one of the two ways
+  to have something shaded under the art. The other is a **panel** — on a
+  frame that is not a page every box drawn on it is themed, and a battle's
+  move box and the bag's item window over a fight are both panels. The art
+  inside one has the same seam for the same reason.
+
+  So the ring now goes wherever the art is standing on something the theme
+  shades. That restores what the bag had before 1.26.2 made its window a
+  panel, and fixes the same hairline beside the coloured move type in every
+  battle, where there had never been a page to turn it on.
+
+  Containment in a box, not overlap: art on a screen the theme leaves alone —
+  the intro's portraits on white paper, a character on the map — is inside no
+  box and still gets no ring, which is the black box round Oak that the gate
+  was put there for.
+
 ## 1.26.2
 
 - **Opening the bag in a battle no longer turns the fight black and white** —
