@@ -1325,6 +1325,12 @@ local function drawItemWindow(list, icons)
     Font.draw(Strings("Nothing here."), box.nameX, ITEM_ROW_TOP_Y)
   end
 
+  -- Worked out once for the window rather than per row: a marked icon under a
+  -- pop-up re-blits itself back over the pop-up, so an icon the menu covers
+  -- draws without its matte or its mark.  See icons.lua.
+  local covers = icons and icons.coversOf and icons.coversOf(list.game, list)
+    or nil
+
   local shown, sawCancel = 0, false
   for row = 1, rows do
     local i = (list.scroll or 0) + row
@@ -1334,7 +1340,9 @@ local function drawItemWindow(list, icons)
     if item.cancel then sawCancel = true end
     local y = ITEM_ROW_TOP_Y + (row - 1) * ITEM_ROW_H
     if box.iconX and icons then
-      icons.drawFor(list.game, item.value, box.iconX, y + (box.iconY or 0))
+      local iconY = y + (box.iconY or 0)
+      icons.drawFor(list.game, item.value, box.iconX, iconY,
+        icons.covered and icons.covered(covers, box.iconX, iconY) or false)
     end
     -- The column rule, on every row including CANCEL: it divides two columns
     -- rather than decorating an item, and one with gaps in it where a row

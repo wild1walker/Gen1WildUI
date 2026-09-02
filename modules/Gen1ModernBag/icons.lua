@@ -270,8 +270,76 @@ return function(mod)
   -- caller last set -- black leaves a silhouette, which is exactly what the
   -- chrome around these rows is drawing in.  Black again on the way out, so a
   -- caller can keep drawing text without knowing this happened.
-  function C.draw(image, x, y)
+  -- ------- and the pop-up standing on the list
+  --
+  -- A marked rectangle re-blits RAW once the pass composes -- AFTER anything
+  -- drawn over it in the meantime.  The bag keeps drawing its rows while a
+  -- menu is open on top of them (SORT, the item actions, TM/HM), so an icon
+  -- under that menu came back on top of it: the icon punched through the
+  -- box, with the matte's own dark cell around it.
+  --
+  -- Draw order cannot reach it, because the re-blit happens after all of it.
+  -- So the MARK is what has to go -- and the matte with it, as a pair. A
+  -- matte with no mark is a dark rectangle in the middle of a page, and the
+  -- palette pass reads those pixels as the page's ink: a hole instead of an
+  -- icon. That is the same pairing the party list makes for the same reason.
+  --
+  -- Both spellings of a box, because the engine has two: Menu.new keeps
+  -- tx/ty/tw/th and TextBox keeps boxTx/boxTy/boxTw/boxTh.
+  local function boxRect(state)
+    local function tiles(tx, ty, tw, th)
+      if type(tx) ~= "number" or type(ty) ~= "number" then return nil end
+      if type(tw) ~= "number" or type(th) ~= "number" then return nil end
+      if tw <= 0 or th <= 0 then return nil end
+      return { x = tx * 8, y = ty * 8, w = tw * 8, h = th * 8 }
+    end
+    return tiles(state.tx, state.ty, state.tw, state.th)
+        or tiles(state.boxTx, state.boxTy, state.boxTw, state.boxTh)
+  end
+
+  -- Every box a state ABOVE `self` is drawing.  Nothing below it and not
+  -- itself: the list is what owns these icons.
+  function C.coversOf(game, self)
+    local stack = game and game.stack
+    local states = type(stack) == "table" and stack.states or nil
+    if type(states) ~= "table" then return nil end
+    local out, above = nil, false
+    for i = 1, #states do
+      if states[i] == self then
+        above = true
+      elseif above and type(states[i]) == "table" then
+        local rect = boxRect(states[i])
+        if rect then
+          out = out or {}
+          out[#out + 1] = rect
+        end
+      end
+    end
+    return out
+  end
+
+  -- Does any of them lie over the cell about to be drawn at x, y?
+  function C.covered(covers, x, y)
+    if type(covers) ~= "table" then return false end
+    for _, r in ipairs(covers) do
+      if x < r.x + r.w and r.x < x + W
+         and y < r.y + r.h and r.y < y + H then
+        return true
+      end
+    end
+    return false
+  end
+
+  function C.draw(image, x, y, covered)
     if not image then return end
+    if covered then
+      -- No matte and no mark: the icon is drawn plainly and the menu above it
+      -- paints over it, which is what the player is looking at.
+      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.draw(image, x, y)
+      love.graphics.setColor(0, 0, 0, 1)
+      return
+    end
     -- The cell first, then the icon's own paper on top of it (see bakePaper).
     -- Only ever inside a rectangle about to be marked: a dark rectangle
     -- anywhere else is shade-3 pixels, which the theme would map to the
@@ -286,9 +354,9 @@ return function(mod)
   end
 
   -- Both at once, for the ordinary case.
-  function C.drawFor(game, id, x, y)
+  function C.drawFor(game, id, x, y, covered)
     local image = C.of(game, id)
-    C.draw(image, x, y)
+    C.draw(image, x, y, covered)
     return image
   end
 

@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.25.0
+
+Re-pinned to **Gen1ModernBag 1.13.0**.
+
+- **Bag icons stop punching through the pop-up on top of them.** Open `SORT`,
+  the item actions or the TM/HM list and the icons underneath came back over
+  the box, each carrying its own dark cell with it.
+
+  A marked rectangle re-blits **raw** once the pass composes — after
+  everything drawn over it in the meantime. The bag keeps drawing its rows
+  while a menu is open on them, so a marked icon under that menu reappears on
+  top of it. Draw order cannot reach it.
+
+  An icon a pop-up covers now drops its mark, and its matte with it. They go
+  as a pair: a matte with no mark is a dark rectangle the palette pass reads
+  as the page's ink, which is a hole where the icon was. The party list has
+  made the same pairing since Gen1Party 1.8.1.
+
+  `Gen1ItemInfo` carries its own copy of `icons.lua` and gets the same change,
+  as that file's header asks.
+
+
 ## 1.24.1
 
 - **Battles are dark again.** 1.24.0 turned every battle's command boxes white
