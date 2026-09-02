@@ -1326,8 +1326,9 @@ local function drawItemWindow(list, icons)
   end
 
   -- Worked out once for the window rather than per row: a marked icon under a
-  -- pop-up re-blits itself back over the pop-up, so an icon the menu covers
-  -- draws without its matte or its mark.  See icons.lua.
+  -- pop-up re-blits itself back over the pop-up, so the part of a cell a menu
+  -- stands on draws without its matte or its mark -- and only that part, or
+  -- the strip still showing beside the menu loses its colours.  See icons.lua.
   local covers = icons and icons.coversOf and icons.coversOf(list.game, list)
     or nil
 
@@ -1341,8 +1342,7 @@ local function drawItemWindow(list, icons)
     local y = ITEM_ROW_TOP_Y + (row - 1) * ITEM_ROW_H
     if box.iconX and icons then
       local iconY = y + (box.iconY or 0)
-      icons.drawFor(list.game, item.value, box.iconX, iconY,
-        icons.covered and icons.covered(covers, box.iconX, iconY) or false)
+      icons.drawFor(list.game, item.value, box.iconX, iconY, covers)
     end
     -- The column rule, on every row including CANCEL: it divides two columns
     -- rather than decorating an item, and one with gaps in it where a row

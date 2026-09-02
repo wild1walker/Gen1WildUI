@@ -284,6 +284,24 @@ return function(mod)
   -- palette pass reads those pixels as the page's ink: a hole instead of an
   -- icon. That is the same pairing the party list makes for the same reason.
   --
+  -- ------- and only as much of it as the box actually stands on
+  --
+  -- 1.13.0 dropped the pair for the whole CELL the moment a box touched any
+  -- of it, and a box that touches an icon is usually not standing on all of
+  -- it: the item tools and the SORT picker are both anchored to the right
+  -- edge and open at a width that reaches into the icon column and stops
+  -- part-way across it. What was left was a strip of icon beside the box with
+  -- no mark on it, which is an icon read through the page's four shades --
+  -- reported as the items going greyscale the moment a pop-up opened.
+  --
+  -- The cell is not the unit. What re-blits over the box is the part of it
+  -- UNDER the box, so that is the only part that has to let go, and the strip
+  -- still showing keeps its matte, its mark and its colours. Every pop-up
+  -- this bag opens is anchored to the right edge (`openMenu`: tx = 20 - tw),
+  -- so what a box leaves is a slab at the left and one number describes it.
+  -- A box that starts at or before the cell covers the lot, which is the old
+  -- behaviour for the case the old behaviour was right about.
+  --
   -- Both spellings of a box, because the engine has two: Menu.new keeps
   -- tx/ty/tw/th and TextBox keeps boxTx/boxTy/boxTw/boxTh.
   local function boxRect(state)
@@ -318,45 +336,81 @@ return function(mod)
     return out
   end
 
-  -- Does any of them lie over the cell about to be drawn at x, y?
-  function C.covered(covers, x, y)
-    if type(covers) ~= "table" then return false end
+  -- How much of the cell about to be drawn at x, y is still in the open: W
+  -- when nothing stands on it, 0 when a box stands on all of it.
+  function C.visible(covers, x, y)
+    if type(covers) ~= "table" then return W end
+    local width = W
     for _, r in ipairs(covers) do
       if x < r.x + r.w and r.x < x + W
          and y < r.y + r.h and r.y < y + H then
-        return true
+        local left = r.x - x
+        if left < 0 then left = 0 end
+        if left < width then width = left end
       end
     end
-    return false
+    return width
   end
 
-  function C.draw(image, x, y, covered)
-    if not image then return end
-    if covered then
-      -- No matte and no mark: the icon is drawn plainly and the menu above it
-      -- paints over it, which is what the player is looking at.
-      love.graphics.setColor(1, 1, 1, 1)
-      love.graphics.draw(image, x, y)
-      love.graphics.setColor(0, 0, 0, 1)
-      return
+  -- Does any of them lie over that cell at all?  Kept as the plain question,
+  -- and the one the tests ask; `C.visible` is the one `C.draw` needs.
+  function C.covered(covers, x, y)
+    return C.visible(covers, x, y) < W
+  end
+
+  -- The left slab of an icon, for a cell a box has taken the right of.  One
+  -- quad per image per width, which is at most sixteen of them and never
+  -- rebuilt: a quad a frame would be an allocation on every row of every
+  -- frame a menu is open.  An engine that cannot make one falls back to the
+  -- whole icon -- the box is drawn after this and paints over the rest -- so
+  -- the worst case is the picture 1.12.0 drew rather than no picture.
+  local slivers = setmetatable({}, { __mode = "k" })
+
+  local function sliver(image, width)
+    local per = slivers[image]
+    if not per then per = {}; slivers[image] = per end
+    if per[width] == nil then
+      local ok, made = pcall(function()
+        local iw, ih = image:getDimensions()
+        return love.graphics.newQuad(0, 0, width, H, iw, ih)
+      end)
+      per[width] = (ok and made) or false
     end
+    return per[width] or nil
+  end
+
+  -- `covers` is what `C.coversOf` answered, or nil for a row with nothing
+  -- standing on it.
+  function C.draw(image, x, y, covers)
+    if not image then return end
+    local width = C.visible(covers, x, y)
+    -- Nothing of it shows.  Drawing it anyway is what 1.13.0 did, and it is
+    -- one page-colour bug away from being wrong: an unmatted, unmarked icon
+    -- is only invisible for as long as the box above it really does paint
+    -- every pixel it claims.
+    if width <= 0 then return end
     -- The cell first, then the icon's own paper on top of it (see bakePaper).
     -- Only ever inside a rectangle about to be marked: a dark rectangle
     -- anywhere else is shade-3 pixels, which the theme would map to the
     -- page's INK and put a hole in the page.
-    matte(x, y, W, H)
+    matte(x, y, width, H)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(image, x, y)
+    local part = width < W and sliver(image, width) or nil
+    if part then
+      love.graphics.draw(image, part, x, y)
+    else
+      love.graphics.draw(image, x, y)
+    end
     if PaletteFX and PaletteFX.markTrueColor then
-      pcall(PaletteFX.markTrueColor, x, y, W, H)
+      pcall(PaletteFX.markTrueColor, x, y, width, H)
     end
     love.graphics.setColor(0, 0, 0, 1)
   end
 
   -- Both at once, for the ordinary case.
-  function C.drawFor(game, id, x, y, covered)
+  function C.drawFor(game, id, x, y, covers)
     local image = C.of(game, id)
-    C.draw(image, x, y, covered)
+    C.draw(image, x, y, covers)
     return image
   end
 

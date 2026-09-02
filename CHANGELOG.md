@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.26.2
+
+- **Opening the bag in a battle no longer turns the fight black and white** —
+  for real this time. 1.26.1 went at a case that does not happen: it made a
+  page leave a `colors = false` list alone, and a classic battle does not hand
+  the theme one. `BattleState:sgbPalettes` returns **nil** for every layout but
+  the wide one, and an empty zone list is the engine's own "blit this frame in
+  the colours it was drawn in" (`Renderer:blitCanvas` — no zones, no shader).
+  The theme was synthesising a whole-screen page over exactly that, and the
+  backdrop and the POKeMON went through four greys.
+
+  The real fault was one level up, in what counts as a page. `src.ui.ListMenu`
+  is in `Theme.PAGES` and belongs there — the shop's list, the item PC's and
+  the prize counter's are each a screen of their own. The **bag's** is not, and
+  `ListMenu` says so itself when `itemBox` is set: `isOpaque = false`, so what
+  is behind it is still on screen, and `sgbPalettes = false`, so it brought no
+  palette and the one already up stays. Together those describe a box on
+  somebody else's screen — a panel, the same thing the `START` menu is on the
+  map.
+
+  So the page walk steps over it now and carries on down to whatever really
+  owns the frame. Nothing is lost by it: the bag's own windows are themed as
+  panels either way, which is how the `START` menu over the map has always been
+  done, and the battle — or the map — behind keeps its colours.
+
+  `tests/battletheme_test.lua` runs the real shape now: a `ListMenu` with
+  `itemBox` over a battle that declares no zones. It fails against 1.26.1.
+
+- **Item icons stop going greyscale when a pop-up opens over them**
+  (Gen1ModernBag 1.13.1, mirrored into Gen1ItemInfo's copy of `icons.lua`).
+  1.25.0 had an icon drop its matte and its true-colour mark for the whole
+  16x16 cell as soon as a box touched any of it, and these boxes are anchored
+  to the right edge at whatever width their longest row needs — so one that
+  reaches into the icon column usually stops part-way across it, and the strip
+  still showing beside it was left unmarked and read through the page's
+  shades. Only the covered part lets go now; the slab still on the page is
+  drawn through a quad that stops where the box starts, and keeps its colours.
+
 ## 1.26.1
 
 - **Opening the bag in a battle no longer turns the fight black and white.**

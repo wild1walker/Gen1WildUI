@@ -47,6 +47,12 @@ local function load_(path, ...)
   return assert(load(source, "@" .. path))(...)
 end
 
+-- The theme matches a page by CLASS, so the test has to be the same table
+-- `src.ui.ListMenu` resolves to when Theme.PAGES is walked.
+local ListMenu = {}
+ListMenu.__index = ListMenu
+package.preload["src.ui.ListMenu"] = function() return ListMenu end
+
 local Theme = load_("runtime/theme.lua")
 
 -- ------------------------------------------------------------- the harness
@@ -157,6 +163,59 @@ do
   ok(out and out[1], "the frame still has a zone list")
   eq(out and out[1] and out[1].colors, false,
      "and the battle's raw blit is still raw, so the fight keeps its colours")
+end
+
+-- --------------------------- and the BAG in a battle, which is the real one
+do
+  -- The case above hand-builds a page and a raw list. The bag is neither.
+  --
+  -- `src.ui.ListMenu` is in Theme.PAGES, and rightly: the shop's list, the
+  -- PC's and the prize counter's are each a screen of their own. The bag's is
+  -- not, and ListMenu says so itself when `itemBox` is set
+  -- (ListMenu.lua:132-137): `isOpaque = false`, so what is behind it is still
+  -- on screen, and `sgbPalettes = false`, so it brought no palette and the one
+  -- already up stays. That is a BOX ON somebody else's screen -- a panel, the
+  -- same thing the START menu is on the map.
+  --
+  -- And the screen underneath is the fight, which hands the theme NO zone
+  -- list at all: `BattleState:sgbPalettes` returns nil for the classic
+  -- layout, and an empty list is the engine's "blit this frame in the colours
+  -- it was drawn in" (Renderer:blitCanvas -- no zones, no shader). Counting
+  -- the bag as a page synthesised a whole-screen palette over exactly that,
+  -- and the backdrop and the POKeMON went through four greys: reported as the
+  -- item menu in battle turning the background black and white.
+  local t = theme("dark")
+  local bag = setmetatable({ itemBox = true, isOpaque = false,
+                             sgbPalettes = false }, ListMenu)
+  Theme.recordBox(4, 2, 16, 11)               -- the item window
+  local out = t.apply(gameWith({ battleState(), bag }), nil)
+
+  ok(out and out[1], "the frame is given a zone list to hang the box on")
+  eq(out and out[1] and out[1].colors, false,
+     "and it opens RAW, so the fight behind the bag keeps its colours")
+
+  local panel
+  for _, zone in ipairs(out or {}) do
+    if type(zone.colors) == "table" and zone.x == 32 and zone.w == 128 then
+      panel = zone
+    end
+  end
+  ok(panel, "the bag's own window is still themed, as a panel on that frame")
+end
+
+-- ------------------------------------- and a list that is NOT the bag's
+do
+  -- The same class, opened the other way: no itemBox, so it is opaque and it
+  -- carries the generic whole-screen palette. That is a page and must stay
+  -- one -- the shop, the item PC, the prize counter.
+  local t = theme("dark")
+  local shop = setmetatable({ isOpaque = true,
+                              sgbPalettes = function() end }, ListMenu)
+  local zones = { { colors = GREYS, x = 0, y = 0, w = 160, h = 144 } }
+  local out = t.apply(gameWith({ shop }), zones)
+  local page = firstColors(out)
+  ok(page and page ~= GREYS and page[1] and page[1][1] < 96,
+     "a full-screen list is still a page, and DARK still reverses it")
 end
 
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))

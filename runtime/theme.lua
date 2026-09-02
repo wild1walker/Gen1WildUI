@@ -977,6 +977,41 @@ function Theme.new(context)
   -- `sgbPalettes` is the same test src/core/Game.lua uses to pick the zone
   -- list in the first place, so "owns the zones" here means exactly what it
   -- means there.
+  -- ------- the one class in Theme.PAGES that is not always a page
+  --
+  -- `src.ui.ListMenu` is in Theme.PAGES because most of what it opens IS a
+  -- page: the shop's list, the PC's, the prize counter's, every one of them a
+  -- screen of its own.  The BAG's is not, and the engine says so twice in the
+  -- same three lines (ListMenu.lua:132-137):
+  --
+  --     self.itemBox = opts.itemBox or opts.messageBox or false
+  --     if self.itemBox then
+  --       self.isOpaque = false
+  --       -- keep RunDefaultPaletteCommand's last palette: ItemMenuLoop never
+  --       -- sets its own
+  --       self.sgbPalettes = false
+  --
+  -- `isOpaque = false` is "what is behind me is still on screen" and
+  -- `sgbPalettes = false` is "I brought no palette; keep the one that is up".
+  -- Together they describe a BOX ON somebody else's screen, which is a panel
+  -- and not a page -- the same thing the START menu is on the map.
+  --
+  -- Treating it as a page synthesised a whole-screen palette and handed the
+  -- frame underneath to it.  Open the bag in a battle and that frame is the
+  -- fight: `BattleState:sgbPalettes` returns nil for the classic layout, so
+  -- the theme is given NO zone list, which is the engine's "blit this frame in
+  -- the colours it was drawn in".  A page over it turned that into four
+  -- greys over the whole screen -- the backdrop, the POKeMON, all of it --
+  -- reported as the item menu making the battle black and white.
+  --
+  -- Stepped over instead, so the walk carries on down to whatever really does
+  -- own the frame.  Nothing is lost by it: the bag's own windows are themed
+  -- as PANELS on that frame, which is how the START menu over the map has
+  -- always been done, and the map or the battle behind keeps its colours.
+  local function overlayState(state)
+    return state.sgbPalettes == false and state.isOpaque == false
+  end
+
   -- The game the current frame belongs to; see the `render.zones` wrap.
   local frameGame = nil
 
@@ -988,7 +1023,9 @@ function Theme.new(context)
       if type(state) == "table" then
         if state.gen1wildTheme ~= nil then return state, i end
         classes = classes or pageClasses()
-        if classes[getmetatable(state)] then return state, i end
+        if classes[getmetatable(state)] and not overlayState(state) then
+          return state, i
+        end
         if state.sgbPalettes then
           -- A picture with something standing on it is a page after all; see
           -- Theme.COVERED_PAGES.  Alone, it is the picture it looks like.
