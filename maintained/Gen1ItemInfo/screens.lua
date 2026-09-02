@@ -79,13 +79,43 @@ return function(mod, C, describe, wants, icons)
   -- pcItemCap into three digits overlaps it outright.  Three sibling screens
   -- where the number appears on two of them reads as a bug, so it appears on
   -- none.  BUY and SELL are four glyphs and have the room to spare.
+  --
+  -- ------- and `title`, because the engine passes none
+  --
+  -- `C.header` was written to print `list.title`, and every screen in this set
+  -- arrives with that nil: `PlayerPC` opens all three of its lists with
+  -- `ListMenu.new(game, nil, ...)` (PlayerPC.lua:98/144/176) and `ShopMenu`
+  -- does the same for BUY and SELL.  Nobody noticed at a mart, where the
+  -- header still carries the money on the right; at a PC the box came up with
+  -- a border and nothing in it.
+  --
+  -- So the name lives with the kind.  These are the PlayerPC MENU's own row
+  -- labels, word for word (PlayerPC.lua:224-226), because the header's job is
+  -- to say which of those four rows you are standing in -- and the menu itself
+  -- is still on the stack underneath, just not drawn.
+  --
+  -- ------- and `noCancel`
+  --
+  -- The `CANCEL` row is the $ff terminator, and it is on the cartridge for a
+  -- reason that has not applied since: `home/list_menu.asm` watches PAD_A and
+  -- PAD_B alike, so B has ALWAYS left one of these lists.  The row is a second
+  -- way to do what B does, and on a screen with three items it is a quarter of
+  -- the list.
+  --
+  -- Dropped rather than hidden: the engine's `leftOnCancel` only ever calls
+  -- `list:close()`, which is what B does a line later in `ListMenu:update`, so
+  -- there is no behaviour to keep -- and a row drawn but not selectable would
+  -- be worse than either.
   local MART = { feature = "mart", money = true }
   local KINDS = {
     ["BUY"]              = MART,
     ["SELL"]             = MART,
-    ["pc_item_withdraw"] = { feature = "pc" },
-    ["pc_item_deposit"]  = { feature = "pc" },
-    ["pc_item_toss"]     = { feature = "pc" },
+    ["pc_item_withdraw"] = { feature = "pc", title = "WITHDRAW ITEM",
+                             noCancel = true },
+    ["pc_item_deposit"]  = { feature = "pc", title = "DEPOSIT ITEM",
+                             noCancel = true },
+    ["pc_item_toss"]     = { feature = "pc", title = "TOSS ITEM",
+                             noCancel = true },
   }
 
   -- ------- and the two the engine does not name
@@ -142,6 +172,18 @@ return function(mod, C, describe, wants, icons)
     return ("¥%d"):format((game.save and game.save.money) or 0)
   end
 
+  -- What the header says.  The list's own title where a build gives it one --
+  -- so an engine that starts naming these is taken at its word -- and the
+  -- kind's otherwise.
+  local function headerTitle(list)
+    local own = list and list.title
+    if type(own) == "string" and own ~= "" then return Strings(own) end
+    local kind = kindOf(list)
+    local named = kind and kind.title
+    if type(named) == "string" and named ~= "" then return Strings(named) end
+    return ""
+  end
+
   local function headerRight(list)
     local kind = kindOf(list)
     if kind and kind.money then return money(list.game) end
@@ -166,7 +208,7 @@ return function(mod, C, describe, wants, icons)
 
   local function draw(self)
     C.clear()
-    C.header(Strings(self.title or ""), headerRight(self))
+    C.header(headerTitle(self), headerRight(self))
 
     local pictures = withIcons()
     local labelX = pictures and C.ICON_LABEL_X or C.LABEL_X
@@ -231,11 +273,59 @@ return function(mod, C, describe, wants, icons)
 
   -- ------- the footer
 
+  -- ------- the row that says what B says
+  --
+  -- Taken out once, at construction.  `PlayerPC:refreshRow` only ever removes
+  -- rows and re-clamps the cursor, and the list is rebuilt every time the
+  -- screen opens, so there is nothing to keep taking it out of.
+  local function dropCancel(list)
+    local items = list.items
+    if type(items) ~= "table" then return end
+    for i = #items, 1, -1 do
+      if type(items[i]) == "table" and items[i].cancel then
+        table.remove(items, i)
+      end
+    end
+    list.index = math.max(1, math.min(list.index or 1, #items))
+    if type(list.clampScroll) == "function" then pcall(list.clampScroll, list) end
+  end
+
+  -- ------- and telling the theme what this screen is
+  --
+  -- These lists are opened with `messageBox = true`, and `ListMenu.new` reads
+  -- that as `itemBox` -- which sets `isOpaque = false` and `sgbPalettes =
+  -- false` (ListMenu.lua:132-137).  Both are true of the box the ENGINE draws:
+  -- a partial window with the map showing round it, keeping whatever palette
+  -- was already up.
+  --
+  -- Neither is true of this one.  `draw` opens with `C.clear()`, a fill of the
+  -- whole 160x144, and the screen is a page from that point on.  Leaving the
+  -- engine's two flags in place said the opposite to everything that reads
+  -- them: the stack went on drawing the map underneath a screen that covers
+  -- it, and Gen1WildUI's DARK -- which stopped counting an item box as a page
+  -- in 1.26.2, correctly, because the bag's really is a box on somebody else's
+  -- screen -- themed the boxes here and left the cleared page between them
+  -- white.  A white plate behind the count and a white band under the list, on
+  -- a black screen.
+  --
+  -- Said once per frame from `update`, and again here so the first frame after
+  -- the push is already right.  `gen1wildTheme` is nil rather than false when
+  -- the feature is off: the theme's test is `~= nil`, so false would still
+  -- claim the frame.
+  local function ownsTheFrame(list, own)
+    list.gen1wildTheme = own or nil
+    list.isOpaque = own or false
+  end
+
   local function decorate(list)
     local baseUpdate, baseDraw = list.update, list.draw
     if type(baseUpdate) ~= "function" or type(baseDraw) ~= "function" then
       return list
     end
+
+    local kind = kindOf(list)
+    if kind and kind.noCancel then dropCancel(list) end
+    ownsTheFrame(list, switchedOn(list))
 
     -- The line the screen sits at when nothing is happening: the mart's
     -- greeting, or nothing at all in a PC.  Captured, not named, so a
@@ -250,7 +340,11 @@ return function(mod, C, describe, wants, icons)
     end
     list.update = function(self, dt)
       baseUpdate(self, dt)
-      if not switchedOn(self) then return end
+      -- ITEM PC SCREENS is a live option, so what this screen IS follows it
+      -- rather than being decided when the list was built.
+      local own = switchedOn(self)
+      ownsTheFrame(self, own)
+      if not own then return end
       local item = self.items and self.items[self.index]
       local text = item and describe(self.game, item.value)
       if text and (self.index ~= lastIndex or self.footer == idle
@@ -448,6 +542,9 @@ return function(mod, C, describe, wants, icons)
   M.kindOf = kindOf
   M.withIcons = withIcons
   M.coveredByPlayerPC = coveredByPlayerPC
+  M.headerTitle = headerTitle
+  M.dropCancel = dropCancel
+  M.ownsTheFrame = ownsTheFrame
   M.PC_MENU = PC_MENU
   M.KINDS = KINDS
 

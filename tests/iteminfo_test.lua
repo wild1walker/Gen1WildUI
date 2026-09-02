@@ -485,6 +485,94 @@ do
   eq(drew, 1, "switched off, the engine draws its own screen")
   on = true
 
+  -- ---- the header, which the engine never fills in
+  --
+  -- `PlayerPC` opens all three of its lists with `ListMenu.new(game, nil, ...)`
+  -- and `ShopMenu` does the same for BUY and SELL, so `list.title` is nil on
+  -- every screen this mod draws.  At a mart the money on the right hid it; at
+  -- a PC the box came up with a border and nothing in it.  The name is the
+  -- kind's now, word for word off the PlayerPC MENU's own rows, so the header
+  -- says which of those four you are standing in.
+
+  eq(screens.headerTitle({ kind = "pc_item_withdraw" }), "WITHDRAW ITEM",
+     "the withdraw list names itself")
+  eq(screens.headerTitle({ kind = "pc_item_deposit" }), "DEPOSIT ITEM",
+     "and so does the deposit list")
+  eq(screens.headerTitle({ kind = "pc_item_toss" }), "TOSS ITEM",
+     "and the toss list")
+  eq(screens.headerTitle({ kind = "pc_item_withdraw", title = "MY PC" }),
+     "MY PC",
+     "a build that DOES name its list is taken at its word")
+  eq(screens.headerTitle({ kind = "BUY" }), "",
+     "a mart list still carries its money and no title, as before")
+
+  -- ---- CANCEL, which is a second B
+  --
+  -- `home/list_menu.asm` watches PAD_A and PAD_B alike, so B has always left
+  -- one of these lists, and the engine's own `leftOnCancel` does nothing but
+  -- `list:close()`.  On a PC screen with three things in it the row is a
+  -- quarter of the list saying what the button already does.
+
+  do
+    local pc = {
+      kind = "pc_item_withdraw", index = 3, scroll = 0, game = game,
+      items = { { value = "POTION", label = "POTION", right = "x1" },
+                { value = "HP_UP", label = "HP UP", right = "x3" },
+                { cancel = true, label = "CANCEL" } },
+      draw = function() end, update = function() end,
+    }
+    screens.decorate(pc)
+    eq(#pc.items, 2, "the terminator row is gone from a PC list")
+    eq(pc.items[2].label, "HP UP", "and the items are the ones that are left")
+    eq(pc.index, 2, "a cursor that was standing on it comes back onto a row")
+
+    local mart = {
+      kind = "BUY", index = 1, scroll = 0, game = game,
+      items = { { value = "POTION", label = "POTION", right = "¥300" },
+                { cancel = true, label = "CANCEL" } },
+      draw = function() end, update = function() end,
+    }
+    screens.decorate(mart)
+    eq(#mart.items, 2, "a mart list keeps its CANCEL: leaving a shop through "
+      .. "the list is how the counter works")
+  end
+
+  -- ---- and what this screen tells the rest of the game it is
+  --
+  -- These lists are opened with `messageBox = true`, which `ListMenu.new`
+  -- reads as `itemBox`: `isOpaque = false` and `sgbPalettes = false`, both
+  -- true of the partial window the ENGINE draws and neither true of this one.
+  -- `draw` opens with a fill of the whole 160x144.
+  --
+  -- Leaving the engine's flags alone said the opposite to everything that
+  -- reads them.  The stack kept drawing the map under a screen that covers it,
+  -- and Gen1WildUI's DARK -- which stopped counting an item box as a page in
+  -- 1.26.2, correctly, because the bag's really is a box on somebody else's
+  -- screen -- themed the boxes and left the cleared page between them white.
+
+  do
+    local pc = {
+      kind = "pc_item_withdraw", index = 1, scroll = 0, game = game,
+      isOpaque = false, sgbPalettes = false,
+      items = { { value = "POTION", label = "POTION", right = "x1" } },
+      draw = function() end, update = function() end,
+    }
+    screens.decorate(pc)
+    ok(pc.gen1wildTheme, "a screen that clears the whole frame says it is a page")
+    ok(pc.isOpaque, "and that it is opaque, so nothing draws under it")
+
+    on = false
+    pc:update(0)
+    eq(pc.gen1wildTheme, nil,
+       "switched off it hands the frame back -- nil, not false, because the "
+       .. "theme's test is `~= nil`")
+    eq(pc.isOpaque, false, "and the engine's own item box is not opaque")
+    on = true
+    pc:update(0)
+    ok(pc.gen1wildTheme and pc.isOpaque,
+       "and it takes the frame again the frame after the option comes back")
+  end
+
   -- ---- the PC menu underneath the item PC
   --
   -- The item PC's menu is pushed over the Pokemon Center's own, which keeps
