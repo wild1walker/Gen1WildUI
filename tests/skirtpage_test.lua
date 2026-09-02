@@ -99,9 +99,15 @@ io.write("a skirt only where there is a seam\n")
 
 -- ------------------------------------------------- the reported case
 do
+  -- Asked of `onPage` rather than of `skirt`, because the two jobs at that
+  -- call site are separate now: `skirt` answers "what colour would a ring be
+  -- in this theme", and `onPage` answers "is there a page to ring against".
+  -- Gating the colour itself also stopped the art being RECORDED, which cost
+  -- every battle its art zone -- see arttrack_test.lua, which asserts the
+  -- ring is not painted here by counting the fills.
   local t, runFrame = theme("dark")
   runFrame(gameWith({ picture() }))
-  ok(t.skirt() == nil,
+  ok(not t.onPage(),
      "no ring round a portrait on a screen the theme does not theme")
 end
 
@@ -136,7 +142,7 @@ do
   -- Nothing is known about the screen yet, so the answer is no ring rather
   -- than a ring on a guess.
   local t = theme("dark")
-  ok(t.skirt() == nil, "and no ring before the first frame is understood")
+  ok(not t.onPage(), "and no ring before the first frame is understood")
 end
 
 -- ------------------------------------------- Oak's speech is a page now

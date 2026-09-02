@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.24.1
+
+- **Battles are dark again.** 1.24.0 turned every battle's command boxes white
+  in `DARK`. Recording *where* the true-colour art is, and painting a
+  one-pixel ring round it, happen at the same call site — and 1.24.0 put them
+  behind the same condition, so gating the ring also stopped the recording.
+
+  The list is what becomes the frame's `ART_PAGE` zone, and a screen needs
+  that zone whether or not it is a page. A battle is exactly that case: it
+  owns the frame, is deliberately not a page, and is full of marked art. It
+  lost its art zone and came back unthemed.
+
+  The two are separate now. Every mark is recorded; the ring is painted only
+  where there is a shaded page to hide a seam against, which is what 1.24.0
+  was for. `tests/arttrack_test.lua` holds them apart and fails against 1.24.0
+  on the battle case.
+
+
 ## 1.24.0
 
 - **Oak's speech is dark, and its portraits have lost their white boxes.** The

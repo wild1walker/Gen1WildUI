@@ -744,7 +744,7 @@ end
 
 local MARK_MARK = "__gen1WildArtSkirt"
 
-local function watchArt(skirt)
+local function watchArt(skirt, onPage)
   local ok, PaletteFX = pcall(require, "src.render.PaletteFX")
   if not ok or type(PaletteFX) ~= "table" then return false end
   if rawget(PaletteFX, MARK_MARK) then return true end
@@ -787,12 +787,28 @@ local function watchArt(skirt)
     local result = base(x, y, w, h)
     if before and #list > before then
       local landed = list[#list]
-      local colour = skirt()
-      local ours = colour and artList() or nil
+      -- ------- two jobs, and only one of them is the ring
+      --
+      -- RECORDING where the art is, and PAINTING a one-pixel ring round it,
+      -- used to be the same `if`: no skirt colour, no entry in the list. They
+      -- are not the same question.
+      --
+      -- The list is what `withArt` turns into the frame's ART_PAGE zone, and
+      -- every screen with true-colour art on it needs that zone whether or not
+      -- it is a page. A battle is the case that proves it: it is deliberately
+      -- not a page, so gating the list on the skirt dropped its art zone
+      -- entirely and the whole battle came back unthemed.
+      --
+      -- The ring is the narrower job. It hides the seam where a raw-blitted
+      -- mark meets a SHADED page, so it is painted only where there is a page
+      -- to shade -- on a screen the theme leaves alone it is the only thing
+      -- you can see, which is the black box round Oak and the NIDORINO.
+      local ours = artList()
       if ours and #ours < ART_CAP then
         local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h }
         ours[#ours + 1] = rect
-        paintSkirt(colour, rect, ours, artClip())
+        local colour = onPage() and skirt() or nil
+        if colour then paintSkirt(colour, rect, ours, artClip()) end
       end
     end
     return result
@@ -1572,28 +1588,6 @@ function Theme.new(context)
     self.skirt = function()
       if not skirtFX then return nil end
       if self.read() ~= "dark" then return nil end
-      -- ------- and nothing to hide a seam against
-      --
-      -- A skirt is the one-pixel ring that hides the seam where raw art meets
-      -- a SHADED page: the mark re-blits its rect untouched, the page around
-      -- it went through the palette pass, and without the ring the join shows.
-      --
-      -- On a screen the theme leaves alone there is no shaded page and so no
-      -- seam -- and the ring becomes the whole of what you see.  The screens
-      -- that are pictures rather than pages are deliberately not themed (see
-      -- Theme.PAGES): the intro, Oak's speech, the Hall of Fame. A full-colour
-      -- portrait on one of those is drawn straight onto white paper and marked
-      -- by the engine (OakSpeech.lua draws the pic itself and calls
-      -- markTrueColor on its whole rect, outside SpriteRenderer, so the sprite
-      -- gate above never sees it) -- and DARK was painting a black box round
-      -- Oak, the rival and the NIDORINO on a white screen, for a seam that was
-      -- never there.
-      --
-      -- Asked of the live stack rather than of anything this theme recorded,
-      -- because the mark happens while the frame is still drawing and
-      -- `render.zones` -- where the theme decides anything -- does not run
-      -- until every state has drawn.
-      if not onThemedPage() then return nil end
       if type(skirtFX.honorsTrueColor) == "function"
           and not skirtFX.honorsTrueColor() then
         return nil
@@ -1606,7 +1600,7 @@ function Theme.new(context)
       mod.log:info("sprite cells are not being watched; a character can wear "
         .. "a pale box on the way into a battle")
     end
-    if not watchArt(self.skirt) then
+    if not watchArt(self.skirt, onThemedPage) then
       mod.log:info("true-colour marks are not being watched; art keeps its "
         .. "hairline on a fractional-DPI display")
     end
