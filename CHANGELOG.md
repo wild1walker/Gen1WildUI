@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.24.0
+
+- **Oak's speech is dark, and its portraits have lost their white boxes.** The
+  whole intro stayed white through `DARK` — the first thing a new game shows,
+  and the one screen the theme never reached. Three things had to be true at
+  once, and each of them was a release on the nightly channel.
+
+  **It is a page now.** It was left out on purpose and the rule was right:
+  `OakSpeech:sgbPalettes` returns `wholeNamed "MEWMON"`, so it owns the frame
+  and draws pictures on it, which is the definition of a screen the theme
+  keeps away from. It is a page anyway, because a white intro is the one place
+  `DARK` stopped. Reversing it is safe precisely because the pictures on it are
+  already exempt: a full-colour portrait is `trueColor` and the engine marks
+  it, so the shade pass never touches it.
+
+  **`runtime/matte.lua` covers it.** A marked rectangle re-blits RAW, so the
+  white the screen cleared to comes back inside it however dark the page
+  around it goes. The matte paints the page colour under the mark. Oak's
+  speech was not in that list, and it is the odd one — it is not a page in its
+  own right, so the matte is gated on there being a themed page on the frame
+  at all. Without that gate the fix would paint a BLACK box onto a white
+  screen, which is the same bug pointing the other way.
+
+  **And the matte survives the screen's own page fill.** `Matte.wrap` paints
+  before the real draw, which is right for a screen handed a page the engine
+  cleared. `OakSpeech:draw` opens with a 160x144 white fill of its own, so the
+  matte went down and was erased before the portrait landed on it. It is now
+  laid a second time the moment that fill lands. This file's header already
+  named the trap — it is why the title screen is done the other way round —
+  and this is the general case it was missing.
+
+- **No black ring round a portrait on a screen the theme leaves alone.** A
+  skirt hides the seam where a raw-blitted mark meets a shaded page. Where
+  there is no shaded page there is no seam, and the ring becomes the only
+  thing on screen. It now asks whether there is a themed page, read live off
+  the stack — a mark happens while the frame is still drawing, and
+  `render.zones` does not run until every state has drawn.
+
+
 ## 1.23.0
 
 - **Voxel support, and it is a work in progress.** It works best with **potato

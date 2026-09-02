@@ -117,15 +117,22 @@ do
     "and marks its rectangle exactly once -- the recording pass stands in "
     .. "for markTrueColor rather than doubling it")
 
-  -- page, matte, page again.  The matte is the middle one, and it is the
-  -- rectangle the screen marked rather than the whole page.
-  eq(#fills, 3, "two pages and one matte")
-  eq(fills[2].x, 104, "the matte is where the art is")
-  eq(fills[2].y, 4, "...both axes")
-  eq(fills[2].w, 40, "and the size the art is")
-  eq(fills[2].h, 40, "...both axes")
-  eq(fills[2].colour[1], 0, "under DARK it is black")
-  eq(fills[2].colour[3], 0, "...on every channel")
+  -- page, matte, page again, matte again.  `screenDraw` fills its own page,
+  -- and a screen that does that WIPES a matte laid before it -- so the matte
+  -- goes down a second time the moment that fill lands.  The last one is the
+  -- one the art is drawn onto and the one the mark re-blits; the first is
+  -- what a screen that inherits an engine-cleared page uses.
+  eq(#fills, 4, "two pages, and a matte for each")
+  eq(fills[3].w, 160, "the screen's own page fill comes third")
+  eq(fills[3].h, 144, "...the whole frame, which is what wipes a matte")
+
+  local last = fills[4]
+  eq(last.x, 104, "so the matte that survives is laid after it")
+  eq(last.y, 4, "...both axes")
+  eq(last.w, 40, "and the size the art is")
+  eq(last.h, 40, "...both axes")
+  eq(last.colour[1], 0, "under DARK it is black")
+  eq(last.colour[3], 0, "...on every channel")
 end
 
 io.write("and only in ADVANCED, because only ADVANCED honours the marks\n")
@@ -335,6 +342,44 @@ do
   ok(named["src.ui.Diploma"], "the diploma")
   ok(named["src.ui.DexEntryMenu"],
     "and the engine's dex entry, for the build with POKEDEX switched off")
+end
+
+io.write("Oak's speech is mattted only while a page is standing on it\n")
+do
+  -- The screen behind the naming screen. It is not a page itself -- the intro
+  -- is a picture and Theme.PAGES leaves it out -- but it is isOpaque and it
+  -- PUSHES the naming screen instead of closing, so it goes on drawing its
+  -- portrait underneath one. That is the white box behind the rival on NEW
+  -- NAME, and no matte on the page above can reach a mark made below it.
+  local named = {}
+  for _, path in ipairs(Matte.SCREENS) do named[path] = true end
+  ok(named["src.ui.OakSpeech"], "so Oak's speech is patched like the rest")
+
+  -- ...and the trap that comes with it. Every other screen in the list is a
+  -- page in its own right, so "there is a page" was implicit and free. This
+  -- one is not, and matting it on the bare intro would paint a BLACK box onto
+  -- white paper -- a worse bug than the one being fixed, and the exact shape
+  -- of the black rings that were just taken out.
+  local page = true
+  local gated = {
+    read = theme.read,
+    matte = theme.matte,
+    onPage = function() return page end,
+  }
+  local gatedContext = { theme = gated, mod = context.mod }
+
+  reset()
+  page = true
+  Matte.new(gatedContext).wrap(screenDraw)({})
+  eq(#fills, 4, "under the naming screen the portrait gets its matte")
+  eq(fills[4].colour[1], 0, "...and it is the page colour")
+  eq(fills[4].x, 104, "...laid after the screen's own page fill, not before")
+
+  reset()
+  page = false
+  Matte.new(gatedContext).wrap(screenDraw)({})
+  eq(drawn, 1, "on the bare intro it draws once, as it always did")
+  eq(#fills, 1, "and no matte is painted onto white paper")
 end
 
 io.write(("\nmatte: %d passed, %d failed\n"):format(passed, failed))

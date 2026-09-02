@@ -134,12 +134,23 @@ local Matte = {}
 -- `src.ui.DexEntryMenu` is here for the build where POKEDEX is switched off:
 -- with it on, Gen1Dex registers its own entry screen, that instance carries
 -- its own `draw`, and this wrapper is never reached for it.
+--
+-- `src.ui.OakSpeech` is the odd one and the reason `matteColour` asks the
+-- theme whether there is a page at all.  It is NOT a page -- the intro is a
+-- picture and Theme.PAGES leaves it out on purpose -- so on its own it is
+-- white art on white paper with no box to see.  But it is `isOpaque` and it
+-- PUSHES the naming screen (OakSpeech.lua:454) rather than closing, so it
+-- goes on drawing its portrait underneath a screen that IS a page and IS
+-- themed.  The white box a player sees behind the rival on NEW NAME is Oak's
+-- speech drawing under the naming screen, and mattes on the page above it
+-- cannot reach a mark made by the state below.
 Matte.SCREENS = {
   "src.ui.TrainerCard",
   "src.ui.SummaryMenu",
   "src.ui.LeaguePC",
   "src.ui.Diploma",
   "src.ui.DexEntryMenu",
+  "src.ui.OakSpeech",
 }
 
 -- The title screen, and the row its copyright line sits on.  `TitleState`
@@ -161,6 +172,14 @@ function Matte.new(context)
       return nil
     end
     if theme.read() == "light" then return nil end
+    -- Is there a themed page on this frame at all?  Every screen above was a
+    -- page in its own right, so this was implicit and free; OakSpeech is not,
+    -- and matting it while the intro is on its own white paper would paint a
+    -- BLACK box where there is currently nothing wrong.  A theme too old to
+    -- answer keeps the previous behaviour.
+    if type(theme.onPage) == "function" and not theme.onPage() then
+      return nil
+    end
     local PaletteFX = require("src.render.PaletteFX")
     if type(PaletteFX.honorsTrueColor) == "function"
         and not PaletteFX.honorsTrueColor() then
@@ -210,7 +229,39 @@ function Matte.new(context)
       if not rects[1] then return end     -- nothing marked; pass 1 IS the frame
 
       for _, rect in ipairs(rects) do paint(colour, rect) end
-      return base(state, ...)
+
+      -- ------- and again, if the screen clears its own page
+      --
+      -- The matte above goes down BEFORE the real draw, which is right for a
+      -- screen that inherits a page the engine already cleared: the art lands
+      -- on the matte and the mark re-blits the two together.
+      --
+      -- A screen that fills its own page wipes it on the way past.
+      -- `OakSpeech:draw` opens with setColor(1,1,1,1) and a 160x144 fill
+      -- (OakSpeech.lua:699-700), so the matte was painted, erased by that
+      -- fill, and the portrait drawn onto white paper again -- the white box,
+      -- with the matte running correctly the whole time and being undone.
+      --
+      -- So it is laid down a second time the moment that fill lands, before
+      -- the screen has drawn anything else. A screen that does not clear its
+      -- own page never triggers this and pays one comparison per rectangle.
+      -- Painting the same colour into the same rectangles twice is harmless.
+      local lg = love.graphics
+      local realRect = lg.rectangle
+      local relaid = false
+      lg.rectangle = function(mode, x, y, w, h, ...)
+        local result = realRect(mode, x, y, w, h, ...)
+        if not relaid and mode == "fill"
+            and x == 0 and y == 0 and w == 160 and h == 144 then
+          relaid = true
+          lg.rectangle = realRect
+          for _, rect in ipairs(rects) do paint(colour, rect) end
+        end
+        return result
+      end
+      local drew, drawProblem = pcall(base, state, ...)
+      lg.rectangle = realRect
+      if not drew then error(drawProblem, 0) end
     end
   end
 

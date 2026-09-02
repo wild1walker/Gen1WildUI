@@ -162,6 +162,21 @@ Theme.PAGES = {
   "src.ui.Diploma",
   "src.ui.TownMap",
   "src.ui.NamingScreen",
+  -- Oak's speech, and it is the one entry here that is a PICTURE by the rule
+  -- above -- it owns the frame and draws portraits on it.  It is a page
+  -- anyway, and asked for as one: a white screen behind Oak, the rival and
+  -- the NIDORINO is the one place DARK stayed light all the way through, and
+  -- it is the first thing a new game shows.
+  --
+  -- What makes it safe to reverse is that the pictures on it are exempt from
+  -- the reversal already.  A full-colour portrait is `trueColor` and the
+  -- engine marks it (OakSpeech.lua:726), so the shade pass never touches it;
+  -- runtime/matte.lua then paints the page colour under that mark, which is
+  -- what stops the mark's raw re-blit bringing the old white page back inside
+  -- it.  Both halves are needed and neither works alone: without the matte
+  -- this is a white box on a dark page, and without the page there is nothing
+  -- for the matte to match.
+  "src.ui.OakSpeech",
   "src.ui.LeaguePC",
   "src.ui.OptionsMenu",
   "src.mods.ManagerState",
@@ -940,6 +955,9 @@ function Theme.new(context)
   -- `sgbPalettes` is the same test src/core/Game.lua uses to pick the zone
   -- list in the first place, so "owns the zones" here means exactly what it
   -- means there.
+  -- The game the current frame belongs to; see the `render.zones` wrap.
+  local frameGame = nil
+
   local function pageState(game)
     local states = game and game.stack and game.stack.states
     if type(states) ~= "table" then return nil end
@@ -964,6 +982,21 @@ function Theme.new(context)
     end
     return nil
   end
+
+  -- Whether this frame has a themed page on it at all, asked of the LIVE
+  -- stack.  Both things that paint over a true-colour mark turn on this, for
+  -- the same reason: a skirt hides the seam against a shaded page, and a matte
+  -- replaces the white a shaded page would otherwise leave inside the mark.
+  -- With no page there is no shading, the screen is still on its own white
+  -- paper, and either one would be painting a box onto a picture.
+  local function onThemedPage()
+    return pageState(frameGame) ~= nil
+  end
+
+  -- Published for runtime/matte.lua, which has to ask the same question about
+  -- a screen that is NOT itself a page: Oak's speech keeps drawing its
+  -- portrait underneath the naming screen, and the naming screen is a page.
+  self.onPage = onThemedPage
 
   -- Every panel on the stack ABOVE whatever owns the frame, bottom up so a
   -- menu over a menu paints in the order the two were drawn.
@@ -1539,6 +1572,28 @@ function Theme.new(context)
     self.skirt = function()
       if not skirtFX then return nil end
       if self.read() ~= "dark" then return nil end
+      -- ------- and nothing to hide a seam against
+      --
+      -- A skirt is the one-pixel ring that hides the seam where raw art meets
+      -- a SHADED page: the mark re-blits its rect untouched, the page around
+      -- it went through the palette pass, and without the ring the join shows.
+      --
+      -- On a screen the theme leaves alone there is no shaded page and so no
+      -- seam -- and the ring becomes the whole of what you see.  The screens
+      -- that are pictures rather than pages are deliberately not themed (see
+      -- Theme.PAGES): the intro, Oak's speech, the Hall of Fame. A full-colour
+      -- portrait on one of those is drawn straight onto white paper and marked
+      -- by the engine (OakSpeech.lua draws the pic itself and calls
+      -- markTrueColor on its whole rect, outside SpriteRenderer, so the sprite
+      -- gate above never sees it) -- and DARK was painting a black box round
+      -- Oak, the rival and the NIDORINO on a white screen, for a seam that was
+      -- never there.
+      --
+      -- Asked of the live stack rather than of anything this theme recorded,
+      -- because the mark happens while the frame is still drawing and
+      -- `render.zones` -- where the theme decides anything -- does not run
+      -- until every state has drawn.
+      if not onThemedPage() then return nil end
       if type(skirtFX.honorsTrueColor) == "function"
           and not skirtFX.honorsTrueColor() then
         return nil
@@ -1571,6 +1626,11 @@ function Theme.new(context)
       -- the frame boundary, and it is here rather than inside `apply` so a
       -- theme that has stood down still forgets what it read
       self.forget()
+      -- Kept for `self.skirt`, which runs while the frame is still DRAWING
+      -- and so cannot be handed the game the way this hook is.  The object
+      -- does not change from frame to frame -- only its stack does, and the
+      -- stack is what gets read, live, at the moment of the mark.
+      frameGame = game
       zones = nextLink(game, zones)
       if broken then return zones end
       local ok, out = pcall(self.apply, game, zones)

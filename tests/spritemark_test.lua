@@ -82,18 +82,35 @@ local OptionSet = load_("runtime/optionset.lua")
 local Theme = load_("runtime/theme.lua")
 
 local stored = {}
+local lastFrame
+
 local mod = {
   id = "ui",
   options = { define = function() end,
               get = function(_, key) return stored[key] end,
               set = function(_, key, value) stored[key] = value end },
   log = { info = function() end, warn = function() end, error = function() end },
-  hooks = { wrap = function() end },
+  hooks = { wrap = function(_, name, fn)
+    if name == "render.zones" then lastFrame = fn end
+  end },
 }
 local theme = Theme.new({ mod = mod, optionset = OptionSet.new() })
 theme.defineRow()
 theme.write("dark")
 theme.install()
+
+-- The frame this file is about is a PAGE: "a page's art is untouched, it is
+-- what the ring is for".  A skirt hides the seam between a raw-blitted mark
+-- and a SHADED page, so it is painted where there is a page and nowhere else
+-- -- and the screen has to be said out loud for the ring to be asked for.
+do
+  local page = { gen1wildTheme = true }
+  if lastFrame then
+    pcall(lastFrame, function(_, zones) return zones end,
+          { stack = { states = { page }, top = function() return page end } },
+          nil)
+  end
+end
 
 local function reset()
   for _, list in pairs(rects) do

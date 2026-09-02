@@ -81,6 +81,24 @@ local OptionSet = load_("runtime/optionset.lua")
 local Theme = load_("runtime/theme.lua")
 
 local lastMod, lastOptionSet
+-- The `render.zones` handler of the theme built most recently.
+local lastFrame
+
+-- A DARK title screen is a title with something standing on it: TitleState's
+-- own draw clears the art the moment its menu opens, so a covered title is a
+-- page (Theme.COVERED_PAGES) and is themed. That is the screen every skirt
+-- assertion below is about -- "black to row 135" is a themed screen -- and it
+-- is now said out loud, because a skirt hides the seam against a shaded page
+-- and is not painted where there is no page to shade.
+local function onDarkTitle()
+  if not lastFrame then return end
+  local title = setmetatable({ sgbPalettes = true }, TitleState)
+  local menu = { tx = 0, ty = 0, tw = 13, th = 10 }
+  pcall(lastFrame, function(_, zones) return zones end,
+        { stack = { states = { title, menu },
+                    top = function() return menu end } }, nil)
+end
+
 local function themeOver()
   local stored = {}
   local mod = {
@@ -89,7 +107,12 @@ local function themeOver()
                 get = function(_, key) return stored[key] end,
                 set = function(_, key, value) stored[key] = value end },
     log = { info = function() end, warn = function() end, error = function() end },
-    hooks = { wrap = function() end },
+    hooks = { wrap = function(_, name, fn)
+      -- Kept so a test can run a frame the way the engine does.  The skirt
+      -- reads the live stack through this, because a mark happens while the
+      -- frame is still drawing.
+      if name == "render.zones" then lastFrame = fn end
+    end },
   }
   local optionset = OptionSet.new()
   lastMod, lastOptionSet = mod, optionset
@@ -416,6 +439,7 @@ do
     local themed = themeOver()
     themed.install()
     themed.write("dark")
+    onDarkTitle()
 
     local function skirted(pass)
       current = pass
@@ -442,6 +466,7 @@ do
   local theme = themeOver()
   theme.install()
   theme.write("dark")
+  onDarkTitle()
 
   -- two rects sharing an edge at x = 40, the way a split mark does
   fills = {}
@@ -483,6 +508,7 @@ do
   local theme = themeOver()
   theme.install()
   theme.write("dark")
+  onDarkTitle()
 
   fills = {}
   theme.clipArt(136)
@@ -522,6 +548,7 @@ do
   local theme = themeOver()
   theme.install()
   theme.write("dark")
+  onDarkTitle()
   theme.clipArt(136)
   theme.apply({ stack = { states = {} } }, {})
 
