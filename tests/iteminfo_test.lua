@@ -503,8 +503,28 @@ do
   eq(screens.headerTitle({ kind = "pc_item_withdraw", title = "MY PC" }),
      "MY PC",
      "a build that DOES name its list is taken at its word")
-  eq(screens.headerTitle({ kind = "BUY" }), "",
-     "a mart list still carries its money and no title, as before")
+  eq(screens.headerTitle({ kind = "BUY" }), "BUY",
+     "and a mart list names itself beside its money")
+  eq(screens.headerTitle({ kind = "SELL" }), "SELL", "each of the two")
+
+  -- ShopMenu names neither of its lists, so which one this IS comes off what
+  -- it does: SELECT picks a row up and a second SELECT swaps the two, which is
+  -- the bag being reordered and is the SELL list's alone -- there is nothing
+  -- to reorder in a shop's stock.
+  do
+    local buy = { kind = nil, game = game }
+    screens.markMart(buy, { money = function() return 0 end })
+    eq(screens.headerTitle(buy), "BUY",
+       "a mart list with nothing to reorder is the BUY list")
+
+    local sell = { kind = nil, game = game }
+    screens.markMart(sell, { money = function() return 0 end,
+                             onSelectKey = function() end })
+    eq(screens.headerTitle(sell), "SELL",
+       "and the one you can swap rows in is the SELL list")
+    eq(screens.headerRight(sell), "¥19436", "which still carries the money")
+    eq(screens.kindOf(sell).feature, "mart", "and is still a mart screen")
+  end
 
   -- ---- CANCEL, which is a second B
   --

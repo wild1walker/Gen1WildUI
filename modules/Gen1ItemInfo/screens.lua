@@ -106,10 +106,24 @@ return function(mod, C, describe, wants, icons)
   -- `list:close()`, which is what B does a line later in `ListMenu:update`, so
   -- there is no behaviour to keep -- and a row drawn but not selectable would
   -- be worse than either.
-  local MART = { feature = "mart", money = true }
+  --
+  -- ------- and why the mart has two entries where it used to have one
+  --
+  -- One `MART` table was right for as long as neither list said anything a
+  -- header could print.  Now that the header carries a name, they need telling
+  -- apart -- and the engine names neither, so it comes off what they DO.
+  --
+  -- `onSelectKey` is the sell list's and only the sell list's: SELECT picks a
+  -- row up and a second SELECT swaps the two, which is `swap_items.asm`
+  -- reordering the bag (ShopMenu.lua:157-169).  There is nothing to reorder in
+  -- a shop's stock, so BUY passes none.  Behaviour rather than content --
+  -- a row's `price` would have said the same thing until an empty sell list
+  -- came up with only its CANCEL row on it.
+  local MART = { feature = "mart", money = true, title = "BUY" }
+  local MART_SELL = { feature = "mart", money = true, title = "SELL" }
   local KINDS = {
     ["BUY"]              = MART,
-    ["SELL"]             = MART,
+    ["SELL"]             = MART_SELL,
     ["pc_item_withdraw"] = { feature = "pc", title = "WITHDRAW ITEM",
                              noCancel = true },
     ["pc_item_deposit"]  = { feature = "pc", title = "DEPOSIT ITEM",
@@ -153,7 +167,7 @@ return function(mod, C, describe, wants, icons)
   local function markMart(list, opts)
     if type(list) ~= "table" or KINDS[list.kind] then return end
     if type(opts) ~= "table" or type(opts.money) ~= "function" then return end
-    list[OWN_KIND] = MART
+    list[OWN_KIND] = type(opts.onSelectKey) == "function" and MART_SELL or MART
   end
 
   -- One marker per patched module, so a second install (a dev hot reload, or

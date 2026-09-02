@@ -565,6 +565,27 @@ return function(mod, C)
   -- icon -- drawn through the palette pass like everything else and then
   -- covered by the box, which is what a row under a box should look like.
   --
+  -- ------- and only as much of it as the box actually covers
+  --
+  -- 1.8.1 dropped the pair for the whole CELL as soon as the box reached any
+  -- part of it, and the box's top edge does not land on a row boundary: it is
+  -- at y=96 and the rows are 24 apart from a header that moved them, so there
+  -- is a row the box cuts THROUGH rather than covers.  That row kept the top
+  -- of its icon on the page with no mark on it, and an unmarked icon is read
+  -- as four shades -- the picture above the box going grey while the ones
+  -- above it stayed in colour.
+  --
+  -- The cell is not the unit.  What re-blits over the box is the part of it
+  -- UNDER the box, so that is the only part that has to let go; the strip
+  -- still on the page keeps its matte and its mark.  The icon is drawn whole
+  -- either way -- the box is painted after this and covers the rest -- so
+  -- clipping the RECTANGLE is the whole of it.  The box's top edge is a
+  -- horizontal, so one number describes what is left.
+  --
+  -- Gen1ModernBag makes the same cut for the same reason (1.13.1), sideways:
+  -- its pop-ups are anchored to the right edge, so what they leave is a slab
+  -- at the left rather than a band at the top.
+  --
   -- Read off the covering state rather than assumed: a TextBox carries the
   -- geometry it was built with (`boxTy`), and the battle's switch prompt is
   -- one of the callers that passes its own.  A state above that does not say
@@ -588,10 +609,20 @@ return function(mod, C)
     return top
   end
 
+  -- How much of an icon at `y` is still clear of the box, or nil for none of
+  -- it.  A copy, never the cached rect `fullColour` hands back: that one is
+  -- keyed by mon and shared by every row the mon is standing in.
+  local function clipped(rect, y, covered)
+    if not (rect and covered) then return rect end
+    local visible = covered - y
+    if visible <= 0 then return nil end
+    if visible >= rect.h then return rect end
+    return { w = rect.w, h = visible }
+  end
+
   local function drawIcon(self, mon, y, selected, covered)
     -- before the art, and only where the art will be marked
-    local rect = fullColour(self.game, mon)
-    if rect and covered and y + rect.h > covered then rect = nil end
+    local rect = clipped(fullColour(self.game, mon), y, covered)
     if rect then
       matte(ICON_X, y, rect.w, rect.h)
     end
@@ -860,12 +891,14 @@ return function(mod, C)
   Party.promptFor = promptFor
   Party.drawInto = draw
 
-  -- `coverTop` is published for tests/partycover_test.lua and nothing else.
-  -- It is the whole of the rule that keeps a marked icon from punching a raw
-  -- hole through somebody else's message box, and it is a stack walk with
-  -- no screen in it -- exactly the shape a headless test can drive, and
-  -- exactly the shape that is wrong quietly if it is wrong.
+  -- `coverTop` and `clipped` are published for tests/partycover_test.lua and
+  -- nothing else.  Between them they are the whole of the rule that keeps a
+  -- marked icon from punching a raw hole through somebody else's message box
+  -- -- where the box starts, and how much of a cell is left above it -- and
+  -- both are arithmetic with no screen in it: exactly the shape a headless
+  -- test can drive, and exactly the shape that is wrong quietly if it is
+  -- wrong.
   return { new = Party.new, geometry = Party.geometry,
            entryY = Party.entryY, promptFor = Party.promptFor,
-           coverTop = coverTop }
+           coverTop = coverTop, clipped = clipped }
 end

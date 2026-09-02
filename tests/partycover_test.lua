@@ -15,9 +15,17 @@
 -- hole of raw white page through it -- the box's own paper, un-inverted, with
 -- its black ink still on it.
 --
--- So the subject here is one question -- where does the covering start -- and
--- the numbers are the point, because being wrong by a row is invisible until
--- somebody has six POKeMON and loses a battle switch.
+-- So the subject here is two questions -- where does the covering start, and
+-- how much of a cell is left above it -- and the numbers are the point,
+-- because being wrong by a row is invisible until somebody has six POKeMON
+-- and loses a battle switch.
+--
+-- The second question is the one 1.8.1 did not ask.  It dropped the matte and
+-- the mark for the whole CELL as soon as the box reached any part of it, and
+-- the box's top edge does not land on a row boundary: slot 5 runs 88..104
+-- against a box at 96, so it is CUT rather than covered.  The half of it still
+-- on the page went unmarked, and an unmarked icon is read as four shades --
+-- one picture going grey while the four above it stayed in colour.
 --
 -- Run:  luajit tests/partycover_test.lua
 
@@ -86,6 +94,8 @@ local Screen = load_("modules/Gen1Party/screen.lua")({ theme = function() end },
 
 local coverTop = Screen.coverTop
 ok(type(coverTop) == "function", "coverTop is exposed")
+local clipped = Screen.clipped
+ok(type(clipped) == "function", "and so is clipped")
 
 -- A stack is a list; the screen is somewhere in it and things above it cover.
 local function screenIn(states, self)
@@ -150,6 +160,36 @@ do
   -- Without a box up, no row is covered: the suite's own footer starts at 120
   -- and the body was sized to hold all six.
   eq(entryY(6) + ICON, 120, "slot 6 ends exactly where the footer box begins")
+end
+
+-- ------------------------------- and how much of a cut row is left over
+--
+-- The rectangle handed to the matte and the mark, against a box at 96.  Slot 5
+-- is the case that matters: half of it is under the box and half of it is not,
+-- and the half that is not has to keep its mark or it loses its colours.
+do
+  local BODY_TOP, ICON = 24, 16
+  local function entryY(i) return BODY_TOP + (i - 1) * ICON end
+  local art = { w = 16, h = 16 }
+
+  eq(clipped(art, entryY(1), 96), art,
+     "a row clear of the box keeps the rectangle it was given, unchanged")
+  eq(clipped(art, entryY(4), 96), art, "and so does the last clear one")
+
+  local cut = clipped(art, entryY(5), 96)
+  ok(cut ~= nil, "the row the box cuts through still has a rectangle")
+  eq(cut and cut.h, 8, "clipped to what is above the box -- 88..96")
+  eq(cut and cut.w, 16, "and its full width: the box's edge is a horizontal")
+  ok(cut ~= art, "and it is a COPY -- fullColour caches one rect per mon, and "
+    .. "every row that mon stands in shares it")
+  eq(art.h, 16, "so the cached rectangle is not shortened by being read")
+
+  eq(clipped(art, entryY(6), 96), nil,
+     "a row entirely under the box has nothing to mark")
+
+  -- and with nothing standing on the screen at all
+  eq(clipped(art, entryY(6), nil), art, "no box, no clipping")
+  eq(clipped(nil, entryY(1), 96), nil, "a mon with no colour art is still nil")
 end
 
 io.write(("\n%d passed, %d failed\n"):format(passed, failed))
