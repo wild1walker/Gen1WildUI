@@ -49,6 +49,13 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y luajit
 
+      - name: Checkout the engine
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ENGINE_REPO }}
+          ref: ${{ env.ENGINE_REF }}
+          path: engine
+
       - name: modules/ is what the submodules build
         working-directory: mod
         run: python3 tools/build.py --check
@@ -57,8 +64,15 @@ jobs:
         working-directory: mod
         run: python3 tools/check.py
 
+      # The Gen 2 suites read the cartridge's own source to check what they
+      # assert against -- a palette, a seam, a struct -- and skip themselves
+      # when they cannot find an engine tree.  A skipped suite exits 0, so
+      # without this they reported success while asserting nothing.  The engine
+      # is checked out above for exactly this reason.
       - name: Bundle test suites
         working-directory: mod
+        env:
+          GEN1RECOMP: ${{ github.workspace }}/engine
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -72,13 +86,6 @@ jobs:
             echo "--- $suite"
             luajit "$suite"
           done
-
-      - name: Checkout the engine
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.ENGINE_REPO }}
-          ref: ${{ env.ENGINE_REF }}
-          path: engine
 
       - name: Place the bundle in the engine tree
         run: |
