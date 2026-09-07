@@ -233,6 +233,23 @@ return function(mod, C)
   local BALL_X, BALL_R = 140, 3.5
   local NAME_X = 16
 
+  -- ------- and the width, by the same arithmetic
+  --
+  -- Both boxes on this screen are the full twenty tiles, so both have the
+  -- same interior: text starts one tile in at x 8, and the right border owns
+  -- 152 onward.  Eighteen glyphs, which is what HEAD_GLYPHS already says
+  -- about the box above -- said once here rather than twice by coincidence.
+  --
+  -- The empty-state line was drawn at NAME_X, which is where a mon's NAME
+  -- goes because a CURSOR sits at 8 in front of it.  "NOTHING LIVES HERE" is
+  -- eighteen glyphs; from 16 they end at 160, and the last one was drawn
+  -- straight through the right border.  It is a message, not a row -- there
+  -- is no cursor beside it and nothing to line it up with -- so it goes where
+  -- the box's other text goes.
+  local TEXT_X = 8
+  local LIST_RIGHT = 20 * 8 - 8 - 1        -- last interior pixel: x 151
+  local EMPTY = "NOTHING LIVES HERE"
+
   -- ------- more below
   --
   -- Six rows fill this box's interior exactly, so unlike the item list and
@@ -333,7 +350,7 @@ return function(mod, C)
 
       Font.drawBox(0, LIST_TY, 20, LIST_TH)
       if #self.rows == 0 then
-        Font.draw("NOTHING LIVES HERE", NAME_X, ROW_Y0)
+        Font.draw(clip(EMPTY), TEXT_X, ROW_Y0)
         love.graphics.setColor(1, 1, 1, 1)
         return
       end
@@ -367,6 +384,10 @@ return function(mod, C)
   Inspect.LIST_BOTTOM = LIST_BOTTOM
   Inspect.MORE_X = MORE_X
   Inspect.MORE_Y = MORE_Y
+  Inspect.NAME_X = NAME_X
+  Inspect.TEXT_X = TEXT_X
+  Inspect.LIST_RIGHT = LIST_RIGHT
+  Inspect.EMPTY = EMPTY
 
   -- ------- the press
 

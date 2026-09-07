@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.27.2
+
+- **"NOTHING LIVES HERE" no longer runs through the box border** (Gen1Dex
+  1.11.2). On a POKéDEX AREA place with no encounters, the line was drawn at
+  the x the mon *names* use — one tile further in than the box's own text,
+  because a cursor normally sits in front of a name. Eighteen glyphs from
+  there end past the right border, and the last one was drawn on top of it. It
+  sits where the box's other text sits now, and is clipped to the same budget
+  the header uses.
+
 ## 1.27.1
 
 - **BILL'S BOX now reaches Gold's PC menu** (Gen1BillsBox 1.7.1). Reported as
