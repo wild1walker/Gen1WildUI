@@ -2146,8 +2146,52 @@ local function loadIcons(mod)
   return value
 end
 
+-- The Gold arm, loaded the same way icons.lua is: a mod cannot require its
+-- own files, so `mod:read` plus `load` is the supported route.  Returns the
+-- module table, or nil and a reason.
+local function loadGen2(mod)
+  if type(mod.read) ~= "function" then return nil, "no mod:read here" end
+  local ok, source = pcall(mod.read, mod, "gen2.lua")
+  if not ok or not source then return nil, "gen2.lua is missing" end
+  local chunk, problem = load(source, "@" .. tostring(mod.path) .. "/gen2.lua")
+  if not chunk then return nil, tostring(problem) end
+  local built, value = pcall(chunk)
+  if not built or type(value) ~= "table" then
+    return nil, tostring(value)
+  end
+  return value
+end
+
 return function(mod)
-  if mod.options and type(mod.options.define) == "function" then
+  -- ------- which arm
+  --
+  -- Asked once.  On Gold the unlimited-inventory patch still runs -- it is on
+  -- the shared `src.inventory.Bag` -- and everything else this mod does is
+  -- replaced by gen2.lua, because Gold's PACK already has the pockets and the
+  -- descriptions that are most of what this mod gives Red's.
+  local isGen2 = false
+  do
+    local ok, GameVersion = pcall(require, "src.core.GameVersion")
+    if ok and type(GameVersion) == "table"
+        and type(GameVersion.generation) == "function" then
+      local okCall, generation = pcall(GameVersion.generation)
+      isGen2 = okCall and generation == 2
+    end
+  end
+
+  -- On Gold this mod replaces no screen, so all but one of the rows below are
+  -- settings for a bag that is not there.  A row that cannot do anything is
+  -- worse than a missing one, so Gold gets the one that governs what this mod
+  -- actually adds -- and it is live, so OFF is the cart's own PACK back with
+  -- nothing to relaunch.
+  if isGen2 then
+    if mod.options and type(mod.options.define) == "function" then
+      mod.options:define({
+        { key = "gen2_pack", type = "toggle", label = "PACK EXTRAS",
+          default = true },
+      })
+    end
+  elseif mod.options and type(mod.options.define) == "function" then
     mod.options:define({
       {
         key = "opening_pocket",
@@ -2274,6 +2318,33 @@ return function(mod)
     local bagOk, Bag = pcall(require, "src.inventory.Bag")
     if not bagOk or not installUnlimitedInventory(Bag, game, mod) then
       mod.log:warn("Gen1ModernBag could not remove inventory limits; src.inventory.Bag was unavailable")
+    end
+
+    -- ------- Gold, Silver and Crystal
+    --
+    -- The unlimited-inventory patch above is generation-agnostic and has
+    -- already run: `src/inventory/Bag.lua` is shared, and Gold's own PackMenu
+    -- requires it (PackMenu.lua:13) and orders its rows through it.  So the
+    -- cap is lifted on both carts by the same two wraps.
+    --
+    -- Everything BELOW this point is Red's bag: `src.ui.BagMenu` is a Gen 1
+    -- module Gold never instantiates, and the pocket screen this mod
+    -- registers is a replacement for a screen Gold does not have.  Gold's
+    -- PACK already has pockets and item descriptions, so what is left is how
+    -- a pocket's list is built -- and that is gen2.lua.
+    if isGen2 then
+      local Gen2Bag, why = loadGen2(mod)
+      if not Gen2Bag then
+        mod.log:warn("Gen1ModernBag could not load gen2.lua: %s", tostring(why))
+        return
+      end
+      local arm = Gen2Bag.new(mod)
+      local okInstall, problem = pcall(arm.install)
+      if not okInstall then
+        mod.log:error("the Gold pack additions did not install: %s",
+                      tostring(problem))
+      end
+      return
     end
 
     local ok, BagMenu = pcall(require, "src.ui.BagMenu")

@@ -269,6 +269,15 @@ return function(mod)
     return { shade[1] * gain, shade[2] * gain, shade[3] * gain }
   end
 
+  -- Published for the Gold arm, which needs the same lift for the same reason
+  -- and gets there by a different road.  Gen 1 has to leave the palette pass
+  -- to keep a colour at all (C.onDark below); Gen 2 themes by handing each
+  -- draw its own four numbers, so a stencilled glyph is never in a palette
+  -- pass to begin with and the colour survives on its own.  What does NOT
+  -- survive is legibility: the table above is written dark because it was
+  -- written for black ink on a white box.  See gen2grid.lua.
+  C.vivid = vivid
+
   -- The colour to lay under the letters, or nil for "nothing to do here".
   -- Three ways to answer nil and each is a whole build that pays nothing: no
   -- theme, LIGHT, or a mode that discards the mark anyway.

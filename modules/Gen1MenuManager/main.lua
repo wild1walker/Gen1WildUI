@@ -14,6 +14,23 @@
 
 local SCREEN = "Gen1MenuManagerEditor"
 
+-- Which game this is.  One row below is Gold's only -- Red's START menu has
+-- no descriptions to turn off -- and a row that cannot do anything is worse
+-- than a missing one, so it is appended rather than declared.
+local isGen2
+local function gen2()
+  if isGen2 == nil then
+    isGen2 = false
+    local ok, GameVersion = pcall(require, "src.core.GameVersion")
+    if ok and type(GameVersion) == "table"
+        and type(GameVersion.generation) == "function" then
+      local okCall, generation = pcall(GameVersion.generation)
+      isGen2 = okCall and generation == 2
+    end
+  end
+  return isGen2
+end
+
 local function loadSibling(mod, name)
   local source = mod:read(name)
   if not source then
@@ -71,6 +88,30 @@ return function(mod)
     { key = "select_row", type = "toggle", label = "SELECT ROW",
       default = false },
   })
+
+  -- ------- Gold's row descriptions
+  --
+  -- Gold's START menu carries a second box in the bottom-left describing
+  -- whichever row the cursor is on -- `.MenuDesc` / `._DrawMenuAccount`, two
+  -- lines per entry, which is why every item in the cart's list ships with
+  -- two lines of text.  Red has nothing of the sort, so this row is Gold's
+  -- only and is appended rather than declared above.
+  --
+  -- OFF by default, which is a deliberate departure from the cart: the box
+  -- covers the bottom-left tenth of the screen on every frame the menu is
+  -- open, and a player who has arranged their own menu knows what their rows
+  -- do.  Arranging it is what this feature is for.
+  --
+  -- ON does NOT force them back on -- it stands down and leaves the cart's
+  -- own `MENU ACCOUNT` to decide, which is the switch Gold already has for
+  -- this on its OPTION screen.  So the two never argue: this row can take the
+  -- descriptions away, and giving them back is the game's own setting.
+  if gen2() then
+    mod.options:define({
+      { key = "row_hints", type = "toggle", label = "ROW HINTS",
+        default = false },
+    })
+  end
 
   -- ------- persistence
   --
@@ -197,6 +238,109 @@ return function(mod)
   local pending = {}
   local startMenuId = nil
 
+  -- ------- re-opening the START menu
+  --
+  -- The editor is reached FROM the START menu and has to put it back on the
+  -- way out, and how you put it back is the one thing the two games disagree
+  -- about here.
+  --
+  -- Red's `StartMenu.new(game)` takes the game and nothing else: it builds
+  -- every row's `onSelect` itself and the engine's own way in is a bare
+  -- `Screens.push(Game, "StartMenu")` (src/world/OverworldController.lua).
+  -- So pushing the learned screen id was not a shortcut there, it was the
+  -- engine's own call spelled out.
+  --
+  -- Gold's is `StartMenu.new(game, opts)`, and `onChoose` and `onClose` are
+  -- PUSH OPTIONS -- Game2:openStartMenu supplies both. A bare push builds a
+  -- menu with neither, and the menu that comes back is inert in exactly the
+  -- two ways a player would report it: `choose` ends in `if self.onChoose
+  -- then` and nothing opens, `close` ends in `if self.onClose then` and B and
+  -- START do not shut it. The rows draw, the cursor moves, and there is no
+  -- way out of it except a soft reset.
+  --
+  -- Which is why this asks the GAME to open its own menu when it has a method
+  -- for it, and only falls back to the id it learned when there is none. The
+  -- fallback is Red's path and stays exactly what it was; the method is
+  -- Gold's, and it does the two things a re-open there also owes the world --
+  -- cancelling the map-name sign and stopping the player -- which a bare push
+  -- skipped as well.
+  --
+  -- ------- and the menu it was opened FROM is still there
+  --
+  -- Red's `Menu` pops itself before it runs a row's onSelect, so by the time
+  -- the editor opens, the START menu is off the stack and the re-open puts
+  -- back the only one. Gold's `StartMenu:choose` does NOT pop -- it runs
+  -- onSelect and returns -- so the editor sits ON TOP of a live START menu,
+  -- and a re-open makes a SECOND one behind it. Two identical menus stacked:
+  -- B pops one and the other is still there, which reads exactly as "you
+  -- can't close it".
+  --
+  -- So the stale one is dropped first. Popping it rather than reusing it is
+  -- deliberate: the menu under the editor was built from the layout the
+  -- player just CHANGED, so reusing it would show the old order.
+  local function isStartMenu(state)
+    if type(state) ~= "table" then return false end
+    if contexts.start.menu ~= nil and state == contexts.start.menu then
+      return true
+    end
+    return startMenuId ~= nil and state.screenId == startMenuId
+  end
+
+  local function dropStaleStartMenus(game)
+    local stack = game and game.stack
+    if type(stack) ~= "table" then return end
+    if type(stack.top) ~= "function" or type(stack.pop) ~= "function" then
+      return
+    end
+    -- Bounded: a stack this mod has misread is a bug to survive, not a loop
+    -- to run until the game is empty.
+    for _ = 1, 4 do
+      local top = stack:top()
+      if not isStartMenu(top) then return end
+      stack:pop()
+      if contexts.start.menu == top then contexts.start.menu = nil end
+    end
+  end
+
+  -- ------- and a menu that is pushed by id still needs its two callbacks
+  --
+  -- Gold's `choose` ends in `if self.onChoose then` and its `close` in `if
+  -- self.onClose then`, and both come from the PUSH OPTIONS. So a bare push
+  -- builds a menu that opens nothing and does not shut -- the rows draw, the
+  -- cursor moves, and there is no way out but a soft reset. These are the two
+  -- Game2:openStartMenu supplies, synthesized the same way the engine's own
+  -- Gen 1 facade synthesizes them (src/mods/Gen2Compat.lua), so the fallback
+  -- path cannot produce that menu either.
+  --
+  -- nil on Red, where `StartMenu.new(game)` takes no options and builds every
+  -- row's onSelect itself.
+  local function startMenuOptions(game)
+    if type(game.openStartMenuItem) ~= "function" then return nil end
+    return {
+      save = game.save,
+      onClose = function()
+        if game.stack and type(game.stack.pop) == "function" then
+          game.stack:pop()
+        end
+      end,
+      onChoose = function(id) game:openStartMenuItem(id) end,
+    }
+  end
+
+  local function reopenStartMenu(game)
+    if not game then return end
+    dropStaleStartMenus(game)
+    if type(game.openStartMenu) == "function" then
+      local ok, problem = pcall(game.openStartMenu, game)
+      if ok then return end
+      mod.log:warn("the START menu would not re-open through the game: %s",
+                   tostring(problem))
+    end
+    if startMenuId then
+      mod.ui.push(game, startMenuId, startMenuOptions(game))
+    end
+  end
+
   local function openEditor(game, ctx, key, onCancel)
     mod.ui.push(game, SCREEN, { context = key, onCancel = onCancel })
   end
@@ -206,6 +350,36 @@ return function(mod)
     if key == "start" then
       local id = state.screenId
       if type(id) == "string" and id ~= "" then startMenuId = id end
+      -- The backstop, and it is here rather than beside the push because it
+      -- is the only place that sees EVERY start menu: this mod's hook runs on
+      -- construction, so a menu built by any route at all arrives here.
+      --
+      -- A Gold START menu with neither callback cannot be left by any means
+      -- the player has. Filling in the two nils turns the worst outcome this
+      -- mod can cause into no outcome at all -- and it only ever fills in a
+      -- nil, so a menu the game opened properly is untouched.
+      -- The descriptions, on the instance rather than through a redraw: it
+      -- is the same field Gold's own MENU ACCOUNT sets
+      -- (`self.showDescription = options.menuAccount ~= false`), read by
+      -- `StartMenu:draw` on every frame, so this is the cart's own switch
+      -- rather than a second way of saying the same thing.  Only ever set
+      -- FALSE -- see the ROW HINTS note.
+      if gen2() and mod.options:get("row_hints") ~= true then
+        state.showDescription = false
+      end
+      local options = startMenuOptions(game)
+      if options then
+        if type(state.onChoose) ~= "function" then
+          state.onChoose = options.onChoose
+          mod.log:warn("a START menu arrived with no onChoose; supplying "
+            .. "one, or its rows would open nothing")
+        end
+        if type(state.onClose) ~= "function" then
+          state.onClose = options.onClose
+          mod.log:warn("a START menu arrived with no onClose; supplying one, "
+            .. "or B and START would not shut it")
+        end
+      end
     end
 
     local baseUpdate = state.update
@@ -218,7 +392,7 @@ return function(mod)
           -- onSelect), so the shortcut does the same and re-opens after
           game.stack:pop()
           openEditor(game, ctx, key, function()
-            if startMenuId then mod.ui.push(game, startMenuId) end
+            reopenStartMenu(game)
           end)
         else
           -- the PC menu stays open under its sub-screens (keepOpen), so the
@@ -313,7 +487,7 @@ return function(mod)
         openEditor(game, contexts[key], key, key == "start" and function()
           -- vanilla submenus return to the START menu on B
           -- (RedisplayStartMenu); this is StartMenu's own `reopen`
-          if startMenuId then mod.ui.push(game, startMenuId) end
+          reopenStartMenu(game)
         end or nil)
       end,
     }

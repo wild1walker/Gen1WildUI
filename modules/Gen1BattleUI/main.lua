@@ -85,7 +85,86 @@ local function loadSibling(mod, name)
   return value
 end
 
+-- Which game this is.  Gold, Silver and Crystal get the Gold arm below --
+-- gen2grid.lua, the command menu's frame and nothing else -- because
+-- everything else in this file is an answer to something Gen 2 already
+-- shipped: the 2x2 layout, the XP bar and its sounds, the level-up stat box
+-- over its own line.  See features.lua and gen2grid.lua's header.
+local function isGen2()
+  local ok, GameVersion = pcall(require, "src.core.GameVersion")
+  if not (ok and type(GameVersion) == "table"
+          and type(GameVersion.generation) == "function") then
+    return false
+  end
+  local okCall, generation = pcall(GameVersion.generation)
+  return okCall and generation == 2
+end
+
 return function(mod)
+  if isGen2() then
+    -- Five rows, and every one of them is a setting on something Gold's own
+    -- battle does differently.  The other five this file defines below are
+    -- settings on machinery Gold shipped for itself -- its XP bar, its
+    -- level-up stat box, its ball sprites -- and a row that cannot do
+    -- anything is worse than a missing one.
+    mod.options:define({
+      -- The four commands in four boxes instead of four words in one.  Off is
+      -- the cart's own menu, prompt and all.
+      { key = "command_grid", type = "toggle", label = "COMMAND GRID",
+        default = true },
+      -- The four moves in the same four boxes instead of a list.  Off is
+      -- Gold's own list with its own MoveInfoBox beside it.
+      { key = "move_grid", type = "toggle", label = "MOVE GRID",
+        default = true },
+      -- The panel over the move grid: the highlighted move's name whole, its
+      -- type and its PP.  It is where two columns inside 160 pixels pay back
+      -- the name width a cell costs -- THUNDERSHOCK is THUNDER. on a button
+      -- and THUNDERSHOCK here -- and it sits where Gold's own MoveInfoBox
+      -- sat, covering what that box covered.
+      { key = "move_panel", type = "toggle", label = "MOVE PANEL",
+        default = true },
+      -- The move NAME on each button and the TYPE in the panel, in the type's
+      -- own colour.  A tile glyph is black on transparent and setColor cannot
+      -- reach it, so the letters are stencilled by a shader that keeps each
+      -- glyph's alpha and supplies the RGB itself -- the game's own font
+      -- throughout, in a different ink.  A host with no shaders, and a type
+      -- this mod has no colour for, both draw in the box's own ink.
+      { key = "type_colour", type = "toggle", label = "TYPE COLOUR",
+        default = true },
+      -- The BUTTONS in the engine's own Plain Pixel, so a name too long for
+      -- the seven glyphs a cell has prints whole instead of being cut.  Off
+      -- -- the default -- is the game's own font, cut to the cell.  The panel
+      -- above already reads the whole name.
+      { key = "full_names", type = "toggle", label = "FULL NAMES",
+        default = false },
+    })
+    if not (type(mod.hooks) == "table"
+            and type(mod.hooks.wrap) == "function") then
+      error("this engine has no hook bus, and the hooks are the whole mod", 0)
+    end
+    -- The same drawing kit Red's arm uses.  It is written against
+    -- `src.render.Font`, which both generations share, and the Gold arm takes
+    -- from it exactly the parts that are about GLYPHS rather than about
+    -- boxes: the type inks, the stencil that colours a tile glyph, the narrow
+    -- face and the measuring.  Boxes and cursors come from Gold's own Chrome
+    -- instead, because those are what UI THEME reaches.
+    local C = loadSibling(mod, "chrome.lua")(mod)
+    if type(C) ~= "table" then
+      error(("chrome.lua did not build the drawing kit (got %s)")
+              :format(type(C)), 0)
+    end
+    local Gen2 = loadSibling(mod, "gen2grid.lua")(mod, C)
+    if not (type(Gen2) == "table" and type(Gen2.install) == "function") then
+      error("gen2grid.lua did not build the Gold battle menus", 0)
+    end
+    Gen2.install()
+    mod.exports = mod.exports or {}
+    mod.exports.geometry = Gen2.geometry
+    mod.exports.owns = Gen2.owns
+    mod.exports.panelRect = Gen2.panelRect
+    return
+  end
+
   mod.options:define({
     -- The panel above the move grid: the highlighted move's full name, its
     -- type and its PP.  It is where the classic layout pays back the name

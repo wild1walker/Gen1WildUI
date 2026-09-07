@@ -64,7 +64,7 @@ local GREENBAR = { { 255, 255, 255 }, { 120, 230, 120 }, { 30, 160, 30 },
 
 local function theme(mode)
   return Theme.new({
-    mod = { id = "gen1_wild_ui_nightly",
+    mod = { id = "gen1_wild_ui",
             log = setmetatable({}, { __index = function() return function() end end }),
             hooks = { wrap = function() end },
             events = { on = function() end, once = function() end } },

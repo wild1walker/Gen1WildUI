@@ -25,7 +25,7 @@
 -- POKeMON reaches the POKeMON and nothing else.  Shade 1 is the trap: MEWMON
 -- paints it {239,156,107}, which is how a grey rule comes out orange.
 
-return function(mod)
+return function(mod, isGen2)
   local Font = require("src.render.Font")
 
   local C = {}
@@ -64,13 +64,58 @@ return function(mod)
   C.BODY_BOTTOM = 119           -- last pixel row before the footer box
   C.LEFT, C.RIGHT = 8, 152      -- the text margins, on every screen
 
+  -- ------- paper and ink, and why only Gold reads them
+  --
+  -- `C.black` and `C.white` are the two colours every screen in this mod
+  -- draws with: the ink it prints in and the paper it prints ON.  They were
+  -- literal, and on Gold that was wrong in a way that shows.
+  --
+  -- Red's theme reverses the WHOLE FRAME after it is drawn, through the SGB
+  -- zone list -- so painting literal white and literal black here is right
+  -- there, and reading a palette would reverse them a second time.
+  --
+  -- Gold has no such pass.  Its colour is per tile, out of
+  -- `Chrome.DEFAULT_BOX_PALETTE`, which the theme rewrites IN PLACE -- so a
+  -- screen that paints its own white and black has to paint them through that
+  -- table or it paints the cart's light look onto a dark page.  Which is what
+  -- this did: the page went dark and every label arrived as a WHITE BOX with
+  -- black letters in it, because `Font.drawBox` fills its interior white and
+  -- `C.black` printed black on top.  Reported as "in dark mode those words
+  -- should just be white, not in white boxes".
+  --
+  -- Read LIVE rather than at build: the theme rewrites those four numbers on
+  -- `core.update`, so a row drawn this frame has to ask this frame.
+  local liveBox
+  if isGen2 then
+    local okChrome, Gen2Chrome = pcall(require, "src.ui.gen2.Chrome")
+    if okChrome and type(Gen2Chrome) == "table" then
+      liveBox = Gen2Chrome.DEFAULT_BOX_PALETTE
+    end
+  end
+
+  -- Colour 0 is the paper and colour 3 is the ink -- the two a theme owns, and
+  -- the same two `Chrome.printThrough` paints a cell and its glyphs with.
+  local function shadeAt(index, fallback, scale)
+    local c = liveBox and liveBox[index]
+    if type(c) ~= "table" then return fallback end
+    return { c[1] / scale, c[2] / scale, c[3] / scale }
+  end
+
+  -- 0..1, for setColor.
+  function C.paper() return shadeAt(1, { 1, 1, 1 }, 255) end
+  function C.inkShade() return shadeAt(4, C.BLACK, 255) end
+  -- 0..255, which is what Font.drawBox's `fill` takes.
+  function C.paperFill() return shadeAt(1, { 255, 255, 255 }, 1) end
+
   function C.ink(shade)
     love.graphics.setColor(shade[1], shade[2], shade[3], 1)
   end
 
-  function C.black() C.ink(C.BLACK) end
+  -- The names are the Gen 1 ones and the call sites are unchanged; what they
+  -- MEAN is "the ink" and "the paper", which on Red are still black and white.
+  function C.black() C.ink(C.inkShade()) end
 
-  function C.white() love.graphics.setColor(1, 1, 1, 1) end
+  function C.white() C.ink(C.paper()) end
 
   function C.option(key, fallback)
     local ok, value = pcall(function() return mod.options:get(key) end)
@@ -157,21 +202,25 @@ return function(mod)
 
   -- ------- the two boxes
   --
-  -- Drawn white-then-black in that order because Font.drawBox fills its
-  -- interior with the CALLER's colour rules but draws its border glyphs in
-  -- whatever colour is current, and the glyph pages are black on transparent.
-  -- Setting black before the call is what keeps a leaked white from painting
-  -- the next label white on white.
+  -- Drawn ink-then-ink around the call because Font.drawBox fills its interior
+  -- from its own `fill` argument but draws its border glyphs in whatever
+  -- colour is current, and the glyph pages are black on transparent.  Setting
+  -- the ink before the call is what keeps a leaked paper colour from painting
+  -- the next label paper-on-paper.
+  --
+  -- The interior is the PAGE's colour, not white.  Left to its default it is
+  -- white "everywhere in Gen 1 and on nearly every Gold screen" (Font.drawBox
+  -- says so), which is exactly right until the page under it goes dark.
 
   function C.headerBox()
     C.black()
-    Font.drawBox(0, 0, 20, C.HEADER_TH)
+    Font.drawBox(0, 0, 20, C.HEADER_TH, C.paperFill())
     C.black()
   end
 
   function C.footerBox()
     C.black()
-    Font.drawBox(0, C.FOOTER_TY, 20, 3)
+    Font.drawBox(0, C.FOOTER_TY, 20, 3, C.paperFill())
     C.black()
   end
 

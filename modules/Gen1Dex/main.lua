@@ -53,7 +53,25 @@ local function loadSibling(mod, name)
 end
 
 return function(mod)
-  mod.options:define({
+  -- ------- which arm, asked once
+  --
+  -- Read before the schema, because the rows differ, and before the siblings
+  -- are LOADED, because on Gold most of them must not be: list.lua and
+  -- entry.lua reach `PartyMenu.drawIcon` and `BattleState.askNicknameUI`,
+  -- neither of which Gold has, and they register over `PokedexMenu` and
+  -- `DexEntryMenu` -- two ids Gold never builds, its own being
+  -- `Gen2PokedexMenu`.
+  local isGen2 = false
+  do
+    local ok, GameVersion = pcall(require, "src.core.GameVersion")
+    if ok and type(GameVersion) == "table"
+        and type(GameVersion.generation) == "function" then
+      local okCall, generation = pcall(GameVersion.generation)
+      isGen2 = okCall and generation == 2
+    end
+  end
+
+  local schema = {
     -- Every POKéMON on the screen in its own species colours, over the plain
     -- grey ramp -- which is what makes the icons worth having and what the
     -- rest of this set looks like.  Off puts the vanilla dex brown back and
@@ -94,6 +112,12 @@ return function(mod)
     -- turned them off.
     { key = "area_hints", type = "toggle", label = "AREA HINTS",
       default = true },
+    -- Crystal animates a POKeMON's picture when its #DEX entry opens, the way
+    -- the SUMMARY page already does.  Off leaves the still picture the entry
+    -- drew before.  On Gold and Silver there are no frames to play and the row
+    -- changes nothing.
+    { key = "dex_anim", type = "toggle", label = "DEX ANIMATION",
+      default = true },
     -- A over a town you can FLY to, on the AREA map, IS a flight.  The
     -- screen is the town map; if the party can fly and the cursor is over
     -- somewhere flyable, making you close it and come back through the START
@@ -129,9 +153,307 @@ return function(mod)
     -- other two.
     { key = "map_inspect", type = "toggle", label = "MAP INSPECT",
       default = true },
-  })
+  }
+
+  -- ------- the rows, per generation
+  --
+  -- Ten of the eleven above are settings for screens this mod REPLACES, and
+  -- on Gold it replaces none of them: the list, the search, the AREA map and
+  -- the nickname prompt are all the cart's there.  A row that cannot do
+  -- anything is worse than a missing one -- it is a switch the player flips
+  -- and watches not work -- so Gold gets the one row that governs what this
+  -- mod actually adds there.
+  local GEN2_ROWS = {
+    gen2_pages = true,
+    -- The START menu is on both cartridges, so this row always meant
+    -- something here -- it was simply never installed (see installDexLabel).
+    dex_label = true,
+    -- The line under the AREA map.  Gold's AREA page is the cart's, but the
+    -- caption under it is this mod's on both cartridges -- see gen2area.lua,
+    -- which reads Gold's own encounter tables and draws one row at the very
+    -- bottom of the map.  So the row means here exactly what it means on Red:
+    -- off is the cartridge's AREA page and nothing else.
+    area_hints = true,
+    -- And the press that reaches it.  Gold refuses A on an undiscovered row
+    -- exactly the way Red does, so the row means the same thing on both --
+    -- with more behind it here, because on Gold AREA is an action ON the
+    -- entry rather than a screen of its own, so the entry opens too.  Masked;
+    -- see gen2unseen.lua.
+    area_unseen = true,
+    -- Crystal's front pics carry an animation and the SUMMARY page already
+    -- plays it; the #DEX entry did not.  Gold and Silver caches have no
+    -- `anim` row at all, so on those two the row governs nothing -- it is
+    -- the CART that decides, not the generation, so a cache with animation
+    -- added by a mod gets it too.  See gen2anim.lua.
+    dex_anim = true,
+  }
+
+  -- The LIST's own rows: SELECT's three views, the cursor wrap and the
+  -- coloured names.  They mean the same thing on both carts, but only once
+  -- the list is this mod's -- so they are offered only when DEX LIST is on.
+  --
+  -- With Gold's own dex as the default (below), leaving them on the menu
+  -- unconditionally would have put three controls there that do nothing,
+  -- which is the complaint that started the Gen 2 work in the first place:
+  -- "none of our start qol options are working on gen 2 like they did in
+  -- gen 1".  A row that cannot act is worse than a row that is not there.
+  --
+  -- Read before `define`, which is fine: optionset.read answers from the
+  -- player's stored settings and does not need the row to exist yet.  No
+  -- stored answer means no list, which is the same test the registration
+  -- below makes -- so the menu and the screen cannot disagree.
+  local GEN2_LIST_ROWS = {
+    view_cycle = true,
+    wrap = true,
+    species_colours = true,
+  }
+
+  if isGen2 then
+    local listOn = mod.options:get("gen2_list") == true
+    local kept = {}
+    for _, row in ipairs(schema) do
+      if GEN2_ROWS[row.key] or (listOn and GEN2_LIST_ROWS[row.key]) then
+        kept[#kept + 1] = row
+      end
+    end
+    -- STATS, EVOLVES and MOVES on the entry screen.  Live: the wrap reads it
+    -- on every frame and every press, so OFF is Gold's own two-page entry
+    -- back with nothing to relaunch.
+    kept[#kept + 1] = { key = "gen2_pages", type = "toggle",
+      label = "EXTRA DEX PAGES", default = true }
+    -- This mod's list in place of the cart's: the icon column, the ball
+    -- column, the SEEN/OWN footer and SELECT's three views.  Off is Gold's
+    -- own list back, exactly as the cartridge draws it -- which is why it is
+    -- a switch and not an assumption.
+    --
+    -- OFF by default now, because that is the dex that was asked for:
+    -- "I do want to use the gold Pokedex", and then "we want to use the gold
+    -- dex now, but fix some things".  Gold's own list is the better starting
+    -- point on this cartridge -- it already runs the whole 251, already opens
+    -- on the Johto order out of `dex.newOrder`, and already has the cart's
+    -- three sorts behind SELECT, all of which this mod's list had to be taught
+    -- one bug at a time.  What it needs is theming, not replacing.
+    --
+    -- Still a switch, and still built: a player who turned it ON keeps it,
+    -- and turning it on is how the icon column and the ball column come back.
+    kept[#kept + 1] = { key = "gen2_list", type = "toggle",
+      label = "DEX LIST", default = false }
+    schema = kept
+  end
+
+  mod.options:define(schema)
+
+  -- ------- START SAYS DEX, which is not a Gen 1 row
+  --
+  -- It renames the overworld START menu's dex entry, and that menu is on both
+  -- cartridges.  It used to be registered at the BOTTOM of this file, below
+  -- the generation branch -- so a Gold boot returned before ever reaching it,
+  -- and the row was neither offered nor installed.  One of the START menu
+  -- options that "stopped working on Gen 2".
+  --
+  -- Declared here, above the branch, and installed by whichever arm runs.
+  local function installDexLabel(option)
+    mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
+      local out = next(game, items)
+      if type(out) ~= "table" then return out end
+      -- read per open rather than once at load, so flipping START SAYS DEX in
+      -- the manager shows up the next time the menu is opened
+      if not option("dex_label", true) then return out end
+      local ok, Strings = pcall(require, "src.core.Strings")
+      if not ok then return out end
+      -- Both the translated word and the source one: Gold hands hooks its rows
+      -- before it translates them, so the translated form alone finds nothing
+      -- there once a translation is installed.  Identical strings in English.
+      local vanilla, source = Strings("POKéDEX"), Strings.source("POKéDEX")
+      for _, item in ipairs(out) do
+        if item.label == vanilla or item.label == source then
+          item.label = item.translateLabel and Strings.source("DEX")
+            or Strings("DEX")
+        end
+      end
+      return out
+    end)
+  end
 
   local DexData = loadSibling(mod, "dexdata.lua")
+
+  -- ------- what this mod publishes
+  --
+  -- The whole of dexdata.lua, and it is published BEFORE the generation
+  -- branch on purpose: it is pure, it reads Gen 1 and Gen 2 datasets alike
+  -- (see `DexData.statKeys`), and it is this mod's public surface.  A sibling
+  -- that asks for `buildStats` should get it whichever cart is running --
+  -- losing it on Gold would be a silent regression for anything built on it.
+  mod.exports.buildList = DexData.list
+  mod.exports.buildMoves = DexData.moves
+  mod.exports.buildMoveRows = DexData.moveRows
+  mod.exports.buildStats = DexData.stats
+  mod.exports.buildDescription = DexData.description
+  mod.exports.seenSpecies = DexData.seenSpecies
+  mod.exports.modeLabels = DexData.MODE_LABELS
+  mod.exports.nextMode = DexData.NEXT_MODE
+
+  if isGen2 then
+    -- Gold's dex keeps its list, its search and its AREA screen; what it has
+    -- no answer for is base stats, evolutions and the learnset, and that is
+    -- all this adds.  See gen2.lua.
+    installDexLabel(function(key, fallback)
+      local value = mod.options:get(key)
+      if value == nil then return fallback end
+      return value
+    end)
+
+    local Gen2Dex = loadSibling(mod, "gen2.lua")
+    local arm = Gen2Dex.new(mod, DexData)
+    local ok, problem = pcall(arm.install)
+    if not ok then
+      mod.log:error("the Gold dex pages did not install: %s", tostring(problem))
+    end
+
+    -- ------- and the line under the AREA map
+    --
+    -- Built and published whether or not the wrap took, for the reason the
+    -- Gen 1 arm gives at the same place: `provide` is how another mod hands
+    -- this screen its words, and a caller that finds nothing to register with
+    -- has no way to tell "absent" from "broken".  Its failure is survivable --
+    -- an AREA page with blinking nests and no caption is the cartridge's own
+    -- AREA page -- so this logs and carries on.
+    local makeGen2Area = loadSibling(mod, "gen2area.lua")
+    if type(makeGen2Area) == "function" then
+      local areaOk, Area = pcall(makeGen2Area, mod, DexData)
+      if areaOk and type(Area) == "table" then
+        local installed, why = pcall(Area.install)
+        if not installed then
+          mod.log:error("the Gold AREA caption was not wrapped: %s",
+                        tostring(why))
+        end
+        -- The same four names Red publishes, so a mod that captions a species
+        -- registers once and gets both cartridges.  `cols` is one number here
+        -- rather than the second line's budget, because the strip is one line.
+        mod.exports.area = {
+          provide = Area.provide,
+          caption = Area.caption,
+          probe = Area.probe,
+          cols = Area.COLS,
+          unknown = Area.UNKNOWN,
+        }
+      else
+        mod.log:error("the Gold AREA caption did not build: %s", tostring(Area))
+      end
+    end
+
+    -- ------- and the picture moves, where the cart has frames for it
+    --
+    -- Built before the pic placeholder and the mask so both wrap outside it: a
+    -- species with no picture never reaches an animation, and a masked entry's
+    -- question mark is not something to animate either.
+    local makeAnim = loadSibling(mod, "gen2anim.lua")
+    if type(makeAnim) == "function" then
+      local animOk, Anim = pcall(makeAnim, mod, DexData)
+      if animOk and type(Anim) == "table" then
+        local installed, why = pcall(Anim.install)
+        if not installed then
+          mod.log:error("the #DEX animation was not wrapped: %s", tostring(why))
+        end
+      else
+        mod.log:error("the #DEX animation did not build: %s", tostring(Anim))
+      end
+    end
+
+    -- ------- the pic the cart cannot find
+    --
+    -- Built before the mask, so the mask's wrap sits outside this one too.
+    -- `PokedexMenu:drawPic` returns silently before it draws ANYTHING when a
+    -- species' picture does not resolve, which is a black square on the page
+    -- and no way to tell it from the mod not being installed.  This puts the
+    -- cart's own question mark there instead and says once, in the log, which
+    -- link broke.  See gen2pic.lua.
+    local makePic = loadSibling(mod, "gen2pic.lua")
+    if type(makePic) == "function" then
+      local picOk, Pic = pcall(makePic, mod, DexData)
+      if picOk and type(Pic) == "table" then
+        local installed, why = pcall(Pic.install)
+        if not installed then
+          mod.log:error("the missing-pic placeholder was not wrapped: %s",
+                        tostring(why))
+        end
+      else
+        mod.log:error("the missing-pic placeholder did not build: %s",
+                      tostring(Pic))
+      end
+    end
+
+    -- ------- and the press that reaches it
+    --
+    -- Last of the three, and deliberately: its wraps have to sit OUTSIDE the
+    -- other two.  The mask works by shadowing four of the screen's own methods
+    -- for the duration of one call, so it has to be the outermost wrap for the
+    -- extra pages and the AREA caption to draw underneath it already masked --
+    -- an inner wrap would run before the shadows were in place and name the
+    -- POKeMON in the middle of a screen built to hide it.
+    --
+    -- Its failure is survivable and fails CLOSED: without it Gold's own dead
+    -- press on an undiscovered row is back, which is the cartridge.
+    local makeUnseen = loadSibling(mod, "gen2unseen.lua")
+    if type(makeUnseen) == "function" then
+      local unseenOk, Unseen = pcall(makeUnseen, mod, DexData)
+      if unseenOk and type(Unseen) == "table" then
+        local installed, why = pcall(Unseen.install)
+        if not installed then
+          mod.log:error("AREA ON UNSEEN was not wrapped on Gold: %s",
+                        tostring(why))
+        end
+      else
+        mod.log:error("AREA ON UNSEEN did not build on Gold: %s",
+                      tostring(Unseen))
+      end
+    end
+
+    -- ------- and the list, in this suite's own shape
+    --
+    -- Registered over the cart's `Gen2PokedexMenu`, which is the id Gold
+    -- pushes.  Everything the list does not draw is handed back to the cart's
+    -- own screen -- the entry, the AREA map with its blinking nests across
+    -- both regions, SEARCH and UNOWN MODE -- by building one and pointing it
+    -- at the species the cursor is on.  So nothing Gold has is
+    -- re-implemented to stand still, and this is a list rather than a
+    -- Pokédex.
+    --
+    -- The chrome is the same file both games' screens draw from, which is
+    -- what makes this the same screen on both carts rather than two that
+    -- resemble each other.  Without it the list cannot draw, so a chrome that
+    -- did not build leaves Gold's own list alone.
+    if mod.options:get("gen2_list") == true then
+      local makeChrome = loadSibling(mod, "chrome.lua")
+      local makeGen2List = loadSibling(mod, "gen2list.lua")
+      local C
+      if type(makeChrome) == "function" then
+        -- `true` is the generation: on Gold the chrome reads the theme's
+        -- live palette for its paper and ink, because nothing reverses the
+        -- frame afterwards the way Red's SGB zones do.
+        local chromeOk, built = pcall(makeChrome, mod, true)
+        if chromeOk and type(built) == "table" then C = built end
+      end
+      if not (C and type(makeGen2List) == "function") then
+        mod.log:warn("the shared chrome did not build; Gold keeps its own "
+          .. "dex list")
+      else
+        local listOk, List = pcall(makeGen2List, mod, DexData, C)
+        if not (listOk and type(List) == "table"
+                and type(List.new) == "function") then
+          mod.log:error("the Gold dex list did not build: %s", tostring(List))
+        else
+          -- Screens.resolve prefers the registry over the builtin module, so
+          -- registering the cart's own id is what puts this list in front of
+          -- it -- and a boot without this mod still finds Gold's.
+          mod.content.screens:register("Gen2PokedexMenu", { new = List.new })
+          mod.log:info("the POKeDEX list is this suite's on Gold")
+        end
+      end
+    end
+    return
+  end
+
   local makeChrome = loadSibling(mod, "chrome.lua")
   local makeList = loadSibling(mod, "list.lua")
   local makeEntry = loadSibling(mod, "entry.lua")
@@ -273,31 +595,12 @@ return function(mod)
   -- label goes through Strings too, so that mod can name it in its own
   -- language.  Nothing else that says POKéDEX moves: the SAVE panel's dex
   -- count and the list's own header are separate text.
-  mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
-    local out = next(game, items)
-    if type(out) ~= "table" then return out end
-    -- read per open rather than once at load, so flipping START SAYS DEX in
-    -- the manager shows up the next time the menu is opened
-    if not C.option("dex_label", true) then return out end
-    local ok, Strings = pcall(require, "src.core.Strings")
-    if not ok then return out end
-    local vanilla, short = Strings("POKéDEX"), Strings("DEX")
-    for _, item in ipairs(out) do
-      if item.label == vanilla then item.label = short end
-    end
-    return out
+  installDexLabel(function(key, fallback)
+    return C.option(key, fallback)
   end)
 
   -- The pure builders, for the suite and for any mod that wants the same
   -- answers this screen is drawing without opening it.
-  mod.exports.buildList = DexData.list
-  mod.exports.buildMoves = DexData.moves
-  mod.exports.buildMoveRows = DexData.moveRows
-  mod.exports.buildStats = DexData.stats
-  mod.exports.buildDescription = DexData.description
-  mod.exports.seenSpecies = DexData.seenSpecies
-  mod.exports.modeLabels = DexData.MODE_LABELS
-  mod.exports.nextMode = DexData.NEXT_MODE
 
   mod.log:info("the Pokédex has icons")
 end

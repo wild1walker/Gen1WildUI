@@ -62,7 +62,7 @@ package.preload["src.render.Renderer"] = function() return Renderer end
 -- `installed` is what mod.voxel.id() answers: nil when there is no voxel mod,
 -- which is most installs.
 local installed = nil
-local mod = { id = "gen1_wild_ui_nightly", exports = {}, stored = {},
+local mod = { id = "gen1_wild_ui", exports = {}, stored = {},
               hooked = {}, events_on = {},
               voxel = { id = function() return installed end } }
 mod.options = {

@@ -58,6 +58,96 @@ local Renderer = require("src.render.Renderer")
 local Game = require("src.core.Game")
 local Strings = require("src.core.Strings")
 
+-- ------- and the same two settings on Gold, by other means
+--
+-- The WIDESCREEN half of this mod is Red's problem and only Red's: Gold's
+-- battle already fills the window (`BattleState:drawsWidescreen` answers true
+-- there) and Gold never calls Renderer at all, so both the endFrame overlay
+-- and the poison-pulse bands are gated off below rather than installed to do
+-- nothing.
+--
+-- The two SETTINGS are not Red's problem, and both were missing on Gold:
+--
+--   FLASHLESS INTROS.  On Red the flash is a property of the wipe -- the
+--   spiral defs simply have no flash flag -- so the setting is a
+--   `transition.style` hook naming the Champion's spiral.  Gold's is not:
+--   the flash is a PHASE every transition runs (`self.phase = self.trainer
+--   and "pokeball" or "flash"`, src/ui/gen2/BattleTransition.lua), and its
+--   four wipes -- spin, speckle, zoom, sine -- all run after it.  Naming a
+--   style there would change which wipe played and leave the flash exactly
+--   where it was; naming Red's "spiralout" would not even do that, because
+--   it is not one of Gold's four and falls back to the vanilla select.  So
+--   the Gen 2 arm shortens the phase instead: `flashFrames` answers zero and
+--   the transition steps straight to its outro on the first frame.  The
+--   trainer's pokeball phase is untouched, because a pokeball is not a flash.
+--
+--   BLACK OUTRO.  Red's return is `Transition.battleReturn`, a white veil
+--   this mod covers with a fade of its own.  Gold's is `World:battleReturnFade`
+--   (data/maps/setup_scripts.asm:124-139), which sets `self.fade = "white"`
+--   and lets the map setup chain ramp it off -- and `World.FADE_RAMP` already
+--   carries a `black` ramp beside the white one, for FadeOutToBlack.  So the
+--   Gen 2 arm does not draw anything: it names the other ramp, and the
+--   engine's own fade plays in black.  That is the cart's machinery, not an
+--   overlay on top of it.
+local isGen2
+local function gen2()
+  if isGen2 == nil then
+    isGen2 = false
+    local okV, GameVersion = pcall(require, "src.core.GameVersion")
+    if okV and type(GameVersion) == "table"
+        and type(GameVersion.generation) == "function" then
+      local okCall, generation = pcall(GameVersion.generation)
+      isGen2 = okCall and generation == 2
+    end
+  end
+  return isGen2
+end
+
+-- FLASHLESS INTROS on Gold.  Patched once, and live: the toggle is read on
+-- every transition rather than at install, so flipping it needs no relaunch.
+local function installGen2Flashless(wanted)
+  local ok, Transition = pcall(require, "src.ui.gen2.BattleTransition")
+  if not (ok and type(Transition) == "table"
+          and type(Transition.flashFrames) == "function") then
+    return false, "no Gen 2 BattleTransition to make flashless"
+  end
+  if Transition.wsbFlashlessHook then return true end
+  local inner = Transition.flashFrames
+  function Transition:flashFrames()
+    if wanted() then return 0 end
+    return inner(self)
+  end
+  Transition.wsbFlashlessHook = true
+  return true
+end
+
+-- BLACK OUTRO on Gold.  The engine sets up the whole return fade and then
+-- reads `self.fade` every frame to pick a ramp, so the edit is one field,
+-- written after the engine has finished writing its own.
+local function installGen2Outro(wanted)
+  local ok, World = pcall(require, "src.world.gen2.World")
+  if not (ok and type(World) == "table"
+          and type(World.battleReturnFade) == "function") then
+    return false, "no Gen 2 World to fade"
+  end
+  if World.wsbBattleOutroHook then return true end
+  local inner = World.battleReturnFade
+  function World:battleReturnFade()
+    -- Read BEFORE the call, not after.  `battleReturnFade` returns early when
+    -- a map setup is already running, and a warp's own fade is white and has a
+    -- mapSetup too -- so "white with a mapSetup" afterwards is true of the
+    -- fade this call started AND of the one it declined to start.  Only the
+    -- transition from no setup to a setup says the return is ours.
+    local already = self.mapSetup ~= nil
+    inner(self)
+    if wanted() and not already and self.mapSetup and self.fade == "white" then
+      self.fade = "black"
+    end
+  end
+  World.wsbBattleOutroHook = true
+  return true
+end
+
 -- Guarded, unlike the three above: those three this mod cannot work without,
 -- and Timing is one number it can supply for itself.  The headless suite
 -- stands up the engine modules it needs and should not have to stand up a
@@ -454,6 +544,33 @@ return function(mod)
   -- pass through to the engine (outroWanted), and the toggle gates the
   -- rest: ON pushes a fade over the battle's last live frame; the fade
   -- runs the engine finish at full black, then fades the map up out of it.
+  -- ------- the two settings, on whichever cartridge this is
+  --
+  -- Installed before the Gen 1 seams and outside them: on Gold the rest of
+  -- this file has nothing to install, and the settings should not be waiting
+  -- behind machinery that is standing down.
+  if gen2() then
+    local litOk, litProblem = installGen2Flashless(function()
+      return flashless.get() and true or false
+    end)
+    if not litOk then mod.log:warn("%s", tostring(litProblem)) end
+    local outOk, outProblem = installGen2Outro(function()
+      return outro.get() and true or false
+    end)
+    if not outOk then mod.log:warn("%s", tostring(outProblem)) end
+    -- The two pairs still have to be published before this returns: the
+    -- bundle's adapter builds both menu rows out of them, and a Gold save
+    -- that installed the settings and then hid their switches would be worse
+    -- than one that installed neither.
+    mod.exports.flashless = flashless
+    mod.exports.outro = outro
+    -- Everything below is Red's: the white battle return this mod covers is
+    -- `Transition.battleReturn` and the flash overlay rides `Renderer`, and
+    -- Gold has neither -- its return is the map setup chain, recoloured
+    -- above, and it draws to the screen without a Renderer to wrap.
+    return
+  end
+
   local BattleState = require("src.battle.BattleState")
   if not BattleState.wsbBattleOutroHook then
     local inner = BattleState.finish

@@ -63,6 +63,34 @@ local GEN2_VISIBLE_ROWS = 7
 -- ON and STEREO.  These are longer ("ON (CONFIGURE)"), so they start earlier.
 local GEN2_VALUE_TX = 4
 
+-- The engine's own OPTION-screen chrome, and the ONE place this bundle names
+-- it.  Two reasons it is a resolver rather than two `require`s at the two
+-- sites that want it:
+--
+-- Gold never runs this module.  `src.ui.OptionRows` is on the loader's Gen 1
+-- only list (src/mods/Loader.lua:117) with no Gen2Compat adapter, so a
+-- require made from a mod's chunk on a Gold boot puts a line on the boot
+-- error feed the player sees in MODS -- the manager's list, not a dev log.
+-- Neither site is reached on Gold (both are inside the `isGen2` false arm,
+-- and `drawGen2` is what `screen.draw` is set to there), so today nothing
+-- calls this; it stays a lazy pcall so that a future edit that DOES reach it
+-- from the wrong generation degrades to the plain draw instead of putting a
+-- red line in front of the player.
+--
+-- `modkit gen2check` reports the literal below as MK402 whatever guards it --
+-- it is a static scan of every file in the package, so a branch it can see is
+-- never taken is still a branch it can see.  That finding is expected and is
+-- the reason this is one literal rather than three.
+local optionRows, optionRowsAsked
+
+local function engineOptionRows()
+  if optionRowsAsked then return optionRows end
+  optionRowsAsked = true
+  local ok, module = pcall(require, "src.ui.OptionRows")
+  optionRows = (ok and type(module) == "table") and module or nil
+  return optionRows
+end
+
 local RESET_ROW = "__reset_defaults"
 
 -- The row this bundle puts on the game's own OPTION screen.  One id, shared by
@@ -747,6 +775,8 @@ function Menu.new(context)
   local BUNDLE_NAMES = {
     gen1_wild_qol = "GEN1WILD QOL",
     gen1_wild_ui = "GEN1WILD UI",
+    gen1_wild_qol = "GEN1WILD QOL",
+    gen1_wild_ui = "GEN1WILD UI",
   }
 
   local function masterLabel(entry)
@@ -959,8 +989,8 @@ function Menu.new(context)
           self.scroll = math.max(0, math.min(self.scroll,
             math.max(0, #self.entries - GEN2_VISIBLE_ROWS)))
         else
-          local ok, OptionRows = pcall(require, "src.ui.OptionRows")
-          if ok and OptionRows and OptionRows.clampScroll then
+          local OptionRows = engineOptionRows()
+          if OptionRows and OptionRows.clampScroll then
             self.scroll = OptionRows.clampScroll(
               self.index, self.scroll, #self.entries, nil)
           end
@@ -1014,7 +1044,8 @@ function Menu.new(context)
       end
 
       local function drawGen1(s)
-        local OptionRows = require("src.ui.OptionRows")
+        local OptionRows = engineOptionRows()
+        if not OptionRows then return end
         local Font = require("src.render.Font")
         OptionRows.draw(s.game, drawable(), s.index, s.scroll)
         love.graphics.setColor(0, 0, 0, 1)
@@ -1256,6 +1287,22 @@ function Menu.new(context)
         if isMods then
           item.__gen1wildRouted = true
           item.onSelect = function() mod.ui.push(game, rootScreenId) end
+          -- ------- and on Gold a callback alone is not a retarget
+          --
+          -- Gold's rows carry a `value` where Red's carry the callback, and
+          -- `StartMenu:choose` dispatches onSelect only when `value == nil`
+          -- (src/ui/gen2/StartMenu.lua) -- so on Gold the line above is
+          -- installed and then stepped over, and MODS still opens the cart's
+          -- own list of zips.  Clearing the value is what makes this a mod's
+          -- row rather than a cart row with a callback nobody reads.
+          --
+          -- The cart loses nothing by the bypass: `mods` is the one id in
+          -- Game2:pushStartMenuItem whose arm is a bare push of ManagerState
+          -- -- no `back`, no pop, and no fade (`mods` is absent from
+          -- MenuFade's OPEN_WHITE) -- so a push from here leaves exactly the
+          -- stack the engine would have left.  nil on Red, where the rows
+          -- never carried a value to begin with.
+          item.value = nil
           break
         end
       end

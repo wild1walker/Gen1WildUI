@@ -37,10 +37,53 @@ function Bundle.install(mod, spec, features)
   local Registry = assert(loadRuntime("registry"), "runtime/registry.lua did not load")
   local Menu = assert(loadRuntime("menu"), "runtime/menu.lua did not load")
   local Claims = assert(loadRuntime("claims"), "runtime/claims.lua did not load")
+  -- Which generation this boot is, asked once and passed on: the theme, the
+  -- mattes, the feature gate and the menu all turn on it, and asking the
+  -- engine four times to get four copies of one answer is four chances for
+  -- them to disagree.
+  local isGen2 = detectGen2()
+
   -- Optional for the same reason Settings is: a tree built before this file
   -- existed should lose the themes rather than the boot.
-  local Theme = loadRuntime("theme")
-  local Matte = loadRuntime("matte")
+  --
+  -- Two arms, and they are two files rather than one file with a branch
+  -- because they share no mechanism.  Red colours a page AFTER it is drawn,
+  -- by blitting the frame through an SGB zone's four colours, so the Gen 1
+  -- theme rewrites the zone list.  Gold's colour is already in the picture
+  -- (src/core/Game2.lua:1536) and goes on per tile while the page draws, out
+  -- of `Chrome.DEFAULT_BOX_PALETTE`, so the Gen 2 theme rewrites those four
+  -- instead.  Same two themes, same stored row, same promise that a theme
+  -- cannot move a glyph; nothing else in common.  See runtime/theme2.lua.
+  local Theme = loadRuntime(isGen2 and "theme2" or "theme")
+  -- Gen 2 only, and not part of the theme even though it exists because of
+  -- one: the YES/NO box is the single piece of Gold's furniture that paints
+  -- like a Gen 1 screen and so cannot be reached by swapping four numbers.
+  -- It is a separate file because it DRAWS, which is the one thing
+  -- runtime/theme2.lua promises never to do.  See runtime/choicebox2.lua.
+  local ChoiceBox2 = isGen2 and loadRuntime("choicebox2") or nil
+  -- Gen 2 only, and nothing to do with the theme -- which is why it is
+  -- installed on its own below rather than inside the theme's block.  Gold
+  -- draws every party icon through a four-shade remap, which is right for the
+  -- cart's own 2bpp sheets and wrong for a mod's colour art: the shape
+  -- arrives and the colours are replaced.  Its battle pics have an escape
+  -- (`trueColor`); its icons never grew one.  See runtime/icons2.lua.
+  local Icons2 = isGen2 and loadRuntime("icons2") or nil
+  -- Gen 1 only, and not a gap.  A matte paints the page colour under a
+  -- true-colour rectangle, because Red blits one RAW past the shade pass and
+  -- the white page it was cut out of comes back with it.  Gold has no such
+  -- pass and no such re-blit -- its art is drawn in the picture like
+  -- everything else -- so there is no white box to repair and nothing for a
+  -- matte to do.
+  local Matte = not isGen2 and loadRuntime("matte") or nil
+  -- The Gen 2 counterpart, and the note above it was wrong to say there was
+  -- none.  Gold has no re-blit past a shade pass to repair -- but it does have
+  -- full-colour cart art with a white field BAKED INTO THE PIXELS, drawn raw
+  -- because there is no palette to remap it through, and a shade substitution
+  -- has nothing to substitute.  So the trainer card's portrait, its eight gym
+  -- leaders and the #DEX's pic all stand in a white square on a black page.
+  -- Red paints a page under its box; Gold takes the box away.  See
+  -- runtime/cutout2.lua.
+  local Cutout2 = isGen2 and loadRuntime("cutout2") or nil
   -- Optional, and deliberately so: a bundle installed outside a sealed cart
   -- needs none of it, and a tree built before this file existed should lose
   -- the remembering rather than the boot.
@@ -82,7 +125,7 @@ function Bundle.install(mod, spec, features)
     optionset = optionset,
     registry = registry,
     loader = loader,
-    isGen2 = detectGen2(),
+    isGen2 = isGen2,
     shared = {},
     -- Which voxel mod is installed, if any.  Built once for the bundle: the
     -- lookup is memoised in there, so a dozen features asking costs one
@@ -269,6 +312,23 @@ function Bundle.install(mod, spec, features)
         -- because a themed build with no mattes is a build with white boxes
         -- on four screens and a themed build with no theme is a build with
         -- no themes at all.
+        -- Gold's own white boxes, taken away rather than painted under.
+        -- Guarded on its own for the reason the mattes are: a themed build
+        -- with no cut-outs is a build with white squares on three screens; a
+        -- build with no theme is a build with no themes at all.
+        if type(Cutout2) == "table" and type(Cutout2.new) == "function" then
+          local cutOk, cutouts = pcall(Cutout2.new, context)
+          if cutOk and type(cutouts) == "table" then
+            local installedOk, problem = pcall(cutouts.install)
+            if not installedOk then
+              mod.log:warn("Gold's picture cut-outs not installed: %s",
+                           tostring(problem))
+            end
+          else
+            mod.log:warn("Gold's picture cut-outs did not build: %s",
+                         tostring(cutouts))
+          end
+        end
         if type(Matte) == "table" and type(Matte.new) == "function" then
           local madeOk, mattes = pcall(Matte.new, context)
           if madeOk and type(mattes) == "table" then
@@ -290,11 +350,38 @@ function Bundle.install(mod, spec, features)
             mod.log:warn("true-colour mattes not built: %s", tostring(mattes))
           end
         end
+        -- and, on Gold, the one box the four numbers cannot reach.  Guarded
+        -- on its own for the reason the mattes are: a themed build with a
+        -- white YES/NO box is worse than it should be and still a themed
+        -- build, so a patch that will not take must not cost the theme.
+        if type(ChoiceBox2) == "table"
+            and type(ChoiceBox2.install) == "function" then
+          local choiceOk, choiceProblem = pcall(ChoiceBox2.install, context)
+          if not choiceOk then
+            mod.log:warn("the YES/NO box keeps its own colours: %s",
+                         tostring(choiceProblem))
+          end
+        end
       else
         mod.log:warn("UI theme not installed: %s", tostring(problem))
       end
     else
       mod.log:warn("UI theme not built: %s", tostring(built))
+    end
+  end
+
+  -- ---- 2b. party icons that carry a colour
+  --
+  -- Outside the theme block on purpose: this has nothing to do with the
+  -- theme, and a build whose theme failed should still show a follower's own
+  -- colours.  Guarded on its own for the same reason the YES/NO patch is --
+  -- icons in the cart's palette are worse than they should be and still
+  -- icons, so a patch that will not take must cost nothing else.
+  if type(Icons2) == "table" and type(Icons2.install) == "function" then
+    local iconOk, iconProblem = pcall(Icons2.install, context)
+    if not iconOk then
+      mod.log:warn("party icons keep the cart's palette: %s",
+                   tostring(iconProblem))
     end
   end
 
@@ -351,11 +438,11 @@ function Bundle.install(mod, spec, features)
   end
 
   -- Which voxel mod this bundle found, and whether that one moves the battle
-  -- HUDs onto its world canvas -- the one thing the forks disagree about and
-  -- the thing everything drawn beside a HUD turns on.  Published as a
-  -- diagnostic rather than for anything here: nothing in the bundle reads it,
-  -- and a build standing beside no voxel mod answers nil rather than nothing,
-  -- so a caller never has to know whether the resolver is there.
+  -- HUDs onto its world canvas -- the one thing the four forks disagree about
+  -- and the thing everything drawn beside a HUD turns on.  Published for the
+  -- nightly bench: nothing in the suite reads it, and a build standing beside
+  -- no voxel mod answers nil rather than nothing, so a caller never has to
+  -- know whether the resolver is there.
   mod.exports.voxelProbe = function()
     if type(context.voxel) ~= "table" then return nil, false end
     local okId, id = pcall(context.voxel.id)

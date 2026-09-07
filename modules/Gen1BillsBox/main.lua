@@ -20,8 +20,24 @@
 -- icon path, so per-species icons, the `pokemon.icon` hook and any icon
 -- replacement mod land in the box exactly as they land in the party.
 
+-- Which game this is.  The two arms build the same screen -- the party down
+-- the left, the open box as a grid on the right, a cursor that carries a
+-- POKeMON -- over two entirely different storage models, so they are two
+-- files rather than one with branches in it.  See gen2screen.lua's header for
+-- what Gold ships and why this replaces it.
+local function isGen2()
+  local ok, GameVersion = pcall(require, "src.core.GameVersion")
+  if not (ok and type(GameVersion) == "table"
+          and type(GameVersion.generation) == "function") then
+    return false
+  end
+  local okCall, generation = pcall(GameVersion.generation)
+  return okCall and generation == 2
+end
+
 return function(mod)
   local Strings = require("src.core.Strings")
+  local gen2 = isGen2()
 
   mod.options:define({
     -- The cry of whichever POKeMON just landed in a slot.  On by default
@@ -69,22 +85,23 @@ return function(mod)
   -- sandboxedLoad): the chunk runs in this mod's globals rather than the real
   -- _G.  A failure here logs and returns, which leaves the builtin BoxMenu in
   -- place -- a broken storage screen must never be the only storage screen.
-  local source, readErr = mod:read("screen.lua")
+  local file = gen2 and "gen2screen.lua" or "screen.lua"
+  local source, readErr = mod:read(file)
   if not source then
-    mod.log:error("screen.lua is missing (%s); reinstall the mod",
+    mod.log:error("%s is missing (%s); reinstall the mod", file,
       tostring(readErr or "unknown read error"))
     return
   end
 
-  local chunk, compileErr = load(source, "@" .. mod.path .. "/screen.lua")
+  local chunk, compileErr = load(source, "@" .. mod.path .. "/" .. file)
   if not chunk then
-    mod.log:error("screen.lua did not compile: %s", tostring(compileErr))
+    mod.log:error("%s did not compile: %s", file, tostring(compileErr))
     return
   end
 
   local okFactory, factory = pcall(chunk)
   if not okFactory or type(factory) ~= "function" then
-    mod.log:error("screen.lua must return a factory function: %s",
+    mod.log:error("%s must return a factory function: %s", file,
       tostring(factory))
     return
   end
@@ -100,10 +117,15 @@ return function(mod)
   -- chain: a second UI mod registering the same id composes, and two storage
   -- screens over one save is the failure mode worth spending a line to
   -- avoid.  The id is the builtin's, so nothing else has to be told.
-  if mod.content.screens:get("BoxMenu") then
-    mod.content.screens:override("BoxMenu", screen)
+  -- Gold pushes its storage list under a different id, and pushes it for all
+  -- THREE of WITHDRAW, DEPOSIT and MOVE POKeMON (src/ui/gen2/PcMenu.lua) --
+  -- which is exactly what makes one screen the right answer there: the three
+  -- verbs land on the grid and there is no second entrance left over.
+  local id = gen2 and "Gen2BoxMenu" or "BoxMenu"
+  if mod.content.screens:get(id) then
+    mod.content.screens:override(id, screen)
   else
-    mod.content.screens:register("BoxMenu", screen)
+    mod.content.screens:register(id, screen)
   end
 
   -- ------- BILL'S PC is BILL'S BOX
@@ -121,16 +143,40 @@ return function(mod)
     ["SOMEONE'S PC"] = "SOMEONE'S BOX",
   }
 
+  -- Gold's storage verbs are on the PC MENU rather than inside the storage
+  -- screen, so replacing the screen leaves THREE doors onto the same grid --
+  -- WITHDRAW, DEPOSIT and MOVE POKéMON all push Gen2BoxMenu
+  -- (src/ui/gen2/PcMenu.lua).  Collapsing them into one row is the same edit
+  -- the Red arm makes one level down, where the four verbs ARE the screen.
+  --
+  -- The row kept is `withdraw`, relabelled: its id is a builtin the cart
+  -- dispatches on, so the surviving door is the cart's own call and nothing
+  -- has to be taught a new one.  CHANGE BOX stays -- the grid's L and R walk
+  -- one at a time and it jumps -- and so do MAIL BOX, DECORATION and SEE YA.
+  local GEN2_DROP = { deposit = true, move = true }
+
   mod.hooks:wrap("ui.pc.items", function(next, game, items)
     local out = next(game, items)
     if type(out) ~= "table" then return out end
+    if not gen2 then
+      for _, entry in ipairs(out) do
+        if type(entry) == "table" then
+          local renamed = PC_ROWS[entry.label]
+          if renamed then entry.label = Strings(renamed) end
+        end
+      end
+      return out
+    end
+    local kept = {}
     for _, entry in ipairs(out) do
-      if type(entry) == "table" then
-        local renamed = PC_ROWS[entry.label]
-        if renamed then entry.label = Strings(renamed) end
+      if type(entry) ~= "table" or not GEN2_DROP[entry.id] then
+        if type(entry) == "table" and entry.id == "withdraw" then
+          entry.label = Strings("BOX")
+        end
+        kept[#kept + 1] = entry
       end
     end
-    return out
+    return kept
   end)
 
   -- ------- a BOX row on the START menu
@@ -149,11 +195,21 @@ return function(mod)
   --
   -- next() first, so another mod's rows survive.
   local function insertBoxRow(items, row)
-    for _, anchor in ipairs({ Strings("POKéMON"), Strings("SAVE") }) do
+    -- Each anchor is looked for in both the translated and the source word:
+    -- Gold hands hooks its rows before translating them, so the translated
+    -- form alone stops matching there the moment a translation is installed,
+    -- and BOX would fall through to the bottom of the menu instead of landing
+    -- between POKéMON and SAVE.  The same string twice in English.
+    local anchors = {
+      { after = true, Strings("POKéMON"), Strings.source("POKéMON") },
+      { after = false, Strings("SAVE"), Strings.source("SAVE") },
+    }
+    for _, anchor in ipairs(anchors) do
       for i, entry in ipairs(items) do
-        if type(entry) == "table" and entry.label == anchor then
+        if type(entry) == "table"
+            and (entry.label == anchor[1] or entry.label == anchor[2]) then
           -- after POKeMON, before SAVE
-          table.insert(items, anchor == Strings("SAVE") and i or i + 1, row)
+          table.insert(items, anchor.after and i + 1 or i, row)
           return items
         end
       end
@@ -162,16 +218,74 @@ return function(mod)
     return items
   end
 
+  -- ------- and the two games put the menu back differently
+  --
+  -- Red's `Menu` pops itself before it runs a row's onSelect, and
+  -- `StartMenu.new(game)` builds every row's onSelect itself -- so a bare
+  -- push of the id is the engine's own call spelled out.
+  --
+  -- Gold's does neither.  `StartMenu:choose` runs onSelect and RETURNS, so
+  -- the START menu is still under whatever the row opened; and
+  -- `StartMenu.new(game, opts)` takes onChoose and onClose as PUSH OPTIONS,
+  -- so a bare push there builds a menu whose rows open nothing and which B
+  -- does not shut.  Both were learned the hard way in Gen1MenuManager, and
+  -- both are answered the same way: drop the stale menu, and ask the GAME to
+  -- open its own.
+  local function openBox(game)
+    if not gen2 then
+      return mod.ui.push(game, "BoxMenu", {
+        onCancel = function() mod.ui.push(game, "StartMenu") end,
+      })
+    end
+    -- .CheckCanUsePC: the PC cannot be opened with an empty party, and the
+    -- row is a door onto the PC.  This is the FIRST thing the row does on a
+    -- new game, before the player has a POKeMON -- so it is the one arm of
+    -- this function every playthrough runs.
+    --
+    -- `canUsePc` answers `false, <the cart's refusal text>`, and that second
+    -- return is a STRING.  `TextBox.new(game, text, onDone, opts)` takes the
+    -- text as its second argument, not an options table: handing it
+    -- `{ text = why }` reached `Tokens.expand`, which calls `text:gsub`, and
+    -- a table has no gsub -- so opening BOX on a new game took the whole game
+    -- down rather than printing the refusal.
+    local Boxes = require("src.core.gen2.Boxes")
+    local usable, why = Boxes.canUsePc(game and game.save)
+    if not usable then
+      local TextBox = mod.ui and mod.ui.TextBox
+      if TextBox and game and game.stack then
+        -- The engine's own words when it has them; its wording repeated here
+        -- only if a later engine stops returning any.  Never a table.
+        local text = type(why) == "string" and why
+          or "You'll need a\nPOK\xe9MON to call\fwith."
+        game.stack:push(TextBox.new(game, text))
+      end
+      return
+    end
+    local stack = game and game.stack
+    if stack and type(stack.top) == "function"
+        and type(stack.pop) == "function" then
+      local top = stack:top()
+      if type(top) == "table" and top.screenId == "Gen2StartMenu" then
+        stack:pop()
+      end
+    end
+    mod.ui.push(game, "Gen2BoxMenu", {
+      save = game and game.save,
+      onClose = function()
+        if stack then stack:pop() end
+        if type(game.openStartMenu) == "function" then
+          pcall(game.openStartMenu, game)
+        end
+      end,
+    })
+  end
+
   mod.hooks:wrap("ui.start_menu.items", function(next, game, items)
     local out = next(game, items)
     if type(out) ~= "table" or not option("startRow", true) then return out end
     return insertBoxRow(out, {
       label = Strings("BOX"),
-      onSelect = function()
-        mod.ui.push(game, "BoxMenu", {
-          onCancel = function() mod.ui.push(game, "StartMenu") end,
-        })
-      end,
+      onSelect = function() openBox(game) end,
     })
   end)
 

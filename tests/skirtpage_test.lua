@@ -64,7 +64,7 @@ local Theme = load_("runtime/theme.lua")
 local function theme(mode)
   local frame
   local t = Theme.new({
-    mod = { id = "gen1_wild_ui_nightly",
+    mod = { id = "gen1_wild_ui",
             log = setmetatable({}, { __index = function() return function() end end }),
             hooks = { wrap = function(_, name, fn)
               if name == "render.zones" then frame = fn end

@@ -1,5 +1,65 @@
 # Changelog
 
+## 1.27.0
+
+**The whole bundle runs on Gold, Silver and Crystal.** The manifest declares
+`gen2`, and every feature in it either works there or stands down and says so.
+This is the Gen 2 work that has been on the nightly channel, promoted through
+each mod's own repository rather than vendored here — so a player running any
+of these standalone gets it too.
+
+### The screens
+
+- **The #DEX** (Gen1Dex 1.11.0) — undiscovered POKéMON open, with the name,
+  kind, footprint, cry and print masked to dashes and the picture left as the
+  `?`; their nests show on the AREA map, which is the reason for opening the
+  page at all. AREA captions name what the marks mean, read off the cart's own
+  encounter tables. The entry's picture animates on Crystal, through the
+  engine's own `MonAnimView`.
+
+- **The box** (Gen1BillsBox 1.7.0) — the 5x4 grid replaces Gold's list of
+  names, and takes all three of the PC's verbs at once. Free placement and the
+  party's hole work as they do on Red: the arrangement lives beside the box in
+  this mod's save data, one cell per POKéMON, reconciled on every read, with
+  the cartridge's own list untouched.
+
+- **The party** (Gen1Party 1.9.0) — the set's frame around the cart's own
+  list, each row in its own species colours, and `SWITCH` that *carries* a
+  POKéMON through the party instead of swapping two. Mail rides with it.
+
+- **The bag** (Gen1ModernBag 1.14.0) — does less on Gold on purpose. Its PACK
+  already has pockets and a remembered cursor; what lands is the item icons,
+  the descriptions and search, under one live `PACK EXTRAS` row.
+
+- **The battle** (Gen1BattleUI 1.8.0, Gen1Arena 0.24.0) — the move grid with
+  type colour behind each move, a HUD that stays readable on a dark page, and
+  126 Johto backdrops mapped by tileset and landmark rather than by a list of
+  map ids.
+
+- **MENU LAYOUT** (Gen1MenuManager 0.5.0) — the START menu comes back once on
+  the way out of the editor rather than twice, and a Gen 2-only `ROW HINTS`
+  row.
+
+### The theme, and three white boxes
+
+- **`runtime/theme2.lua`** — Gold's furniture is not Red's, so DARK and LIGHT
+  are a separate file rather than four numbers swapped. `runtime/choicebox2.lua`
+  handles the one piece of Gold's chrome that paints like a Gen 1 screen.
+
+- **`runtime/cutout2.lua`** — Gold ships full-colour art with a white field
+  baked into the pixels, drawn raw because there is no palette to remap it
+  through. Red paints a page under its box; Gold takes the box away. The
+  trainer card's portrait, its eight gym leaders, the #DEX's picture and the
+  SUMMARY's are each cut out of their square.
+
+- **The words on the SUMMARY's coloured pages** are black ink on the page
+  rather than white ink in a black box.
+
+- **`runtime/icons2.lua`** — a party icon carrying colours of its own keeps
+  them instead of being read as four shades, and only the icon under the cursor
+  walks.
+
+
 ## 1.26.5
 
 - **The party row a message box cuts through keeps its colours**

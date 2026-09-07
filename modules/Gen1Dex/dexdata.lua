@@ -49,8 +49,11 @@ function DexData.moves(data, def)
   data = data or {}
   def = def or {}
 
+  -- Gen 1 stores the level-up list as `learnset` and Gold's extractor stores
+  -- it as `levelMoves`.  The ROWS are identical -- `{ level, move }` on both
+  -- -- so only the name has to be reconciled.
   local learned, seen = {}, {}
-  for _, entry in ipairs(def.learnset or {}) do
+  for _, entry in ipairs(def.learnset or def.levelMoves or {}) do
     if entry.move and not seen[entry.move] then
       seen[entry.move] = true
       local moveType, name = typeOf(data, entry.move)
@@ -144,6 +147,91 @@ local STAT_KEYS = {
   { key = "SPC", field = "special" },
 }
 
+-- Gen 2 split Special into two stats, so its base-stat block is six wide.
+--
+-- The order is the cart's own -- HP, ATK, DEF, SPD, SP.ATK, SP.DEF, which is
+-- the order `BaseData` stores them in and the order Gold's own stats screen
+-- reads them out (`RomExtractorGen2:extractPokemon`'s baseStats block puts
+-- speed at row[5] and the two specials at [6] and [7]).  Keeping it means a
+-- player comparing this page against the summary screen is comparing two
+-- lists in the same order.
+--
+-- `SPC` becomes `SPA`/`SPD`... except SPD is already SPEED here, so the two
+-- specials are `SP.A` and `SP.D` and speed stays `SPD`.  Four glyphs is one
+-- more than the Gen 1 keys, and the Gold page is laid out for it.
+local STAT_KEYS_GEN2 = {
+  { key = "HP", field = "hp" },
+  { key = "ATK", field = "attack" },
+  { key = "DEF", field = "defense" },
+  { key = "SPD", field = "speed" },
+  { key = "SP.A", field = "specialAttack" },
+  { key = "SP.D", field = "specialDefense" },
+}
+
+-- Which of the two a dataset wants, asked of the DATA rather than of the
+-- game version.  A Gen 2 base-stat block has `specialAttack` and a Gen 1 one
+-- has `special`; nothing else has to be known, and a caller that hands in a
+-- hand-built table gets the right answer without saying which cart it is
+-- pretending to be.  (The migration guide's own advice: test for the
+-- capability the code needs, not the version.)
+function DexData.statKeys(def)
+  local bs = (def or {}).baseStats
+  if type(bs) == "table" and bs.specialAttack ~= nil then
+    return STAT_KEYS_GEN2
+  end
+  return STAT_KEYS
+end
+
+-- ------- the five Gen 2 evolution methods
+--
+-- Gen 1 has two -- a level and a stone -- and both come out of the shared
+-- `evolution_methods` registry's `describe`.  Gold has five, and its registry
+-- lives under another name (`gen2EvolutionMethods`, per
+-- src/mods/Schemas.lua:547), so this is the fallback for when neither
+-- registry answers: the row's own fields, in words.
+--
+-- Each is written from what the extractor stores
+-- (RomExtractorGen2:readEvosAttacks): a level, an item id, an optional traded
+-- item, a happiness time band, or a level plus an attack/defence comparison.
+local TIME_LABEL = {
+  ANYTIME = "HAPPINESS",
+  MORNDAY = "HAPPY MORN/DAY",
+  NITE = "HAPPY NITE",
+}
+
+local COMPARISON_LABEL = {
+  ATK_GT_DEF = "ATK>DEF",
+  ATK_LT_DEF = "ATK<DEF",
+  ATK_EQ_DEF = "ATK=DEF",
+}
+
+local function itemName(data, id)
+  if not id then return nil end
+  local def = data and data.items and data.items[id]
+  return (def and def.name) or tostring(id):gsub("_", " ")
+end
+
+local function gen2MethodLabel(data, evo)
+  local method = evo.method
+  if method == "EVOLVE_LEVEL" then
+    return ("LEVEL %d"):format(evo.level or 0)
+  elseif method == "EVOLVE_ITEM" then
+    return itemName(data, evo.item) or "STONE"
+  elseif method == "EVOLVE_TRADE" then
+    -- A held item is optional on a trade: only four species want one.
+    local held = itemName(data, evo.item)
+    return held and ("TRADE + " .. held) or "TRADE"
+  elseif method == "EVOLVE_HAPPINESS" then
+    return TIME_LABEL[evo.time] or "HAPPINESS"
+  elseif method == "EVOLVE_STAT" then
+    -- TYROGUE, and only TYROGUE: the level AND which stat won.
+    local how = COMPARISON_LABEL[evo.comparison]
+    if how then return ("LEVEL %d %s"):format(evo.level or 0, how) end
+    return ("LEVEL %d"):format(evo.level or 0)
+  end
+  return nil
+end
+
 -- What the dex prints in place of a name it has not earned.  One token
 -- everywhere: the INSPECT list, and now the evolution rows.
 local UNSEEN_NAME = "?????"
@@ -161,7 +249,7 @@ function DexData.stats(data, def, save)
   def = def or {}
   local bs = def.baseStats or {}
   local stats, bst = {}, 0
-  for _, spec in ipairs(STAT_KEYS) do
+  for _, spec in ipairs(DexData.statKeys(def)) do
     local value = bs[spec.field] or 0
     stats[#stats + 1] = { key = spec.key, value = value }
     bst = bst + value
@@ -169,25 +257,38 @@ function DexData.stats(data, def, save)
 
   local evolutions = {}
   for _, evo in ipairs(def.evolutions or {}) do
-    local method = data.evolution_methods and data.evolution_methods[evo.method]
-    local label = evo.method
+    -- Gen 1 names the target `species`; Gold's extractor names it `into`
+    -- (RomExtractorGen2:readEvosAttacks).  Same field, two spellings, and
+    -- reading both is cheaper than asking which cart this is.
+    local into = evo.into or evo.species
+
+    -- The registry first, on either of its two names -- a content mod that
+    -- adds a method and describes it gets that description here for free,
+    -- which is the whole reason this goes through a registry at all.  Then
+    -- this file's own words for Gold's five.  Then, failing both, the raw
+    -- method id: ugly but true, and never blank.
+    local registry = data.evolution_methods or data.gen2EvolutionMethods
+    local method = registry and registry[evo.method]
+    local label
     if method and method.describe then
       local ok, described = pcall(method.describe, evo, data)
       if ok and type(described) == "string" and described ~= "" then
         label = described
       end
     end
-    local target = data.pokemon and data.pokemon[evo.species]
-    local name = (target and target.name) or evo.species
+    label = label or gen2MethodLabel(data, evo) or evo.method
+
+    local target = data.pokemon and data.pokemon[into]
+    local name = (target and target.name) or into
     -- What it becomes is a spoiler until you have met one.  The dex prints
     -- "EVOLVES / LEVEL 16 / IVYSAUR" on a BULBASAUR the moment it is caught,
     -- which hands over the next two names of every line in the game -- so an
     -- unseen target is masked exactly the way the list masks it, and the row
     -- still says HOW and WHEN.  Ask for the mask by passing a save; a caller
     -- that does not is unchanged.
-    if save and not seenBy(save, evo.species) then name = UNSEEN_NAME end
+    if save and not seenBy(save, into) then name = UNSEEN_NAME end
     evolutions[#evolutions + 1] = {
-      method = evo.method, label = label, species = evo.species,
+      method = evo.method, label = label, species = into,
       name = name,
     }
   end
@@ -256,10 +357,45 @@ function DexData.list(data, save, mode)
     if def.dex then byDex[def.dex] = def end
   end
 
-  local constants = data.constants or {}
+  -- ------- how far the dex runs
+  --
+  -- This asked `constants.dexSize`, and an earlier pass "fixed" the Gold case
+  -- by preferring `data.gen2Constants` over `data.constants`.  Both halves of
+  -- that were wrong, which is why Gold's dex still stopped at 151:
+  --
+  --   * a Gold boot never loads src/core/Data.lua at all (Game2.lua:1161
+  --     says so in as many words), so there is no `data.constants` to fall
+  --     back TO -- and `dexSize` is derived in that file, so nothing else
+  --     computes it;
+  --   * `data.gen2Constants` is Game2's `data/generated/constants.lua` -- the
+  --     cart's ORDERED NAME LISTS (speciesOrder, spriteOrder, mapOrder), the
+  --     shape src/mods/Gen2Compat.lua calls "the cart's ordered name lists,
+  --     not Gen 1's".  It has no `dexSize` key at all.
+  --
+  -- So the preference picked a table that was truthy and silently answered
+  -- nil, and `or 151` did the rest -- worse than before, because it also
+  -- shadowed a fallback that might have held a number.
+  --
+  -- Derived from the roster instead, which is what src/core/Data.lua does for
+  -- Gen 1 and for the same stated reason: "a dataset with a different roster
+  -- gets the right upper bound without 151 being written down anywhere".  It
+  -- is also what the cart's own dex does -- `PokedexMenu:order` builds the
+  -- national list out of `dex.entries` rather than counting to a constant --
+  -- so a mod that adds a species is covered here without being enumerated.
+  local constants = data.gen2Constants or data.constants or {}
+  -- The union of the two, so neither can shrink the list: the roster's own
+  -- highest number (the only answer Gold has) against a dexSize a dataset
+  -- declares explicitly (which may be HIGHER than the roster, when a dex has
+  -- slots nothing fills yet).  Both absent is Red's historical 151.
+  local dexSize = 0
+  for n in pairs(byDex) do
+    if type(n) == "number" and n > dexSize then dexSize = n end
+  end
+  dexSize = math.max(dexSize, constants.dexSize or 0)
+  if dexSize == 0 then dexSize = 151 end
   local numFmt = ("%%0%dd"):format(constants.dexDigits or 3)
   local entries, seen, owned = {}, 0, 0
-  for n = 1, constants.dexSize or 151 do
+  for n = 1, dexSize do
     local def = byDex[n]
     if def then
       local isOwned = savedOwned[def.id] and true or false

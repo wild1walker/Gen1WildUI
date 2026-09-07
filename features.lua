@@ -45,7 +45,22 @@ return {
     menu_label = "GEN1WILD UI",
     screen_id = "Gen1WildUI",
     -- Gen151 lives in the QOL bundle and wants Gen1Dex, which lives here.
-    -- This is the hop that keeps that working.
+    -- This is the hop that keeps that working -- and MENU LAYOUT's hop to the
+    -- SELECT menu's row registry, which is published by EASY HM USE over
+    -- there under the alias FieldMenu.
+    --
+    -- THE NIGHTLY ID, not the stable one.  Forking the two bundles renamed
+    -- them both, and this line kept pointing at `gen1_wild_qol` -- a mod the
+    -- nightly cart does not install.  Every lookup from this side across to
+    -- that one failed silently, which is exactly what a registry lookup does
+    -- when it cannot find the mod: nothing, quietly.  The SELECT menu was not
+    -- arrangeable because the manager never found the registry to join.
+    --
+    -- tools/check.py said so on every run -- "Gen1WildQOL not on disk;
+    -- cross-check skipped" -- and that line was read as the cross-check being
+    -- unavailable in a single-bundle checkout rather than as this being
+    -- wrong.  The other half had already been updated: the QOL bundle names
+    -- `gen1_wild_ui_nightly`.
     paired_bundle = "gen1_wild_qol",
 
     -- Mods the cart pins that get a door of their own at the top of the
@@ -60,7 +75,14 @@ return {
     -- Both halves declare the same list, for the same reason both declare
     -- the same cards below: either can end up hosting the merged menu.  An
     -- id that is not loaded simply has no row.
+    -- Both ids, because a nightly cart pins the nightly Wild Green and
+    -- somebody running this bundle beside the stable mod has the other one.
+    -- An id that is not loaded has no schema and so has no row; listing both
+    -- costs a lookup and saves a door being missing on one of the two.
     adopted = {
+      { mod = "wild_green_nightly", label = "PLAYER",
+        description = "WHAT YOUR CHARACTER WEARS, THE NAMES THE GAME OFFERS, "
+          .. "AND THE TITLE SCREEN." },
       { mod = "wild_green", label = "PLAYER",
         description = "WHAT YOUR CHARACTER WEARS, THE NAMES THE GAME OFFERS, "
           .. "AND THE TITLE SCREEN." },
@@ -101,6 +123,29 @@ return {
       enabledKey = "enabled",
       default = true,
       aliases = { "Gen1Arena", "gen1arena" },
+      -- Runs on Gold, Silver and Crystal.
+      --
+      -- The seam there is cleaner than Red's: the battle field is one
+      -- `Chrome.clear()` call, the first line of `BattleState:drawPanel`
+      -- (src/ui/gen2/BattleState.lua:4246) and the only one in the file, so
+      -- the backdrop goes in ahead of that instead of behind Red's
+      -- geometry-matched `love.graphics.rectangle` shim.
+      --
+      -- What made this look like a content problem is that the art is named
+      -- after Kanto.  It is not drawn for Kanto.  All twenty backdrops are
+      -- FireRed TERRAIN scenes -- grass, forest, cave, sea, pond, beach,
+      -- craggy, snow, ice cave, desert, volcano -- and Johto is made of the
+      -- same terrain.  What was Kanto-specific was the ASSIGNMENT, and that
+      -- is a table.
+      --
+      -- Two of the three inputs are better here than on Red, because Gold's
+      -- map header carries what Red made this mod guess: `environment` says
+      -- whether a map is a town, a route, a cave or a room, so an unmapped
+      -- tileset still lands somewhere right; and the roof colours are in the
+      -- data, so a town variant is generated rather than hand-listed.
+      --
+      -- See modules/Gen1Arena/main.lua for the three tables and
+      -- tools/make_gen2_towns.py for the town recolours.
     },
 
     {
@@ -123,6 +168,35 @@ return {
       -- upstream registration is suppressed, so each has one home.
       adapter = "widescreen",
       suppress_hooks = { ["ui.options.rows"] = true },
+      -- Runs on Gold, Silver and Crystal -- for its two SETTINGS, not for
+      -- the widescreen.
+      --
+      -- The widescreen half is Red's problem and stays there.  Gold's battle
+      -- already fills the window (`BattleState:drawsWidescreen` answers true,
+      -- src/ui/gen2/BattleState.lua:317) and Gold never calls Renderer at all,
+      -- so the endFrame overlay and the poison-pulse bands have nothing to fix
+      -- and nowhere to attach.  The module stands both down on a Gen 2 boot.
+      --
+      -- FLASHLESS INTROS and BLACK OUTRO are a different matter: neither is
+      -- about aspect ratio, both were missing on Gold, and both are reachable
+      -- there once you stop looking for Red's seam.
+      --
+      -- The flash on Red is a property of the WIPE -- the spiral defs carry no
+      -- flash flag -- so the setting is a `transition.style` hook.  On Gold it
+      -- is a PHASE every transition runs before its wipe, and all four of
+      -- Gold's wipes run after it, so no style names a flashless intro there
+      -- (and Red's "spiralout" is not among the four at all -- it would fall
+      -- back to the vanilla select and change nothing).  The Gen 2 arm shortens
+      -- the phase instead.
+      --
+      -- The white flash out of a battle is `Transition.battleReturn` on Red and
+      -- `World:battleReturnFade` on Gold, and Gold's is the better seam: it
+      -- picks a ramp out of `World.FADE_RAMP`, which already carries `black`
+      -- beside `white`.  So BLACK OUTRO on Gold draws nothing of its own -- it
+      -- names the other ramp and the cart's own fade plays in black.
+      --
+      -- See modules/WidescreenBattleIntro/main.lua for both.
+      
     },
 
     {
@@ -139,6 +213,29 @@ return {
       -- this row takes a relaunch and carries the menu's asterisk.
       default = true,
       aliases = { "Gen1BattleUI" },
+      -- Both games, and they get very different amounts of it.
+      --
+      -- Gold shipped most of what this mod was built to add to Red, and the
+      -- feature gate said so for six releases:
+      --
+      --   The 2x2 LAYOUT: `BattleState:drawPanel` lays its menu labels out at
+      --   `col = ((i - 1) % 2) * spacing` and `row = floor((i - 1) / 2) * 2`
+      --   (src/ui/gen2/BattleState.lua), which is the grid this mod builds
+      --   for Red out of Red's four-row list.
+      --
+      --   The XP bar: Gold has one, animates it, and plays the cart's own
+      --   Sfx_ExpBar and Sfx_HitEndOfExpBar while it fills.
+      --
+      --   The move menu: Gold's list carries a MoveInfoBox with the type and
+      --   the PP of the highlighted move, which is what Red's arm has to
+      --   build its own panel for.
+      --
+      -- What Gold did not ship is the FRAME.  Its four commands are four
+      -- words in one box, not four buttons -- which is what "still no updated
+      -- battle ui like we have for Gen 1 with the 2x2 selections" was about.
+      -- So the Gold arm is that and nothing else: four boxes over the cart's
+      -- one, with the cart's own labels and the cart's own cursor in them.
+      -- See modules/Gen1BattleUI/gen2grid.lua.
     },
 
     -- ---- the menus a player lives in
@@ -158,6 +255,35 @@ return {
       description = "THE POKEDEX WITH A POKEMON BESIDE EVERY ENTRY, BASE STATS, EVOLUTIONS, MOVES AND AN AREA SCREEN.",
       default = true,
       aliases = { "Gen1Dex" },
+      -- Runs on Gold, Silver and Crystal -- as three extra pages on the
+      -- cart's own entry screen rather than as a replacement dex.
+      --
+      -- Gold's Pokedex is good, and already carries two of the three things
+      -- this mod was built to add to Red's: an AREA screen with blinking
+      -- nests, and a working search with NEW / OLD / A-Z on SELECT.  What it
+      -- has no answer for is the third -- base stats, evolutions and the
+      -- learnset -- so that is all the Gold arm adds, and it adds it where
+      -- the cart already has a control that means "next page": PAGE counts on
+      -- past its two into STATS, EVOLVES and MOVES.
+      --
+      -- Everything above the entry's divider stays the cart's on every page,
+      -- so they read as more of the same entry rather than a second screen
+      -- wearing its frame.  See modules/Gen1Dex/gen2.lua.
+      --
+      -- The AREA page is the cart's too, with one row added at the very bottom
+      -- of the map: how you catch it, roughly what level, and -- where Gold's
+      -- tables can say so -- at what hour and how often.  The blinking nests
+      -- read grass, water and the roamers and nothing else, so a HEADBUTT-only
+      -- POKeMON opens a page with an empty map, and that line is the only
+      -- thing on the screen that can tell the player why.  AREA HINTS turns it
+      -- off.  See modules/Gen1Dex/gen2area.lua.
+      --
+      -- And A on an undiscovered row opens that entry, where the cartridge
+      -- refuses -- which is the same AREA ON UNSEEN row Red has, with more
+      -- behind it, because on Gold AREA is an action ON the entry.  The name,
+      -- the kind, the footprint and the cry are all withheld and the pic stays
+      -- the question mark, so what opens is the number, an empty frame and the
+      -- nest map.  See modules/Gen1Dex/gen2unseen.lua.
     },
 
     {
@@ -170,6 +296,37 @@ return {
       description = "REPLACES BILL'S PC WITH A REAL BOX: THE PARTY LEFT, TWENTY SLOTS RIGHT, AND A CURSOR THAT CARRIES A POKEMON.",
       default = true,
       aliases = { "Gen1BillsBox" },
+      -- Gen 1 only, because Gold already has the screen this builds.
+      --
+      -- This mod exists because Red's Bill's PC is a text list: WITHDRAW,
+      -- DEPOSIT, a name at a time, no picture, no party beside it.  Gold's is
+      -- a box -- `src/ui/gen2/BoxMenu.lua`, transcribed from
+      -- engine/pokemon/bills_pc.asm -- with the box name in its own panel,
+      -- five nicknames down the right, and a left panel carrying the front
+      -- pic, the level, the gender and the species of whatever the cursor is
+      -- on.  MOVE POKéMON is there too, walking the party and the box the way
+      -- _MovePKMNWithoutMail does.
+      --
+      -- ------- and that verdict was too generous by half
+      --
+      -- Gold's storage is a LIST.  `.PlaceNickname` writes five nicknames
+      -- from (9,4), two rows apart, with a left panel carrying the front
+      -- pic, the level, the gender and the species of whichever one the
+      -- cursor is on.  It is a good list.  It is not a box: there is no
+      -- grid, the party is not on screen beside it, and moving a POKeMON is
+      -- a four-step modal flow reached from a third row on the PC menu.
+      --
+      -- The thing this mod builds -- the party down the left, the open box
+      -- as a grid on the right, and a cursor that picks a POKeMON up and
+      -- puts it down -- is what NEITHER game shipped.  So it runs on Gold
+      -- too, and it replaces the list: `Gen2BoxMenu` is the id PcMenu pushes
+      -- for all three of WITHDRAW, DEPOSIT and MOVE POKéMON, so the three
+      -- verbs land on one screen and the PC menu keeps one door onto it.
+      --
+      -- Every write is the cart's own -- src/core/gen2/Boxes.lua's refusals
+      -- and its two tails, enterBox and the withdraw heal -- because this is
+      -- the one screen in the suite where a mistake loses a POKéMON.  See
+      -- modules/Gen1BillsBox/gen2screen.lua.
     },
 
     {
@@ -194,6 +351,23 @@ return {
       description = "SEVEN POCKETS WITH AUTO-SORTING, FAVORITES, PINNED ITEMS, SEARCH AND NO CAPACITY LIMIT.",
       default = true,
       aliases = { "Gen1ModernBag", "gen1_modern_bag" },
+      -- Runs on Gold, Silver and Crystal -- as three additions to the
+      -- cart's own PACK rather than as a replacement bag.
+      --
+      -- Gold's PACK already has the two biggest things this mod gives Red's:
+      -- pockets, with the cart's own tab strip, and a description under the
+      -- list with a TM showing its MOVE's description.  What is left is how a
+      -- pocket's list is BUILT, and that is one method -- `PackMenu:rebuild`
+      -- -- so SORT, SEARCH and PIN happen after it and before the draw.
+      --
+      -- The capacity limit needed nothing at all: that patch is on
+      -- `src.inventory.Bag`, which is shared, and Gold's own PackMenu orders
+      -- its rows through it.
+      --
+      -- FAVOURITES is the one thing that did not port: on Red it is a virtual
+      -- POCKET, and Gold's tab strip is four fixed pockets from the cart's own
+      -- table.  PIN does the half of it that fits.  See
+      -- modules/Gen1ModernBag/gen2.lua.
     },
 
     -- ---- the screens nothing else had got to
@@ -222,6 +396,17 @@ return {
       default = true,
       maintained = true,
       aliases = { "Gen1ItemInfo" },
+      -- Gen 1 only, because Gold prints these already.
+      --
+      -- The whole of ITEM INFO is "these three screens have nowhere to say
+      -- what an item is, so redraw them until they do".  On Gold all three
+      -- say it out of the box: `PackMenu:description` and
+      -- `MartMenu:description` both print the item's line under the list, and
+      -- both substitute a TM's MOVE description for the TM's own.  The text
+      -- is the cart's -- RomExtractorGen2 pulls `ItemDescriptions` straight
+      -- out of the ROM -- so it is not even the same text this mod had to
+      -- write for Red, it is the real thing.
+      gen1_only = true,
     },
 
     {
@@ -236,6 +421,17 @@ return {
       default = true,
       maintained = true,
       aliases = { "Gen1Elevator" },
+      -- Gen 1 only, because Gold's lift is already the panel.
+      --
+      -- Red's WHICH FLOOR? is a full-screen list with the car gone behind it,
+      -- which is the thing this mod fixes.  Gold's is two boxes transcribed
+      -- from Elevator_AskWhichFloor: a "Now on:" panel at the top left and a
+      -- four-row scrolling list at `menu_coords 12, 1, 18, 9` -- against the
+      -- right edge, small, with the elevator still on the screen behind it
+      -- (src/ui/gen2/ElevatorMenu.lua).
+      --
+      -- Same layout, same reasoning, already in the cart.
+      gen1_only = true,
     },
 
     -- ---- the furniture
@@ -263,6 +459,14 @@ return {
       shared = {
         claim = "gen1wild_menu_manager",
         storage = "gen1_wild_shared",
+        -- The fork renamed the bundles; this names one of them, so it is
+        -- renamed too.  Same class of stale id as the paired_bundle this
+        -- fork carried for eleven releases, and the same consequence in
+        -- miniature: the fallback only runs when no engine module can hold
+        -- the claim table, and with a name neither nightly bundle answers to
+        -- BOTH stand down and the feature goes missing rather than being
+        -- installed twice.  tools/check.py fails on a name no bundle here
+        -- carries.
         owner = "gen1_wild_ui",
       },
     },
@@ -285,6 +489,14 @@ return {
       shared = {
         claim = "gen1wild_mod_menu",
         storage = "gen1_wild_shared",
+        -- The fork renamed the bundles; this names one of them, so it is
+        -- renamed too.  Same class of stale id as the paired_bundle this
+        -- fork carried for eleven releases, and the same consequence in
+        -- miniature: the fallback only runs when no engine module can hold
+        -- the claim table, and with a name neither nightly bundle answers to
+        -- BOTH stand down and the feature goes missing rather than being
+        -- installed twice.  tools/check.py fails on a name no bundle here
+        -- carries.
         owner = "gen1_wild_ui",
       },
     },
