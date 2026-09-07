@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.27.3
+
+- **POKéMON in the box and the party walk south again instead of turning round
+  on the spot.** Gold's icon path draws the sheet's first two 16x16 cells and
+  alternates them. That is right for a cart icon, which is a 16x32 sheet
+  holding exactly the two frames of one pose. It is wrong for the follower
+  sheets this suite uses, which are 16x96 — six frames in the overworld order:
+
+  ```
+  0 stand south   1 stand north   2 stand side
+  3 walk  south   4 walk  north   5 walk  side
+  ```
+
+  So cells 0 and 1 are the POKéMON *facing you* and then *facing away*, and
+  alternating them turns it round and back forever — the flip.
+
+  Red has had the rule for this all along: `PartyMenu.frameFor`'s fallback is
+  `alt and ((ih or 0) >= 64 and 3 or 1)`, so a sheet 64 pixels or taller steps
+  to cell 3 rather than cell 1. Gold's icon path never got it. It has it now,
+  asking the same question of the same thing — the sheet's own height — so a
+  16x32 cart icon is untouched.
+
+  This is really an engine gap (Gold's `iconFor` should carry the rule beside
+  Red's), and until it moves there it lives in the bundle runtime, where every
+  Gold screen that draws an icon goes through one function.
+
 ## 1.27.2
 
 - **"NOTHING LIVES HERE" no longer runs through the box border** (Gen1Dex

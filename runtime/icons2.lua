@@ -164,14 +164,60 @@ function Icons2.install(context)
     end
   end
 
+  -- ------- and WHICH two frames the walk is
+  --
+  -- The other half of the same report -- "it's supposed to be walk south, not
+  -- flip back and forth" -- and it is not about which icons animate but about
+  -- which cells the animation uses.
+  --
+  -- Gold's `iconFor` picks `math.floor(clock / 16) % 2` and `drawIcon` quads
+  -- it as `frame * 16`, so it always draws the sheet's FIRST TWO 16x16 cells.
+  -- That is right for a cart icon, which is a 16x32 sheet holding exactly the
+  -- two frames of one pose.  It is wrong for every replacement sheet in this
+  -- suite: Gen1Follower's are 16x96, six frames in the overworld order
+  --
+  --     0 stand south   1 stand north   2 stand side
+  --     3 walk  south   4 walk  north   5 walk  side
+  --
+  -- so cells 0 and 1 are the mon FACING YOU and then FACING AWAY.  Alternating
+  -- them turns the POKeMON round and back on the spot, which is the flip.  The
+  -- south walk is 0 and 3.
+  --
+  -- Red already knows this.  `PartyMenu.frameFor`'s fallback is
+  --
+  --     return alt and ((ih or 0) >= 64 and 3 or 1) or 0
+  --
+  -- -- a sheet 64 pixels or taller has more than two frames, so its alternate
+  -- is cell 3 rather than cell 1.  Gold's icon path never got that rule.  This
+  -- is that same line, at the same decision, asking the same question of the
+  -- same thing: the sheet's own height.  A 16x32 cart icon is untouched
+  -- because 32 is not >= 64.
+  --
+  -- It belongs in the engine, beside Red's copy, and it is worth moving there;
+  -- until then it lives here, where every Gold screen that draws an icon --
+  -- the party list, this suite's box, the dex -- goes through one function.
+  local TALL_SHEET = 64        -- more than two 16px frames
+  local WALK_SOUTH = 3         -- cell 3, the same one Red's fallback picks
+
+  local function walkFrame(image, frame)
+    if frame ~= 1 or not image then return frame end
+    local ok, height = pcall(image.getHeight, image)
+    if not ok or (height or 0) < TALL_SHEET then return frame end
+    return WALK_SOUTH
+  end
+
+  Icons2.walkFrame = walkFrame
+
   local baseIconFor = PartyMenu.iconFor
   if type(baseIconFor) == "function" then
     PartyMenu.iconFor = function(menu, mon, ...)
       local image, frame = baseIconFor(menu, mon, ...)
       -- Frame 0 is the one the cart rests on, so a still icon is the icon the
-      -- cart would draw between flips rather than a second pose.
+      -- cart would draw between flips rather than a second pose.  It is also
+      -- cell 0 on a six-frame sheet -- standing, facing south -- so a still
+      -- icon needs nothing from the rule below.
       if image and not menu.gen1wildAnimate then return image, 0 end
-      return image, frame
+      return image, walkFrame(image, frame)
     end
   end
 

@@ -98,6 +98,25 @@ PartyMenu.drawIcon = function(menu, mon, px, py)
   end
   return true
 end
+
+-- ------- the frame the clock asks for, and the CELL it turns into
+--
+-- The engine's own pick, reduced to the arithmetic: two frames off the
+-- screen's clock (src/ui/gen2/PartyMenu.lua, ICON_FRAME_STEPS = 16).  Which
+-- cell of the sheet each of those is, is the thing under test -- so the stub
+-- images differ in the one property the rule reads, their height.
+local SHEETS = {
+  -- a cart icon: 16x32, exactly the two frames of one pose
+  cart = { getHeight = function() return 32 end },
+  -- Gen1Follower's: 16x96, six frames in the overworld order, so cell 1 is
+  -- the mon facing AWAY and cell 3 is its south step
+  follower = { getHeight = function() return 96 end },
+}
+PartyMenu.iconFor = function(menu, mon)
+  return SHEETS[(mon and mon.sheet) or "cart"],
+         math.floor((menu.clock or 0) / 16) % 2
+end
+
 package.loaded["src.ui.gen2.PartyMenu"] = PartyMenu
 
 local Icons2 = chunkOf("runtime/icons2.lua")
@@ -284,6 +303,42 @@ if ENGINE then
      "and there is no separate held-POKeMON pass left to disagree with it")
   ok(boxSrc:find("function Screen:monDrawnAt", 1, true) ~= nil,
      "...because monDrawnAt puts the carried POKeMON in the cell instead")
+end
+
+do
+  io.write("a six-frame sheet walks south instead of turning round\n")
+  -- Reported as "it's supposed to be walk south not flip back and forth".
+  -- Gold's iconFor answers 0 then 1, and drawIcon quads that as `frame * 16`
+  -- -- the sheet's first two 16x16 cells.  On a 16x96 follower sheet those
+  -- are STAND SOUTH and STAND NORTH, so the POKeMON turns to face you and
+  -- away again on the spot.  Red has had the rule for this all along:
+  -- PartyMenu.frameFor's fallback is `alt and ((ih or 0) >= 64 and 3 or 1)`.
+  local hovered = setmetatable({ gen1wildAnimate = true }, { __index = PartyMenu })
+
+  hovered.clock = 0
+  local _, frame = PartyMenu.iconFor(hovered, { sheet = "follower" })
+  eq(frame, 0, "a follower sheet rests on cell 0 -- standing, facing south")
+
+  hovered.clock = 16
+  _, frame = PartyMenu.iconFor(hovered, { sheet = "follower" })
+  eq(frame, 3, "and steps to cell 3, the south walk -- not cell 1, the back")
+
+  -- The cart's own icons must not move: 32 is not >= 64, so the rule does
+  -- not fire and the two frames stay the two frames.
+  hovered.clock = 0
+  _, frame = PartyMenu.iconFor(hovered, { sheet = "cart" })
+  eq(frame, 0, "a cart icon still rests on frame 0")
+  hovered.clock = 16
+  _, frame = PartyMenu.iconFor(hovered, { sheet = "cart" })
+  eq(frame, 1, "and still alternates to frame 1, which is its only other one")
+
+  -- An unhovered icon rests, whatever its sheet -- and cell 0 is standing,
+  -- facing south, on both shapes, so the two rules agree without talking.
+  local still = setmetatable({ clock = 16 }, { __index = PartyMenu })
+  _, frame = PartyMenu.iconFor(still, { sheet = "follower" })
+  eq(frame, 0, "an unhovered follower icon stands still, facing south")
+  _, frame = PartyMenu.iconFor(still, { sheet = "cart" })
+  eq(frame, 0, "and so does an unhovered cart icon")
 end
 
 io.write(("icons2: %d passed, %d failed\n"):format(passed, failed))
