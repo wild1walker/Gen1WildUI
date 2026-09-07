@@ -339,6 +339,85 @@ return function(mod)
     renameStorageText(payload and payload.game)
   end)
 
+  -- ------- Gold's PC has a menu in front of the one this mod renames
+  --
+  -- On Red the storage system IS the PC: `ui.pc.items` carries the row that
+  -- says "BILL'S PC" and renaming it there is the whole job.  Gold has two
+  -- menus.  `ui.pc.items` is the INNER one (src/ui/gen2/PcMenu.lua --
+  -- WITHDRAW / DEPOSIT / CHANGE BOX / MOVE), which the gen2 arm above already
+  -- collapses to a single BOX row.  The row a player actually presses first
+  -- is on the OUTER one, src/ui/gen2/CenterPcMenu.lua's "Access whose PC?" --
+  -- BILL's PC / <PLAYER>'s PC / PROF.OAK's PC -- and that screen runs no hook
+  -- at all.  Its two siblings both call `ui.pc.items` and its own comments
+  -- describe the same contract, so the missing call reads as an oversight
+  -- rather than a decision; either way there is no seam to rename through,
+  -- which is why BILL'S PC kept its name on Gold while every other surface
+  -- said BOX.
+  --
+  -- So the two methods are wrapped instead.  Narrow on purpose: `buildEntries`
+  -- for the row and `say` for the page it opens with, both touching only the
+  -- text that names BILL's machine.  <PLAYER>'s PC and PROF.OAK's PC are
+  -- other people's and keep their names.
+  --
+  -- Rewritten rather than replaced, the same way the ROM lines above are: one
+  -- gsub of the machine's name leaves a localized build's own wording intact
+  -- everywhere else, and a translation that does not spell it "PC" is left
+  -- alone rather than mangled.
+  local function billsBox(text)
+    if type(text) ~= "string" then return text end
+    if not text:find("BILL", 1, true) then return text end
+    return (text:gsub("PC", "BOX"))
+  end
+
+  local centerPcWrapped = false
+
+  local function renameGoldPcMenu()
+    if centerPcWrapped or not gen2 then return end
+    local ok, Center = pcall(require, "src.ui.gen2.CenterPcMenu")
+    if not (ok and type(Center) == "table") then return end
+    centerPcWrapped = true
+
+    -- The row.  buildEntries fills self.entries with labels the engine has
+    -- already localized, so the rename runs on the finished string and never
+    -- has to know which language built it.
+    local baseEntries = Center.buildEntries
+    if type(baseEntries) == "function" then
+      Center.buildEntries = function(self, ...)
+        local result = baseEntries(self, ...)
+        for _, entry in ipairs(self.entries or {}) do
+          if type(entry) == "table" and entry.id == "bills" then
+            entry.label = billsBox(entry.label)
+          end
+        end
+        return result
+      end
+    end
+
+    -- The page it opens with ("BILL's PC accessed."), for the reason the ROM
+    -- rename above gives: a row that says BOX opening a page that says PC is
+    -- worse than not renaming it at all.  `say` takes a list of pages, each a
+    -- list of lines, so the walk is two deep and leaves anything else alone.
+    local baseSay = Center.say
+    if type(baseSay) == "function" then
+      Center.say = function(self, pages, ...)
+        if type(pages) == "table" then
+          for _, page in ipairs(pages) do
+            if type(page) == "table" then
+              for i, line in ipairs(page) do page[i] = billsBox(line) end
+            end
+          end
+        end
+        return baseSay(self, pages, ...)
+      end
+    end
+
+    mod.log:info("BILL'S PC is a box on Gold's PC menu too")
+  end
+
+  -- On game.ready rather than at install: the wrap is on an engine class this
+  -- mod does not otherwise require, and on Red it is never loaded at all.
+  mod.events:on("game.ready", renameGoldPcMenu)
+
   -- ------- a catch that overflows says so
   --
   -- The overflow itself is NOT this mod's: src/pokemon/Boxes.lua's `deposit`

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.27.1
+
+- **BILL'S BOX now reaches Gold's PC menu** (Gen1BillsBox 1.7.1). Reported as
+  "when I go to the PC, BILL'S BOX isn't replacing BILL'S PC" — and it wasn't,
+  on the one menu a Gold player presses first. Gold has *two* PC menus where
+  Red has one: the "Access whose PC?" chooser and the storage verbs behind it.
+  Only the second runs the `ui.pc.items` hook this mod renames through, so the
+  row actually carrying the words "BILL's PC" had no seam on it and kept its
+  name while every other surface said BOX. The row and the page it opens with
+  are renamed now; `<PLAYER>'s PC` and `PROF.OAK's PC` keep theirs.
+
 ## 1.27.0
 
 **The whole bundle runs on Gold, Silver and Crystal.** The manifest declares
