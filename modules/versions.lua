@@ -5,7 +5,7 @@ return {
   ["Gen1Arena"] = "0.24.0",
   ["Gen1BattleUI"] = "1.8.0",
   ["Gen1BillsBox"] = "1.7.0",
-  ["Gen1Dex"] = "1.11.0",
+  ["Gen1Dex"] = "1.11.1",
   ["Gen1Elevator"] = "maintained",
   ["Gen1ItemInfo"] = "maintained",
   ["Gen1MenuManager"] = "0.5.0",

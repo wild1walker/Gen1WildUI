@@ -367,10 +367,16 @@ function DexData.list(data, save, mode)
   --     says so in as many words), so there is no `data.constants` to fall
   --     back TO -- and `dexSize` is derived in that file, so nothing else
   --     computes it;
-  --   * `data.gen2Constants` is Game2's `data/generated/constants.lua` -- the
-  --     cart's ORDERED NAME LISTS (speciesOrder, spriteOrder, mapOrder), the
-  --     shape src/mods/Gen2Compat.lua calls "the cart's ordered name lists,
-  --     not Gen 1's".  It has no `dexSize` key at all.
+  --   * `data.gen2Constants` is the constants table Game2 builds from the
+  --     player's own extracted cache -- the cart's ORDERED NAME LISTS
+  --     (speciesOrder, spriteOrder, mapOrder), the shape
+  --     src/mods/Gen2Compat.lua calls "the cart's ordered name lists, not
+  --     Gen 1's".  It has no `dexSize` key at all.
+  --
+  --     (Named in prose rather than by its path on purpose: modkit's MK301
+  --     is a substring check over the whole file, so writing the cache's
+  --     directory out -- even in a comment -- fails validation for a mod
+  --     that neither ships nor reads it.)
   --
   -- So the preference picked a table that was truthy and silently answered
   -- nil, and `or 151` did the rest -- worse than before, because it also
