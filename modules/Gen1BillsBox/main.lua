@@ -70,6 +70,15 @@ return function(mod)
     -- from: the cart wanted a PC in front of you.
     { key = "startRow", label = "BOX ON START", type = "toggle",
       default = true },
+    -- The GLOBAL BOX: pages at the end of the box list that every cartridge
+    -- on this installation shares.  On by default because it is inert until
+    -- something is put in it -- an empty GLOBAL 1 past BOX 12 -- and off is
+    -- here because it IS a way for a POKeMON to leave this save.
+    { key = "globalBox", label = "GLOBAL BOX", type = "toggle", default = true },
+    -- The SEND row on a POKeMON's popup, in the party menu and in the box.
+    -- Separate from the pages because the pages are somewhere you go and this
+    -- is a verb you can press by accident on the way to STATS.
+    { key = "sendRow", label = "SEND ROW", type = "toggle", default = true },
   })
 
   local function option(key, fallback)
@@ -85,28 +94,67 @@ return function(mod)
   -- sandboxedLoad): the chunk runs in this mod's globals rather than the real
   -- _G.  A failure here logs and returns, which leaves the builtin BoxMenu in
   -- place -- a broken storage screen must never be the only storage screen.
+  -- One reader for all three files this mod is built from.  Answers nil and
+  -- says why, rather than raising: a mod file that will not load costs the
+  -- feature it carries, and the two optional ones must not be able to take
+  -- the storage screen down with them.
+  local function submodule(file)
+    local source, readErr = mod:read(file)
+    if not source then
+      mod.log:error("%s is missing (%s); reinstall the mod", file,
+        tostring(readErr or "unknown read error"))
+      return nil
+    end
+    local chunk, compileErr = load(source, "@" .. mod.path .. "/" .. file)
+    if not chunk then
+      mod.log:error("%s did not compile: %s", file, tostring(compileErr))
+      return nil
+    end
+    local ok, value = pcall(chunk)
+    if not ok then
+      mod.log:error("%s failed to run: %s", file, tostring(value))
+      return nil
+    end
+    return value
+  end
+
+  -- ------- the GLOBAL BOX
+  --
+  -- Two files: the STORE, which knows about buckets, ids and claims and
+  -- nothing about a game being open, and the PANE, which is the layer between
+  -- it and a box screen.  Both are optional in the sense that matters -- if
+  -- either fails to load, `pane` is nil, the box screen shows the cart's
+  -- twelve boxes exactly as it did before this feature existed, and no SEND
+  -- row is offered.  A shared store is the one part of this mod that can put
+  -- a POKeMON somewhere the save cannot reach, so it never gets to be the
+  -- reason storage does not open.
+  local GlobalBox = submodule("globalbox.lua")
+  local paneFactory = type(GlobalBox) == "table" and submodule("globalpane.lua")
+    or nil
+  local pane = nil
+  if type(paneFactory) == "function" then
+    local okPane, built = pcall(paneFactory, mod, GlobalBox)
+    if okPane and type(built) == "table" then
+      pane = built
+    else
+      mod.log:error("the GLOBAL BOX did not build (%s); the cartridge's own "
+        .. "boxes are unaffected", tostring(built))
+    end
+  end
+
+  local function globalPane()
+    if not pane or not option("globalBox", true) then return nil end
+    return pane
+  end
+
   local file = gen2 and "gen2screen.lua" or "screen.lua"
-  local source, readErr = mod:read(file)
-  if not source then
-    mod.log:error("%s is missing (%s); reinstall the mod", file,
-      tostring(readErr or "unknown read error"))
+  local factory = submodule(file)
+  if type(factory) ~= "function" then
+    mod.log:error("%s must return a factory function", file)
     return
   end
 
-  local chunk, compileErr = load(source, "@" .. mod.path .. "/" .. file)
-  if not chunk then
-    mod.log:error("%s did not compile: %s", file, tostring(compileErr))
-    return
-  end
-
-  local okFactory, factory = pcall(chunk)
-  if not okFactory or type(factory) ~= "function" then
-    mod.log:error("%s must return a factory function: %s", file,
-      tostring(factory))
-    return
-  end
-
-  local okScreen, screen = pcall(factory, mod)
+  local okScreen, screen = pcall(factory, mod, globalPane)
   if not okScreen or type(screen) ~= "table"
       or type(screen.new) ~= "function" then
     mod.log:error("the box screen factory failed: %s", tostring(screen))
@@ -521,6 +569,177 @@ return function(mod)
     battle:sayNext(overflowNote(open, landed, switched))
   end)
 
+  -- ------- SEND, on a POKeMON's own popup
+  --
+  -- The box screen is where you ARRANGE the GLOBAL BOX; this is the one-press
+  -- way in, from the menu you are already in when you decide a POKeMON should
+  -- go.  `ui.party.submenu` is the same hook name and arity on both
+  -- generations (src/ui/PartyMenu.lua:775, src/ui/gen2/PartyMenu.lua:292), so
+  -- one row serves Red and Gold.
+  --
+  -- Deliberately NOT offered in the box screen's own popup: there, carrying a
+  -- POKeMON onto a GLOBAL page is the same action with the cursor already in
+  -- your hand, and a second path that reaches around that screen's party
+  -- bookkeeping is a way to desync it.
+  --
+  -- The row is left OFF a POKeMON that could only refuse -- an EGG, a Johto
+  -- species, one holding MAIL, one that knows a move RED never heard of --
+  -- rather than shown as a refusal, which is the same call Gen1Remember makes
+  -- about its own row.  Asking costs a conversion, so it is asked once when
+  -- the menu is built and not again.
+  local function nameOf(game, mon)
+    if type(mon) ~= "table" then return "" end
+    if mon.nickname then return mon.nickname end
+    local pokemon = game and game.data and game.data.pokemon
+    local def = pokemon and pokemon[mon.species]
+    return (def and def.name) or tostring(mon.species)
+  end
+
+  local function say(game, text, opts)
+    local TextBox = mod.ui and mod.ui.TextBox
+    if not (TextBox and game and game.stack) then return end
+    game.stack:push(TextBox.new(game, text, nil, opts))
+  end
+
+  -- The party may not be emptied, and on Gold it may not be left without
+  -- something that can fight -- the same two rules the box screen enforces on
+  -- a pick-up, asked here of a POKeMON that is about to leave the save
+  -- entirely.  Answers the refusal line, or nil.
+  local function refusesToLeaveParty(game, mon)
+    local save = game and game.save
+    local party = (save and save.party) or {}
+    if not gen2 then
+      if #party <= 1 then
+        local text = (game.data and game.data.text) or {}
+        return text._CantDepositLastMonText
+          or Strings("You can't deposit\nthe last POKéMON!")
+      end
+      return nil
+    end
+    local healthy = 0
+    for _, held in ipairs(party) do
+      if held ~= mon and not held.isEgg and (held.hp or 0) > 0 then
+        healthy = healthy + 1
+      end
+    end
+    if healthy < 1 then
+      return Strings("That's your last\nPOKéMON!")
+    end
+    return nil
+  end
+
+  -- Everything the cart does to a POKeMON on its way into storage, before it
+  -- is copied into the box -- so what the GLOBAL BOX holds is a stored
+  -- POKeMON rather than a party one.
+  local function enteringStorage(game, mon)
+    if gen2 then
+      local okBoxes, Gen2Boxes = pcall(require, "src.core.gen2.Boxes")
+      if okBoxes and type(Gen2Boxes.enterBox) == "function" then
+        pcall(Gen2Boxes.enterBox, mon)
+      end
+      return
+    end
+    -- src.world.PikachuFollower, which is the name screen.lua's own deposit
+    -- tail reaches for -- there is no src.world.Follower, and a require for
+    -- one fails silently inside the pcall, which is exactly the shape of bug
+    -- that only a test with the real module name in it finds.
+    local okFollower, Follower = pcall(require, "src.world.PikachuFollower")
+    if okFollower and type(Follower) == "table"
+        and type(Follower.modifyHappiness) == "function" then
+      pcall(Follower.modifyHappiness, game.save, "DEPOSITED", mon)
+    end
+  end
+
+  -- Out of the party, and out of the letters indexed by party position with
+  -- it.  A POKeMON holding MAIL never reaches here -- Convert refuses it --
+  -- but every letter BEHIND the one leaving still has to move up, which is
+  -- what removeSlot is for (src/core/gen2/Mail.lua:136).
+  local function leaveParty(game, mon)
+    local party = game and game.save and game.save.party
+    if type(party) ~= "table" then return false end
+    for index, held in ipairs(party) do
+      if held == mon then
+        table.remove(party, index)
+        if gen2 then
+          local okMail, Mail = pcall(require, "src.core.gen2.Mail")
+          if okMail and type(Mail) == "table"
+              and type(Mail.removeSlot) == "function" then
+            pcall(Mail.removeSlot, game.save, index)
+          end
+        end
+        return true
+      end
+    end
+    return false
+  end
+
+  local function sendToGlobal(game, mon)
+    local P = globalPane()
+    if not P then return end
+    local okOpen, session = pcall(P.open, game)
+    if not (okOpen and type(session) == "table") then
+      mod.log:warn("the GLOBAL BOX could not be opened (%s)", tostring(session))
+      return
+    end
+    local refusal = session:refusalFor(game, mon)
+    if refusal then return say(game, session:refusalText(refusal)) end
+    local cannotLeave = refusesToLeaveParty(game, mon)
+    if cannotLeave then return say(game, cannotLeave) end
+
+    local name = nameOf(game, mon)
+    say(game, Strings("Send %s\nto the GLOBAL BOX?", name), {
+      defaultNo = true,
+      choice = function(yes)
+        if not yes then return end
+        -- re-asked: the confirm ran a frame later, and the party can have
+        -- changed under it
+        local stillThere = false
+        for _, held in ipairs((game.save and game.save.party) or {}) do
+          if held == mon then stillThere = true break end
+        end
+        if not stillThere then return end
+        local againReason = session:refusalFor(game, mon)
+        if againReason then
+          return say(game, session:refusalText(againReason))
+        end
+        local againLine = refusesToLeaveParty(game, mon)
+        if againLine then return say(game, againLine) end
+        enteringStorage(game, mon)
+        local index, reason = session:put(game, mon)
+        if not index then return say(game, session:refusalText(reason)) end
+        leaveParty(game, mon)
+        say(game, Strings("Sent %s\nto the GLOBAL BOX!", name))
+      end,
+    })
+  end
+
+  mod.hooks:wrap("ui.party.submenu", function(next, game, items, mon, ctx)
+    local out = next(game, items, mon, ctx)
+    if type(out) ~= "table" then return out end
+    if not (option("sendRow", true) and globalPane()) then return out end
+    -- SWITCH / STATS / CANCEL, mid-battle: not a place to be emptying the
+    -- party into shared storage
+    if ctx and ctx.battle then return out end
+    if not (type(mon) == "table" and mon.species) then return out end
+    local okAsk, refusal = pcall(globalPane().wouldRefuse, game, mon)
+    if not okAsk then
+      mod.log:warn("the GLOBAL BOX could not be asked about this POKéMON "
+        .. "(%s); the row is left off", tostring(refusal))
+      return out
+    end
+    if refusal then return out end
+    out[#out + 1] = {
+      label = Strings("SEND"),
+      -- The party menu dispatches a hook-injected row as onSelect(mon, game)
+      -- (src/ui/PartyMenu.lua); taking both and falling back on the pair the
+      -- row was built for is what lets one row serve either caller.
+      onSelect = function(whichMon, whichGame)
+        sendToGlobal(whichGame or game, whichMon or mon)
+      end,
+    }
+    return out
+  end)
+
   -- The per-mon popup's extension point: another mod hands it rows for a
   -- POKeMON and this screen puts them between its own verbs and CANCEL.
   -- Published whether or not anything registers, because provide() is how a
@@ -542,6 +761,14 @@ return function(mod)
 
   -- exported so the suite can drive the rename without a booted game, and so
   -- a companion mod can ask whether the rename has run yet
+  -- The GLOBAL BOX, for the suite and for a companion mod that wants to put
+  -- a POKeMON in one without going through a menu.  nil when the feature is
+  -- switched off or failed to load, which is the same answer either way: do
+  -- not offer it.
+  mod.exports.globalBox = GlobalBox
+  mod.exports.globalPane = globalPane
+  mod.exports.sendToGlobal = sendToGlobal
+
   mod.exports.renameStorageText = renameStorageText
   mod.exports.pcRowLabels = PC_ROWS
   mod.exports.overflowTarget = overflowTarget

@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.28.0
+
+- **The GLOBAL BOX** (Gen1BillsBox 1.8.0, 1.8.1). Past the last of your
+  cartridge's boxes the box header keeps going: **GLOBAL 1**, and another page
+  every time the last one fills. It is one box shared by every save on your
+  installation — deposit a POKéMON on Wild Green, withdraw it on Wild Crystal
+  — and there is a **SEND** row on a POKéMON's own popup in the party menu, on
+  both games, for the times you would rather not open the PC at all.
+
+  **It lives inside the saves.** Save sync carries exactly two things: save
+  slot sources and the mod roster. So the box is not one list — every save
+  carries its own outbox in its mod data, and the GLOBAL pages are all of them
+  laid end to end. Your own save's outbox is the only thing you ever write;
+  every other save is read read-only; and withdrawing one that came from
+  another save writes a *claim* into yours, which every cartridge reads, so it
+  leaves the box everywhere at once and the save still holding it lets go on
+  its next boot. It syncs, it backs up, and it rolls back with the save that
+  holds it.
+
+  What may live in it is the **Time Capsule's** rule, reused rather than
+  restated: a Johto species, a Gen 2 move, a held MAIL or an EGG is refused
+  with the cartridge's own reason. A shared page has no gaps, no swap, no SORT
+  and no RELEASE, each one a consequence of the store being shared rather than
+  a decision taken for its own sake.
+
+  Two switches: **GLOBAL BOX** turns the pages off, **SEND ROW** turns the row
+  off. With the first off the box screen is the twelve — or fourteen — it
+  always was.
+
 ## 1.27.4
 
 - **The box walks its POKéMON at the same speed the party list does**

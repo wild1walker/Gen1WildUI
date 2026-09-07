@@ -57,7 +57,7 @@
 -- the hairline between the two panes at x=28.  A player who knows this screen
 -- on one cart knows it on the other.
 
-return function(mod)
+return function(mod, globalPane)
   local Boxes = require("src.core.gen2.Boxes")
   local Chrome = require("src.ui.gen2.Chrome")
   local Mail = require("src.core.gen2.Mail")
@@ -381,6 +381,75 @@ return function(mod)
     return nil
   end
 
+  -- ------- the GLOBAL pages
+  --
+  -- Past BOX 14 the header keeps going: GLOBAL 1, and one more page every time
+  -- the last one fills.  The store behind them is shared with every other save
+  -- on this installation, Wild Green's included (globalbox.lua), and the whole
+  -- of what is different about them follows from that:
+  --
+  --   * no gaps -- the cell another cartridge's POKeMON sits in is not this
+  --     save's to record, so the pages are the union in order and always
+  --     closed up.  One put down lands in the first free cell and the cursor
+  --     follows it there.
+  --   * no swap, no sort, no release.  A swap re-sorts the page under your
+  --     hand; a sort would be this save deciding the order of POKeMON in other
+  --     people's saves; and "gone forever" is not a thing this save gets to
+  --     decide about a POKeMON living in another one.
+  --
+  -- The Gen 1 screen carries the same layer, function for function
+  -- (modules/Gen1BillsBox/screen.lua): the two storage models underneath are
+  -- nothing like each other, but the shared store is one store and a page of
+  -- it has to behave the same on both cartridges.
+
+  local function globalSession(screen)
+    return screen and screen.global or nil
+  end
+
+  local function onGlobal(screen)
+    return screen ~= nil and screen.globalPage ~= nil
+      and globalSession(screen) ~= nil
+  end
+
+  local function globalPages(screen)
+    local session = globalSession(screen)
+    if not session then return 0 end
+    local ok, pages = pcall(session.pages, session)
+    return (ok and tonumber(pages)) or 0
+  end
+
+  local function pageMonAt(screen, cell)
+    if not onGlobal(screen) then
+      return boxMonAt(screen.save, screen.boxIndex, cell)
+    end
+    local session = globalSession(screen)
+    local ok, mon = pcall(session.at, session, screen.globalPage, cell)
+    return ok and mon or nil
+  end
+
+  local function pageCount(screen)
+    if not onGlobal(screen) then
+      return Boxes.count(screen.save, screen.boxIndex)
+    end
+    local session = globalSession(screen)
+    local ok, count = pcall(session.countOn, session, screen.globalPage)
+    return (ok and tonumber(count)) or 0
+  end
+
+  local function pageCapacity(screen)
+    if not onGlobal(screen) then return Boxes.MONS_PER_BOX end
+    local session = globalSession(screen)
+    local ok, capacity = pcall(session.capacity, session)
+    return (ok and tonumber(capacity)) or Boxes.MONS_PER_BOX
+  end
+
+  local function pageName(screen)
+    if not onGlobal(screen) then
+      return Boxes.name(screen.save, screen.boxIndex)
+    end
+    return Strings("GLOBAL %d", screen.globalPage)
+  end
+
   -- ------- and where in the PARTY pane each one sits
   --
   -- The same idea, and deliberately not the same mechanism -- again the Gen 1
@@ -557,6 +626,25 @@ return function(mod)
     installIconRule()
     local ok, icons = pcall(PartyMenu.new, game, { party = {}, save = self.save })
     self.icons = ok and icons or nil
+    -- The GLOBAL pages, opened once here rather than per frame: opening a
+    -- session reads and decodes every save on the installation and reconciles
+    -- this one against what the others have claimed.  nil when the feature is
+    -- off or failed to load, and every page* call above already reads that as
+    -- "this screen has fourteen boxes".
+    self.globalPage = nil
+    self.global = nil
+    if type(globalPane) == "function" then
+      local pane = globalPane()
+      if pane then
+        local okPane, session = pcall(pane.open, game)
+        if okPane and type(session) == "table" then
+          self.global = session
+        else
+          mod.log:warn("the GLOBAL BOX did not open (%s); the cartridge's own "
+            .. "boxes are unaffected", tostring(session))
+        end
+      end
+    end
     return self
   end
 
@@ -583,7 +671,8 @@ return function(mod)
   function Screen:boxCells(index)
     local cells = {}
     for cell = 1, SLOTS do
-      cells[cell] = boxMonAt(self.save, index, cell)
+      cells[cell] = onGlobal(self) and pageMonAt(self, cell)
+        or boxMonAt(self.save, index, cell)
     end
     return cells
   end
@@ -622,7 +711,7 @@ return function(mod)
       if at == slot then return held.mon end
     end
     if pane == "party" then return partyMonAtRow(self, slot) end
-    return boxMonAt(self.save, self.boxIndex, slot)
+    return pageMonAt(self, slot)
   end
 
   function Screen:monUnder()
@@ -654,6 +743,21 @@ return function(mod)
       partyTake(self, row)
       Mail.removeSlot(self.save, index)
       self.held = { mon = mon, from = "party", row = row }
+      return
+    end
+    -- A GLOBAL page hands back a TICKET as well as the POKeMON, and the ticket
+    -- is the only way back: out of your OWN outbox it is a removal, out of
+    -- another save's it is a claim, and undoing the two is not the same move.
+    if onGlobal(self) then
+      local session = globalSession(self)
+      local mon, ticket = session:take(self.game, self.globalPage, self.boxSlot)
+      if not mon then
+        if ticket and ticket ~= "empty_cell" then
+          self:say(session:refusalText(ticket))
+        end
+        return
+      end
+      self.held = { mon = mon, from = "box", global = true, ticket = ticket }
       return
     end
     if not self:boxIndexAt(self.boxIndex, self.boxSlot) then return end
@@ -709,9 +813,61 @@ return function(mod)
     if pane == "party" then
       targetIndex = self:partyIndexAt(self.partySlot)
       target = targetIndex and party[targetIndex]
+    elseif onGlobal(self) then
+      target = pageMonAt(self, self.boxSlot)
     else
       targetIndex = self:boxIndexAt(self.boxIndex, self.boxSlot)
       target = targetIndex and boxList(self.save, self.boxIndex)[targetIndex]
+    end
+
+    -- ---- onto a GLOBAL page
+    --
+    -- Two arms and no third.  A POKeMON that CAME from a global page goes back
+    -- through its own ticket, into the cell it came out of, whatever cell the
+    -- cursor is on -- the pages are a shared queue and there is nothing here
+    -- to rearrange.  Anything else is a deposit, which lands in the first free
+    -- cell for the same reason; the cursor follows it so the move is visible.
+    if pane == "box" and onGlobal(self) then
+      local session = globalSession(self)
+      if held.global then
+        session:untake(held.ticket)
+        self.held = nil
+        local page, cell = session:locate(held.ticket and held.ticket.id)
+        if page then self.globalPage, self.boxSlot = page, cell end
+        return
+      end
+      if held.from == "party" and healthyAfter(party, held.mon, nil) < 1 then
+        return self:say(Strings("You can't deposit\nthe last POKéMON!"))
+      end
+      -- the cart's own into-storage tail runs BEFORE the box copies it, so
+      -- what is stored is a stored POKeMON and not a party one.  `put` is the
+      -- only place the conversion happens, and it converts before it stores --
+      -- so a refusal leaves the box untouched and the POKeMON in hand, and
+      -- asking first would only be Convert run twice.  The cell the cursor is
+      -- on is not part of it: the pages are a queue with no gaps, so a deposit
+      -- lands in the first free cell wherever it was aimed and the cursor
+      -- follows it there.
+      -- three returns on the way out and only the first says whether it
+      -- worked: `put` answers index, page, cell -- or nil and a reason, whose
+      -- reason would read as a perfectly good page number if the index were
+      -- thrown away.
+      local index, page, cell = session:put(self.game, intoBox(held.mon))
+      if not index then return self:say(session:refusalText(page)) end
+      self.globalPage, self.boxSlot = page, cell
+      self.held = nil
+      if option("placeCry", true) then
+        pcall(function()
+          require("src.core.Sound").playCry(self.game.data, held.mon.species)
+        end)
+      end
+      return
+    end
+
+    -- A POKeMON carried OUT of a global page cannot swap: the POKeMON it would
+    -- displace has to go back where the carried one came from, and "where it
+    -- came from" is a cell in somebody else's save.
+    if held.global and target then
+      return self:say(Strings("There's a POKéMON\nthere already!"))
     end
 
     local refusal = self:refuse(pane, target)
@@ -740,6 +896,9 @@ return function(mod)
         local at = partyPut(self, held.row, intoParty(sent))
         mailInsertSlot(self.save, at)
       else
+        -- held.global never reaches here: a carried shared POKeMON refuses
+        -- an occupied cell above, because there is no cell of its own to send
+        -- the displaced one back to.
         boxPut(self.save, held.box, held.cell, intoBox(sent))
       end
     else
@@ -763,6 +922,11 @@ return function(mod)
     local held = self.held
     if not held then return end
     self.held = nil
+    if held.global then
+      local session = globalSession(self)
+      if session then session:untake(held.ticket) end
+      return
+    end
     if held.from == "party" then
       local party = partyOf(self.save)
       if #party < Boxes.PARTY_SIZE then
@@ -806,12 +970,22 @@ return function(mod)
 
   -- ------- moving about
 
+  -- One ring: BOX 1 .. BOX 14, then GLOBAL 1 .. GLOBAL n, then round to BOX 1.
+  -- The global pages are counted fresh on every step, because the last one is
+  -- always empty and a deposit into it opens another.
   function Screen:changeBox(delta)
-    local index = self.boxIndex + delta
-    if index < 1 then index = Boxes.NUM_BOXES end
-    if index > Boxes.NUM_BOXES then index = 1 end
-    self.boxIndex = index
-    if self.save then self.save.currentBox = index end
+    local pages = globalPages(self)
+    local count = Boxes.NUM_BOXES + pages
+    local at = self.globalPage and (Boxes.NUM_BOXES + self.globalPage)
+      or self.boxIndex
+    at = ((at - 1 + delta) % count) + 1
+    if at > Boxes.NUM_BOXES then
+      self.globalPage = at - Boxes.NUM_BOXES
+      return
+    end
+    self.globalPage = nil
+    self.boxIndex = at
+    if self.save then self.save.currentBox = at end
   end
 
   -- The header is a stop on the way round rather than a wall: UP out of the
@@ -893,7 +1067,7 @@ return function(mod)
     local mon = (not screen.held) and screen:monUnder() or nil
     if not mon then return nil end
     local items = { { label = Strings("STATS"), id = "stats" } }
-    if screen.pane == "box" then
+    if screen.pane == "box" and not onGlobal(screen) then
       items[#items + 1] = { label = Strings("RELEASE"), id = "release" }
     end
     items[#items + 1] = { label = Strings("CANCEL"), id = "cancel" }
@@ -1022,6 +1196,11 @@ return function(mod)
   -- header's LEFT/RIGHT are the other two and all of them stay -- so nothing
   -- is lost by giving it the job it has on Red.
   function Screen:openSort()
+    -- A sort rewrites the order of a box.  The GLOBAL pages are the union of
+    -- every save's outbox in the order the POKeMON were sent, and that order
+    -- is what makes a page and a cell mean the same thing on both cartridges
+    -- -- so there is nothing here this save is entitled to reorder.
+    if onGlobal(self) then return end
     if self.held or self.pane == "header" then return end
     local list = boxList(self.save, self.boxIndex)
     if not list or #list < 2 then
@@ -1078,6 +1257,12 @@ return function(mod)
   end
 
   function Screen:doRelease()
+    -- RELEASE is the cartridge's own verb over the cartridge's own storage.  A
+    -- POKeMON on a GLOBAL page may be sitting in another save entirely, and
+    -- "gone forever" is not a thing this save gets to decide about one.  The
+    -- row is not offered there; this is the second lock, because the first is
+    -- a menu and menus can be reached in more than one way.
+    if onGlobal(self) then return end
     local index = self:boxIndexAt(self.boxIndex, self.boxSlot)
     if not index then return end
     -- Copied BEFORE the release, because reconciliation cannot tell which
@@ -1229,10 +1414,9 @@ return function(mod)
     arrow(8, 8, "left")
     arrow(148, 8, "right")
     if self.pane == "header" then arrow(16, 8, "right") end
-    local name = Boxes.name(self.save, self.boxIndex)
-    Chrome.printThrough(tostring(name), 3, 1, palette())
-    local count = Boxes.count(self.save, self.boxIndex)
-    Chrome.printRightThrough(("%d/%d"):format(count, Boxes.MONS_PER_BOX),
+    Chrome.printThrough(tostring(pageName(self)), 3, 1, palette())
+    Chrome.printRightThrough(("%d/%d"):format(pageCount(self),
+                                              pageCapacity(self)),
                              18, 1, palette())
   end
 
