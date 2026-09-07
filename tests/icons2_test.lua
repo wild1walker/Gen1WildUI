@@ -303,6 +303,30 @@ if ENGINE then
      "and there is no separate held-POKeMON pass left to disagree with it")
   ok(boxSrc:find("function Screen:monDrawnAt", 1, true) ~= nil,
      "...because monDrawnAt puts the carried POKeMON in the cell instead")
+
+  -- ------- and at the cart's own speed
+  --
+  -- The box drives the borrowed renderer's clock from its own counter.  That
+  -- used to be DOUBLED, to match the Gen 1 box's ANIM_STEPS = 8 -- but Red's
+  -- box animates by mirroring one frame, and Gold's icons are a two-pose
+  -- walk, so eight steps of Gold's is the walk at double speed.  The box also
+  -- draws a party column, so the same POKeMON walked at one speed there and
+  -- another in PARTY MENU.
+  ok(boxSrc:find("self.icons.clock = self.ticks\n", 1, true) ~= nil
+       or boxSrc:find("self.icons.clock = self.ticks end", 1, true) ~= nil,
+     "the box hands the renderer its own tick count, undoubled")
+  ok(boxSrc:find("self.icons.clock = self.ticks * 2", 1, true) == nil,
+     "and nothing doubles it any more")
+
+  -- The counter has to turn over on a WHOLE flip or the walk jumps once a
+  -- cycle.  Both numbers are read rather than restated.
+  local steps = tonumber(partySrc:match("ICON_FRAME_STEPS%s*=%s*(%d+)"))
+  local ticks = tonumber(boxSrc:match("local TICKS%s*=%s*(%d+)"))
+  ok(steps and ticks, "both cadences are readable from the source")
+  eq(steps, 16, "the cart flips a party icon every sixteen steps")
+  eq(ticks % steps, 0,
+     ("%d ticks is a whole number of %d-step flips, so the walk does not "
+      .. "jump when the counter wraps"):format(ticks, steps))
 end
 
 do

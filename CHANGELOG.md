@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.27.4
+
+- **The box walks its POKéMON at the same speed the party list does**
+  (Gen1BillsBox 1.7.2). 1.27.3 fixed *which* two frames the walk uses; this is
+  how fast it plays them. The box was driving the icon clock at **double** rate
+  to match the Gen 1 box's `ANIM_STEPS = 8` — but Red's box animates by
+  *mirroring* one frame, where Gold's icons are a two-pose *walk*, so eight
+  steps of Gold's is the walk at double speed. The box even draws a party
+  column of its own, so the same POKéMON was walking at one speed there and
+  another in PARTY MENU. One cadence now, Gold's own sixteen.
+
 ## 1.27.3
 
 - **POKéMON in the box and the party walk south again instead of turning round

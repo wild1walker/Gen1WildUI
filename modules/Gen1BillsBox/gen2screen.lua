@@ -1113,15 +1113,23 @@ return function(mod)
   function Screen:update(_dt)
     self.ticks = (self.ticks + 1) % TICKS
     -- The borrowed renderer's clock is driven from this screen's own counter,
-    -- at TWICE its rate.  `iconFor` flips frames every ICON_FRAME_STEPS = 16,
-    -- which is the party list's cadence; the Gen 1 box walks its icon every
-    -- EIGHT (modules/Gen1BillsBox/screen.lua, ANIM_STEPS), and a storage grid
-    -- next to a party list is not the place for the two to disagree.  Doubling
-    -- the clock is the whole of it -- no second copy of the frame maths.
+    -- AT ITS OWN RATE -- `iconFor` flips frames every ICON_FRAME_STEPS = 16,
+    -- and that is the cadence a Gold POKeMON walks at.
     --
-    -- 240 ticks doubled is 480, thirty whole frame-flips, so neither the walk
-    -- nor the flash jumps when the counter turns over.
-    if self.icons then self.icons.clock = self.ticks * 2 end
+    -- It used to be doubled, to match the Gen 1 box's ANIM_STEPS = 8 on the
+    -- grounds that a storage grid next to a party list should not disagree
+    -- with it.  The number was borrowed from the wrong screen.  Red's box
+    -- animates by MIRRORING one frame the way the hardware's OAM did, and
+    -- eight steps of a mirror reads as a shuffle; Gold's icons are a two-pose
+    -- WALK, and eight steps of that is simply the walk at double speed.  The
+    -- party list this grid actually sits beside is Gold's, at sixteen -- and
+    -- this screen draws a party column of its own, so the same POKeMON was
+    -- walking at one speed here and another in PARTY MENU.
+    --
+    -- 240 ticks is fifteen whole frame-flips, so the walk does not jump when
+    -- the counter turns over.  The flash reads `self.ticks` directly and is
+    -- unaffected either way.
+    if self.icons then self.icons.clock = self.ticks end
     local input = self.game and self.game.input
     if not input then return end
 
