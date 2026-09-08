@@ -65,16 +65,19 @@
 --
 -- ------- what may live in it
 --
--- Gen 1 POKeMON, in Gen 1 shape, and nothing else.  Not a rule invented here:
--- it is the Time Capsule's, which the engine already implements and this
--- reuses whole (src/online/Convert.lua).  A Johto species, a Gen 2 move, a
--- held MAIL or an EGG is refused with the cartridge's own reason.
+-- Any POKeMON either generation can hold, in the shape the game that sent it
+-- had it in (see FORMAT below).  The box refuses almost nothing.
 --
--- Storing ONE shape is what makes the box work at all.  A Gen 1 cart deposits
--- and withdraws with no conversion and needs no second dataset.  A Gen 2 cart
--- converts on the way in and on the way out, which needs a Gen 1 dataset
--- mounted -- the same requirement, through the same code, that the Time
--- Capsule already has.
+-- What a GAME will take back out is a different question, and it is the Time
+-- Capsule's -- the engine's own rule, which this reuses whole
+-- (src/online/Convert.lua) rather than restating.  A Johto species, a Gen 2
+-- move, a held MAIL or an EGG cannot come out on a Gen 1 game, and is refused
+-- there with the cartridge's own reason.  It comes out on Gold exactly as it
+-- went in.
+--
+-- That is one rule asked at one place, and it is the right place: "RED never
+-- heard of that move" is a fact about handing a POKeMON to RED, not about
+-- storing it.
 
 local GlobalBox = {}
 
@@ -92,19 +95,52 @@ GlobalBox.CAPACITY = GlobalBox.PAGE * GlobalBox.MAX_PAGES
 -- The mod.save key the bucket hangs from.
 GlobalBox.KEY = "globalbox"
 
-GlobalBox.FORMAT = 1
+-- FORMAT 2 keeps each POKeMON in ITS OWN generation's shape and says which,
+-- where format 1 kept everything in Gen 1's.
+--
+-- One shape was the wrong trade.  It meant a Gen 2 game had to convert on the
+-- way IN, which needs Gen 1's base stats, moves and growth rates -- so a Gold
+-- player with no Gen 1 game imported could not use the box at all, and one WITH
+-- a Gen 1 game imported paid for a whole dataset mount to send a POKeMON to
+-- himself.  It also meant a player whose games are all Gen 2 could never put a
+-- Johto POKeMON in, which is most of what such a player has.
+--
+-- Storing the native shape costs nothing and pays twice.  A deposit converts
+-- NOTHING, ever.  A withdrawal converts only when the POKeMON is crossing
+-- generations, and Convert reaches for the OTHER generation's dataset only as
+-- a fallback for a POKeMON missing its stats (src/online/Convert.lua:126) or
+-- its maxHp (:262) -- which a stored POKeMON never is.  So both conversions
+-- run on the live game's own dataset and no dataset is ever mounted.
+--
+-- What moves is WHEN a POKeMON is refused.  "RED never heard of that move" is
+-- not a fact about storing it, it is a fact about handing it to RED, so it is
+-- asked at the withdrawal into a Gen 1 game and nowhere else.  A Johto POKeMON
+-- sits in the box perfectly well; it simply will not come out on Red.
+GlobalBox.FORMAT = 2
+
+-- Format 1 buckets are read, not discarded: everything in one is a Gen 1 shape
+-- by construction, so it reads as `gbGen = 1` and needs no rewrite to be
+-- understood.  Only OUR OWN bucket is ever stamped up to 2, and only when the
+-- save it lives in is next written.
+GlobalBox.READABLE = { [1] = true, [2] = true }
+
+-- Which generation's shape a stored POKeMON is in.  Absent means format 1,
+-- which means Gen 1.
+function GlobalBox.genOf(mon)
+  if type(mon) ~= "table" then return 1 end
+  local gen = tonumber(mon.gbGen)
+  return (gen == 2) and 2 or 1
+end
 
 -- ------- the rules, borrowed rather than restated
 
 -- The reasons Convert.refusalFor answers with, in the cartridge's own voice.
--- `species_too_new` is the one a player meets: a Johto POKeMON cannot go in a
--- box a Gen 1 game has to be able to open.
+-- `species_too_new` is the one a player meets: a Johto POKeMON goes in the box
+-- happily and will not come out on a Gen 1 game.
 --
 -- RED stands for the Gen 1 games here, the way the Time Capsule's own refusals
--- do -- except in `no_gen1_data`, which is about an IMPORT and so has to name
--- what would actually fix it.  Any of the three will (GEN1_VERSIONS below), so
--- telling a BLUE player to import RED would be telling them to do the one
--- thing they do not need to.
+-- do.  Every one of these is now a WITHDRAWAL refusal -- what RED will not
+-- take out -- rather than something the box refused to hold.
 GlobalBox.REFUSALS = {
   not_a_mon       = "That can't be\nsent.",
   is_egg          = "An EGG can't be\nsent.",
@@ -112,7 +148,6 @@ GlobalBox.REFUSALS = {
   has_mail        = "Take the MAIL off\nfirst.",
   move_too_new    = "It knows a move\nRED has never\fheard of.",
   full            = "The GLOBAL BOX is\nfull!",
-  no_gen1_data    = "RED, BLUE or\nYELLOW must be\fimported to send\nfrom here.",
   no_save         = "There's no save to\nput it in.",
 }
 
@@ -145,7 +180,7 @@ end
 -- how a POKeMON disappears.
 function GlobalBox.isBucket(value)
   if type(value) ~= "table" then return false end
-  if tonumber(value.format) ~= GlobalBox.FORMAT then return false end
+  if not GlobalBox.READABLE[tonumber(value.format)] then return false end
   if type(value.origin) ~= "string" or value.origin == "" then return false end
   return true
 end
@@ -198,6 +233,16 @@ function GlobalBox.ensureBucket(modSave)
     bucket.mons = type(bucket.mons) == "table" and bucket.mons or {}
     bucket.claims = type(bucket.claims) == "table" and bucket.claims or {}
     bucket.seq = tonumber(bucket.seq) or 0
+    -- A format 1 bucket holds Gen 1 shapes and nothing else, so saying so is
+    -- the whole migration.  Done to OUR OWN bucket only, and in place: the ids
+    -- do not change, so a claim another save is holding against one of these
+    -- still names it.
+    if tonumber(bucket.format) ~= GlobalBox.FORMAT then
+      for _, mon in ipairs(bucket.mons) do
+        if type(mon) == "table" and mon.gbGen == nil then mon.gbGen = 1 end
+      end
+      bucket.format = GlobalBox.FORMAT
+    end
     return bucket
   end
   -- A bucket this build cannot read is left exactly where it is: replacing it
@@ -223,9 +268,10 @@ end
 -- disk, and the one in memory is the true one).
 
 local function sourceFrom(key, bucket, live)
-  if type(bucket) ~= "table" then return nil end
-  if tonumber(bucket.format) ~= GlobalBox.FORMAT then return nil end
-  if type(bucket.origin) ~= "string" or bucket.origin == "" then return nil end
+  -- Every format this build can READ, not just the one it writes: another
+  -- cartridge running an older build keeps a format 1 bucket, and a box that
+  -- stopped seeing it the moment this one updated would not be one box.
+  if not GlobalBox.isBucket(bucket) then return nil end
   return {
     key = key,
     origin = bucket.origin,
@@ -456,12 +502,15 @@ end
 
 -- ------- what goes in
 --
--- The gate is Convert's, asked of the Gen 1 shape the box stores.  A caller
--- on a Gen 2 cartridge converts FIRST and asks about the result, so a mon
--- that Convert would refuse never reaches here with a reason of its own.
+-- What the STORE refuses, which is now almost nothing: it holds whatever
+-- generation's shape it is handed, so there is no conversion here to fail.
+--
+-- An EGG is not refused any more.  It was, when everything had to be a Gen 1
+-- shape and Gen 1 has no eggs -- but a Gen 2 box holds one perfectly well, and
+-- an egg that will not come out on Red is a withdrawal Red refuses, not a
+-- deposit anybody should have been stopped from making.
 function GlobalBox.accepts(view, mon)
   if type(mon) ~= "table" or mon.species == nil then return nil, "not_a_mon" end
-  if mon.isEgg then return nil, "is_egg" end
   if GlobalBox.full(view) then return nil, "full" end
   return true
 end
@@ -470,7 +519,7 @@ end
 -- Appended rather than placed, because the box is a queue of what you sent
 -- rather than a grid you arrange: SEND from a party menu has no cell to aim
 -- at, and a cell in a union of outboxes is not one save's to hand out.
-function GlobalBox.deposit(bucket, view, mon)
+function GlobalBox.deposit(bucket, view, mon, generation)
   if type(bucket) ~= "table" or type(bucket.mons) ~= "table" then
     return nil, "no_save"
   end
@@ -480,6 +529,9 @@ function GlobalBox.deposit(bucket, view, mon)
   bucket.seq = seq
   mon.gbId = ("%s#%d"):format(bucket.origin, seq)
   mon.gbSent = (os.time and os.time()) or seq
+  -- the shape it is in, recorded at the one moment anybody knows it for
+  -- certain: the game that put it there is the game it came out of
+  mon.gbGen = (tonumber(generation) == 2) and 2 or 1
   bucket.mons[#bucket.mons + 1] = mon
   return mon.gbId
 end

@@ -1,35 +1,41 @@
--- The GLOBAL BOX at runtime: the pages the box screen shows, and the two
--- conversions that let one store serve two cartridges.
+-- The GLOBAL BOX at runtime: the pages the box screen shows, and the one
+-- conversion that lets one store serve both generations.
 --
 -- globalbox.lua is the STORE -- buckets, ids, claims, the union view -- and
 -- knows nothing about a game being open.  This is the layer between it and a
--- screen: it finds the saves, holds the session's view of them, and turns a
--- POKeMON of this cartridge's generation into the Gen 1 shape the box keeps,
--- and back again.
+-- screen: it finds the saves, holds the session's view of them, and converts a
+-- POKeMON when, and only when, it crosses generations.
 --
--- ------- the two directions are not the same cost, and that is the design
+-- ------- nothing is converted on the way IN, and nothing mounts a dataset
 --
--- The box keeps ONE shape, Gen 1's.  So:
+-- The box keeps each POKeMON in its OWN generation's shape and records which
+-- (globalbox.lua, FORMAT 2).  So a deposit is a copy and a stamp, from either
+-- game, and a withdrawal converts only when the stored shape is not this
+-- game's:
 --
---   * A Gen 1 cartridge deposits and withdraws with no conversion at all.
---     The only thing it does on the way in is `Stats.ensure`, so the stored
---     POKeMON carries its computed stats -- see below for why that matters to
---     the OTHER cartridge.
---   * A Gen 2 cartridge WITHDRAWING calls Convert.toGen2, which reads the Gen
---     1 dataset only as a fallback for a POKeMON whose stats are missing
---     (src/online/Convert.lua:126).  Because the deposit side guarantees they
---     are not, a withdrawal needs no Gen 1 dataset -- which is the direction
---     this feature was asked for -- everything out of a Gen 1 game's box and
---     into a Gen 2 one -- costs no dataset mount at all.
---   * A Gen 2 cartridge DEPOSITING calls Convert.toGen1, which genuinely
---     needs Gen 1's base stats, moves and growth rates
---     (src/online/Convert.lua:236, :269, :281).  There is no way to compute a
---     Gen 1 POKeMON without them.
+--   Gen 1 -> Gen 1, Gen 2 -> Gen 2   nothing to do
+--   Gen 1 -> Gen 2                   Convert.toGen2
+--   Gen 2 -> Gen 1                   Convert.toGen1, which may REFUSE
 --
--- So one direction out of four mounts a Gen 1 dataset, through the engine's
--- own Trade.withDataset -- the same call the Time Capsule makes -- and the
--- result is snapshotted and kept for the rest of the session, so the cost is
--- paid once and only by a player who actually sends FROM Gold.
+-- Both of those read the other generation's dataset only as a FALLBACK -- for
+-- a POKeMON with no stats (src/online/Convert.lua:126) or no maxHp (:262) --
+-- and a stored POKeMON has both, because the deposit side makes sure of them.
+-- So each conversion runs on the LIVE game's own dataset and this mod never
+-- mounts anything.
+--
+-- The version that did mount is why: it stored one shape, Gen 1's, so a Gen 2
+-- deposit had to compute a Gen 1 POKeMON, which genuinely needs Gen 1's base
+-- stats and growth rates.  That put a whole dataset mount behind a keypress,
+-- made the feature unusable for anyone with no Gen 1 game imported, and
+-- reported every way it could fail as the same "RED, BLUE or YELLOW must be
+-- imported" -- including the ways that had nothing to do with an import.
+--
+-- ------- and a refusal is about the game taking it OUT
+--
+-- "RED never heard of that move" is not a fact about storing a POKeMON, it is
+-- a fact about handing it to RED.  So the Time Capsule's refusals are asked at
+-- the withdrawal into a Gen 1 game and nowhere else.  A Johto POKeMON goes in
+-- the box happily from Gold and simply will not come out on Red.
 --
 -- ------- what a screen gets
 --
@@ -72,71 +78,7 @@ return function(mod, GlobalBox)
     end,
   })
 
-  -- ------- the Gen 1 dataset, for the one direction that needs it
-
-  local snapshot, snapshotRefused
-
-  -- Only what Convert.toGen1 reads, copied out while the dataset is mounted
-  -- and kept afterwards.  A shallow copy is enough: the per-species and
-  -- per-move tables are what unloadGenerated drops its references to, and
-  -- holding our own keeps them alive.
-  local function snapshotOf(data)
-    if type(data) ~= "table" then return nil end
-    local out = { pokemon = {}, moves = {}, growth_rates = data.growth_rates }
-    for key, value in pairs(data.pokemon or {}) do out.pokemon[key] = value end
-    for key, value in pairs(data.moves or {}) do out.moves[key] = value end
-    if next(out.pokemon) == nil then return nil end
-    return out
-  end
-
-  -- Red first, because that is the cartridge whose rules this box keeps; the
-  -- other two are here so an installation that imported one of them and not
-  -- Red is not told it has no Gen 1 game.
-  local GEN1_VERSIONS = { "red", "blue", "yellow" }
-
-  local function gen1Data()
-    if snapshot then return snapshot end
-    if snapshotRefused then return nil, "no_gen1_data" end
-    local Trade = requireOr("src.online.Trade")
-    if not (Trade and type(Trade.withDataset) == "function") then
-      snapshotRefused = true
-      return nil, "no_gen1_data"
-    end
-    -- The engine's own guard: mounting a second dataset over a live Gen 1
-    -- game is what Trade itself refuses to do, and this must not be the one
-    -- caller that tries it.  On Gold it is false, which is the only boot that
-    -- ever gets here.
-    if type(Trade.gameIsLive) == "function" then
-      local okLive, live = pcall(Trade.gameIsLive)
-      if okLive and live then
-        snapshotRefused = true
-        return nil, "no_gen1_data"
-      end
-    end
-    for _, version in ipairs(GEN1_VERSIONS) do
-      local ok, got = pcall(Trade.withDataset, version, function(data)
-        return snapshotOf(data)
-      end)
-      if ok and type(got) == "table" then
-        snapshot = got
-        mod.log:info("the GLOBAL BOX reads %s for its Gen 1 rules", version)
-        return snapshot
-      end
-    end
-    snapshotRefused = true
-    mod.log:warn("no Gen 1 game is imported, so nothing can be sent to the "
-      .. "GLOBAL BOX from here")
-    return nil, "no_gen1_data"
-  end
-
-  -- Exposed so a suite can drive the Gold arm without an import tree, and so
-  -- a failed mount is not permanent across a hot reload.
-  function Pane.setGen1Data(data)
-    snapshot = data or nil
-    snapshotRefused = false
-  end
-
-  -- ------- the two conversions
+  -- ------- the one conversion
 
   local Convert = requireOr("src.online.Convert")
 
@@ -159,46 +101,75 @@ return function(mod, GlobalBox)
     return out
   end
 
-  -- Into the box.  On Red this is a copy of the POKeMON with its stats made
-  -- sure of -- Gold's withdrawal reads those stats and computes its own from
-  -- them (src/online/Convert.lua:126), so a POKeMON stored without them is
-  -- one that arrives on Gold with the wrong HP.  On Gold it is Convert's,
-  -- refusals and all.
+  -- Into the box: a copy, with its stats made sure of, in whatever shape it
+  -- already is.  Nothing is converted and nothing can be refused for being
+  -- the wrong generation, because the box holds both.
+  --
+  -- `Stats.ensure` is the one piece of work, and it is what keeps the OTHER
+  -- generation's withdrawal free: Convert falls back to the far dataset only
+  -- for a POKeMON whose stats are missing, so a stored POKeMON that has them
+  -- can be converted by a game that has never seen its dataset.
   local function toStored(game, mon)
     if type(mon) ~= "table" or mon.species == nil then return nil, "not_a_mon" end
-    if mon.isEgg then return nil, "is_egg" end
+    -- The one thing a DEPOSIT still refuses, and it is the cart's own rule
+    -- rather than the Time Capsule's: Gold will not put a POKeMON holding MAIL
+    -- into storage at all ("Remove MAIL.", src/ui/gen2/BoxMenu.lua), because
+    -- sPartyMail is keyed by party slot and a boxed POKeMON has none.  Nothing
+    -- to do with which generation is reading it later.
+    if mon.mail ~= nil then return nil, "has_mail" end
+    local Mail = requireOr("src.core.gen2.Mail")
+    if Mail and type(Mail.monHoldsMail) == "function" then
+      local okMail, holds = pcall(Mail.monHoldsMail, mon)
+      if okMail and holds then return nil, "has_mail" end
+    end
+    local stored = copyMon(mon)
+    -- Gen 1 only, because there is no gen2 Stats module and no need for one:
+    -- Gold's own POKeMON carry `stats` and `maxHp` already, and a Gen 1 box
+    -- POKeMON is the one that can reach here without them (an imported .sav,
+    -- the vanilla PC's own deposit).  src/pokemon/Stats.lua is Red's.
     if generation() ~= 2 then
       local Stats = requireOr("src.pokemon.Stats")
       local def = game and game.data and game.data.pokemon
         and game.data.pokemon[mon.species]
-      local stored = copyMon(mon)
-      if Stats and def then pcall(Stats.ensure, def, stored) end
-      return stored
+      if Stats and def and type(Stats.ensure) == "function" then
+        pcall(Stats.ensure, def, stored)
+      end
     end
-    if not Convert then return nil, "no_gen1_data" end
-    local data, why = gen1Data()
-    if not data then return nil, why end
-    local out, reason = Convert.toGen1(mon, game and game.data or {}, data)
+    return stored
+  end
+
+  -- Out of the box, in THIS game's shape.
+  --
+  -- Same generation: a copy, stripped of the box's own bookkeeping -- a
+  -- POKeMON in your party has no business carrying the id it had in storage.
+  -- Crossing: Convert's, on the live dataset, and the Gen 2 -> Gen 1 direction
+  -- is the one that can say no.
+  local function fromStored(game, mon)
+    if type(mon) ~= "table" then return nil, "not_a_mon" end
+    local here, stored = generation(), GlobalBox.genOf(mon)
+    local data = game and game.data or {}
+    local out, reason
+    if here == stored then
+      out = copyMon(mon)
+    elseif not Convert then
+      return nil, "not_a_mon"
+    elseif here == 2 then
+      out, reason = Convert.toGen2(mon, nil, data)
+    else
+      out, reason = Convert.toGen1(mon, nil, data)
+    end
     if not out then return nil, tostring(reason or "not_a_mon") end
+    out.gbId, out.gbSent, out.gbGen = nil, nil, nil
     return out
   end
 
-  -- Out of the box.  The Gen 1 dataset is passed when it happens to be in
-  -- hand and left out when it is not: toGen2 only reaches for it when the
-  -- stored POKeMON has no stats, and toStored is what makes sure it does.
-  local function fromStored(game, mon)
-    if type(mon) ~= "table" then return nil, "not_a_mon" end
-    if generation() ~= 2 then
-      local out = copyMon(mon)
-      -- the box's own bookkeeping is the box's; a POKeMON in your party has
-      -- no business carrying the id it had while it was in storage
-      out.gbId, out.gbSent = nil, nil
-      return out
-    end
-    if not Convert then return nil, "not_a_mon" end
-    local out, reason = Convert.toGen2(mon, snapshot, game and game.data or {})
-    if not out then return nil, tostring(reason or "not_a_mon") end
-    return out
+  -- Whether this game could take a stored POKeMON out, without taking it out.
+  -- The box screen asks before it draws a cell as one you can pick up, and the
+  -- refusal it answers with is the Time Capsule's own.
+  function Pane.refusalForTaking(game, mon)
+    local out, reason = fromStored(game, mon)
+    if out then return nil end
+    return reason or "not_a_mon"
   end
 
   Pane.toStored, Pane.fromStored = toStored, fromStored
@@ -215,6 +186,9 @@ return function(mod, GlobalBox)
     if out then return nil end
     return reason or "not_a_mon"
   end
+
+  -- Which generation this game is, for the store to stamp on a deposit.
+  Pane.generation = generation
 
   -- ------- a session
 
@@ -304,7 +278,8 @@ return function(mod, GlobalBox)
     if not self:writable() then return nil, "no_save" end
     local stored, reason = toStored(game, mon)
     if not stored then return nil, reason end
-    local id, why = GlobalBox.deposit(self.bucket, self.view, stored)
+    local id, why = GlobalBox.deposit(self.bucket, self.view, stored,
+                                      generation())
     if not id then return nil, why end
     self:refresh()
     for index, entry in ipairs(self.view) do

@@ -648,8 +648,34 @@ return function(mod, globalPane)
     return self
   end
 
+  -- ------- a message, and the pages it is written in
+  --
+  -- "\f" is the engine's page break and every refusal in this mod is written
+  -- with it: two lines, then a break, then two more.  Red's arm gets that for
+  -- free -- it says through the engine's own TextBox, which pages.  This
+  -- screen draws its own message box and did not, so it printed the first line
+  -- before the first "\n" and then EVERYTHING ELSE on the second line, page
+  -- breaks and all, straight off the right edge of the screen.
+  --
+  -- Reported as "the words don't fit in the pop up", with a refusal reading
+  -- "YELLOW must be importe" and no way to see the rest of it.
+  local function messagePages(text)
+    local pages = {}
+    for page in tostring(text):gmatch("[^\f]+") do pages[#pages + 1] = page end
+    if #pages == 0 then pages[1] = "" end
+    return pages
+  end
+
   function Screen:say(text)
     self.message = text
+    self.messagePage = 1
+  end
+
+  function Screen:messageLines()
+    local pages = messagePages(self.message)
+    local page = pages[self.messagePage or 1] or ""
+    local first, second = page:match("^([^\n]*)\n?(.*)$")
+    return first or "", second or "", #pages
   end
 
   function Screen:close()
@@ -1319,8 +1345,16 @@ return function(mod, globalPane)
     if not input then return end
 
     if self.message then
+      -- A or B turns the page, and turns past the last one to dismiss it --
+      -- the same two buttons the cart's own text box advances on.
       if input:wasPressed("a") or input:wasPressed("b") then
-        self.message = nil
+        local _, _, pages = self:messageLines()
+        local next = (self.messagePage or 1) + 1
+        if next > pages then
+          self.message, self.messagePage = nil, nil
+        else
+          self.messagePage = next
+        end
       end
       return
     end
@@ -1566,9 +1600,9 @@ return function(mod, globalPane)
     self:drawConfirm()
     if self.message then
       Chrome.textbox(0, 12, 18, 4)
-      local first, second = tostring(self.message):match("^([^\n]*)\n?(.*)$")
-      Chrome.printThrough(first or "", 1, 14, palette())
-      Chrome.printThrough(second or "", 1, 16, palette())
+      local first, second = self:messageLines()
+      Chrome.printThrough(first, 1, 14, palette())
+      Chrome.printThrough(second, 1, 16, palette())
     end
     love.graphics.setColor(1, 1, 1, 1)
   end

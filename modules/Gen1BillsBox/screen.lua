@@ -326,6 +326,21 @@ return function(mod, globalPane)
     return mon and pokemon and pokemon[mon.species] or nil
   end
 
+  -- ------- a POKeMON this game has never heard of
+  --
+  -- The GLOBAL BOX holds both generations now, so a Gen 1 game's box can have
+  -- a CHIKORITA sitting in it -- a species RED has no icon for and no entry
+  -- for.  Two places care: the grid draws a question mark instead of nothing
+  -- (a cell that looks empty, counts as full and refuses when you press A is
+  -- worse than one that says "something is here"), and the popup leaves STATS
+  -- off, because the summary screen draws from a species record there isn't.
+  local function unknownHere(game, mon)
+    if not (mon and mon.species) then return false end
+    local pokemon = game and game.data and game.data.pokemon
+    if type(pokemon) ~= "table" then return false end
+    return pokemon[mon.species] == nil
+  end
+
   local function nameOf(game, mon)
     if not mon then return "" end
     local def = defOf(game, mon)
@@ -1523,10 +1538,14 @@ return function(mod, globalPane)
     local pane = self.pane
     local mon = self:monAt(pane)
     if not mon then return end
-    local items = {
-      { label = Strings("STATS"), keepOpen = true,
-        onSelect = function() self:openSummary(mon) end },
-    }
+    local items = {}
+    -- STATS is not offered for a POKeMON this game has no entry for: the
+    -- summary screen draws from the species record, and there isn't one.  A
+    -- Johto POKeMON sitting on a GLOBAL page is the only way to meet this.
+    if not unknownHere(self.game, mon) then
+      items[#items + 1] = { label = Strings("STATS"), keepOpen = true,
+        onSelect = function() self:openSummary(mon) end }
+    end
     if pane == "box" and not onGlobal(self) then
       items[#items + 1] = { label = Strings("RELEASE"),
         onSelect = function() self:release() end }
@@ -1740,6 +1759,12 @@ return function(mod, globalPane)
 
   function Screen:drawIcon(mon, x, y, selected)
     if not mon then return end
+    if unknownHere(self.game, mon) then
+      ink(BLACK)
+      -- centred in the cell the icon would have filled, which is 16 wide
+      Font.draw("?", x + 4, y + 4)
+      return
+    end
     -- full-colour art must sit out the shade remap, or the pass repaints it
     -- off its red channel and an orange POKeMON comes out white.  Sitting the
     -- pass out means sitting the THEME out too, so the page under the art is

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.29.0
+
+- **The GLOBAL BOX holds both generations, each POKéMON in its own shape**
+  (Gen1BillsBox 1.9.0). It kept one shape, Gen 1's — so Gold had to convert on
+  the way *in*, which mounted a whole Gen 1 dataset behind a keypress, was
+  unusable with no Gen 1 game imported, and reported every failure as the same
+  "RED, BLUE or YELLOW must be imported" whether or not that was the problem.
+  A player whose games are all Gen 2 could never put a Johto POKéMON in.
+
+  A deposit converts nothing now, from either game, and nothing is ever
+  mounted. A withdrawal converts only when the POKéMON crosses generations, on
+  the live game's own data. The Time Capsule's refusals move to where they
+  belong — a Johto POKéMON goes into the box from Gold and will not come out
+  on Red, where it is drawn as a **?** rather than as an empty-looking cell.
+  Boxes written by the old build are read and migrated in place.
+
+- **A refusal ran off the right edge of Gold's message box.** Every refusal is
+  written with the engine's page break; Red's text box pages on it and this
+  screen did not, so it printed the first line and then everything else off
+  the side of the screen. A and B turn the page now.
+
 ## 1.28.2
 
 - **The GLOBAL BOX is a feature of the box mod, not of a cartridge**
