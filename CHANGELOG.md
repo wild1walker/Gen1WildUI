@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.32.0
+
+- **The battle is not greyscale any more** (Gen1Arena 0.25.1). Reported three
+  times, and the screenshot said it in one line: every pixel of the game
+  screen was one of three DMG shades, and the one thing still in colour was
+  the EXP bar — which is the one thing that clears the shader before it
+  paints. The backdrop is drawn *into* the cart's own draw, from a shim on
+  `love.graphics.rectangle`, so whatever shader the caller had bound was still
+  bound: the palette shader answers every pixel with one of four entries
+  chosen off its red channel, and a FireRed terrain scene came back as four
+  greys. It paints with the shader down and hands it back now.
+
+- **The GLOBAL BOX keeps its holes, and it sorts** (Gen1BillsBox 1.13.0). It
+  was a queue — the view was the union sorted by when each POKéMON was sent,
+  and a cell was an index into it — so it closed up behind every withdrawal
+  and its order belonged to other saves' files. A cell is a position now, kept
+  in this save's own arrangement: a hole stays a hole, a POKéMON put down on a
+  cell lands in it, B puts one back where it came from, and SORT and UNDO are
+  on the popup on a global page.
+
+- **A POKéMON taken out of the GLOBAL BOX is registered in the POKéDEX.** It
+  may have been caught by a cartridge this save has never met. Seen and owned,
+  which is what the link trade already did.
+
 ## 1.31.0
 
 - **SEND is on the party half of the box screen** (Gen1BillsBox 1.11.1).

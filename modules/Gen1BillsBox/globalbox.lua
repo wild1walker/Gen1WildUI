@@ -446,15 +446,73 @@ end
 
 GlobalBox.claimedIds = claimedIds
 
-function GlobalBox.view(sources)
+-- ------- where each POKeMON SITS, which is this save's own business
+--
+-- The box used to be a QUEUE: the view was the union sorted by when each was
+-- sent, and a cell was just an index into it.  Two things came of that and
+-- both were reported.
+--
+--   * It CLOSED UP.  Take one out and everything after it slid down a cell,
+--     so a hole was impossible to keep and a mark made a moment ago pointed
+--     at a different POKeMON ("moving multiple mon from global box").
+--   * It could not be SORTED.  Order was a property of the union, and the
+--     union is made of other saves' files, which this save cannot write.
+--
+-- So a cell is a POSITION now, and the arrangement is THIS SAVE'S, kept in
+-- this save's own bucket as `cells` -- id to cell.  That is the whole of what
+-- makes both of those work:
+--
+--   * a withdrawal takes an id out of the arrangement and leaves the cell
+--     empty, because nothing else moved;
+--   * sorting rewrites the arrangement, which is one save's own file and
+--     needs nobody's permission.
+--
+-- Another cartridge keeps its own, and the two disagreeing is not a conflict:
+-- they are two views of one set of POKeMON, the way two trainers' PCs would
+-- be.  An id nobody arranged -- anything sent by another cartridge since this
+-- save last looked -- takes the lowest free cell, in the order it was sent,
+-- which is exactly where the queue would have put it.
+--
+-- `cells` is written by `remember` after every change, so it never holds an
+-- id the view does not: the pruning is the writing.
+function GlobalBox.cellsOf(bucket)
+  if type(bucket) ~= "table" then return nil end
+  if type(bucket.cells) ~= "table" then bucket.cells = {} end
+  return bucket.cells
+end
+
+function GlobalBox.remember(bucket, view)
+  local cells = GlobalBox.cellsOf(bucket)
+  if not cells then return false end
+  for id in pairs(cells) do cells[id] = nil end
+  if type(view) ~= "table" then return true end
+  for cell = 1, GlobalBox.CAPACITY do
+    local entry = view[cell]
+    if type(entry) == "table" and entry.id ~= nil then cells[entry.id] = cell end
+  end
+  return true
+end
+
+local function usableCell(value, taken)
+  local cell = tonumber(value)
+  if not cell or cell ~= math.floor(cell) then return nil end
+  if cell < 1 or cell > GlobalBox.CAPACITY then return nil end
+  if taken[cell] then return nil end
+  return cell
+end
+
+-- The view is SPARSE: view[cell] or nil, 1..CAPACITY.  Every reader goes
+-- through `at`, `count` and `pages`, which is why they are the three that
+-- know it is not a list.
+function GlobalBox.view(sources, cells)
   local claimed = claimedIds(sources)
-  local seen, out = {}, {}
+  local seen, list = {}, {}
   for _, source in ipairs(sources or {}) do
     for _, mon in ipairs(source.mons or {}) do
       local id = type(mon) == "table" and mon.gbId
       if type(id) == "string" and not claimed[id] and not seen[id] then
         seen[id] = true
-        out[#out + 1] = {
+        list[#list + 1] = {
           id = id,
           mon = mon,
           origin = source.origin,
@@ -465,10 +523,30 @@ function GlobalBox.view(sources)
       end
     end
   end
-  table.sort(out, function(a, b)
+  table.sort(list, function(a, b)
     if a.sent ~= b.sent then return a.sent < b.sent end
     return a.id < b.id
   end)
+
+  local out, taken = {}, {}
+  -- Arranged first, so a POKeMON that has a cell keeps it whatever has been
+  -- sent since.
+  if type(cells) == "table" then
+    for _, entry in ipairs(list) do
+      local cell = usableCell(cells[entry.id], taken)
+      if cell then
+        taken[cell], out[cell], entry.cell = true, entry, cell
+      end
+    end
+  end
+  local free = 1
+  for _, entry in ipairs(list) do
+    if not entry.cell then
+      while taken[free] do free = free + 1 end
+      if free > GlobalBox.CAPACITY then break end
+      taken[free], out[free], entry.cell = true, entry, free
+    end
+  end
   return out
 end
 
@@ -479,9 +557,19 @@ end
 -- than the full ones, and it is empty.  A box you cannot see an open slot in
 -- is a box you cannot deposit into.
 
+-- The LAST OCCUPIED cell rather than how many there are, because a box with
+-- holes in it has those two disagreeing -- and what decides whether GLOBAL 3
+-- exists is whether anything is on it, not how full GLOBAL 1 happens to be.
+function GlobalBox.lastCell(view)
+  if type(view) ~= "table" then return 0 end
+  for cell = GlobalBox.CAPACITY, 1, -1 do
+    if view[cell] then return cell end
+  end
+  return 0
+end
+
 function GlobalBox.pages(view)
-  local n = type(view) == "table" and #view or 0
-  local pages = math.floor(n / GlobalBox.PAGE) + 1
+  local pages = math.floor(GlobalBox.lastCell(view) / GlobalBox.PAGE) + 1
   if pages > GlobalBox.MAX_PAGES then return GlobalBox.MAX_PAGES end
   return pages
 end
@@ -501,7 +589,40 @@ function GlobalBox.at(view, page, slot)
 end
 
 function GlobalBox.count(view)
-  return type(view) == "table" and #view or 0
+  if type(view) ~= "table" then return 0 end
+  local n = 0
+  for cell = 1, GlobalBox.CAPACITY do
+    if view[cell] then n = n + 1 end
+  end
+  return n
+end
+
+-- How many are on ONE page, which is what a header counts and what a screen
+-- asks before it moves a markful of POKeMON onto it.
+function GlobalBox.countOn(view, page)
+  local first = GlobalBox.indexAt(page, 1)
+  if not first then return 0 end
+  local n = 0
+  for cell = first, first + GlobalBox.PAGE - 1 do
+    if type(view) == "table" and view[cell] then n = n + 1 end
+  end
+  return n
+end
+
+-- The lowest cell nothing is in, or nil for a full box.  A page may be given,
+-- and then it is the lowest free cell ON THAT PAGE -- which is what a deposit
+-- aimed at the page somebody is looking at wants.
+function GlobalBox.freeCell(view, page)
+  local from, to = 1, GlobalBox.CAPACITY
+  if page ~= nil then
+    from = GlobalBox.indexAt(page, 1)
+    if not from then return nil end
+    to = from + GlobalBox.PAGE - 1
+  end
+  for cell = from, to do
+    if not (type(view) == "table" and view[cell]) then return cell end
+  end
+  return nil
 end
 
 function GlobalBox.full(view)
@@ -566,14 +687,17 @@ function GlobalBox.withdraw(bucket, sources, view, page, slot)
     for index, mon in ipairs(mons) do
       if type(mon) == "table" and mon.gbId == entry.id then
         table.remove(mons, index)
-        return entry.mon, { how = "removed", id = entry.id, mon = mon }
+        -- the CELL travels on the ticket, so `restore` can put it back where
+        -- it was rather than wherever the next free cell happens to be
+        return entry.mon,
+          { how = "removed", id = entry.id, mon = mon, cell = entry.cell }
       end
     end
     return nil, "empty_cell"
   end
   bucket.claims = type(bucket.claims) == "table" and bucket.claims or {}
   bucket.claims[entry.id] = true
-  return entry.mon, { how = "claimed", id = entry.id }
+  return entry.mon, { how = "claimed", id = entry.id, cell = entry.cell }
 end
 
 -- Put a withdrawal back exactly where it was.

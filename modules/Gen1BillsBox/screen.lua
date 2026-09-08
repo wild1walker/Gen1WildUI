@@ -1169,15 +1169,20 @@ return function(mod, globalPane)
       self:transfer(held.mon, held.pane, "box")
       -- `put` is the only place the conversion happens, and it converts before
       -- it stores -- so a refusal leaves the box untouched and the POKeMON in
-      -- hand, and asking first would only be the same conversion twice.  The
-      -- cell the cursor is on is not part of it: the pages are a queue with no
-      -- gaps in it, so a deposit lands in the first free cell wherever it was
-      -- aimed, and the cursor follows it there.
+      -- hand, and asking first would only be the same conversion twice.
+      --
+      -- The cell the cursor is on IS part of it now.  The pages used to be a
+      -- queue with no gaps, so a deposit landed in the first free cell
+      -- wherever it was aimed; a global page keeps its holes, so a POKeMON put
+      -- down on cell 7 goes in cell 7.  An occupied cell falls back to the
+      -- first free one, which is the old behaviour and the only sane answer to
+      -- aiming at somewhere full.
       -- three returns on the way out and only the first says whether it
       -- worked: `put` answers index, page, cell -- or nil and a reason, whose
       -- reason would read as a perfectly good page number if the index were
       -- thrown away.
-      local index, page, cell = session:put(self.game, held.mon)
+      local aimed = session:cellAt(self.globalPage, self.boxSlot)
+      local index, page, cell = session:put(self.game, held.mon, aimed)
       if not index then
         self:say(session:refusalText(page))
         return
@@ -1623,9 +1628,58 @@ return function(mod, globalPane)
     self.sortUndo = snapshot
   end
 
+  -- ------- SORT, on a GLOBAL page
+  --
+  -- Refused until now, and the reason was true of the old store: order was a
+  -- property of the union of every save's outbox, and the union is other
+  -- saves' files, which this save cannot write.
+  --
+  -- The ARRANGEMENT is not.  It is a map of id to cell in this save's own
+  -- bucket -- see GlobalBox.cellsOf -- so a sort here rewrites one file this
+  -- save owns and asks nobody.  The other cartridge keeps its own order, and
+  -- the two disagreeing is two trainers' PCs disagreeing about where they
+  -- filed the same POKeMON rather than a conflict to resolve.
+  --
+  -- Every key is the cartridge sort's, including the tie-break: table.sort is
+  -- not stable, so the cell each is already in is the last word and POKeMON
+  -- that tie keep the order somebody is looking at.
+  function Screen:sortGlobal(mode)
+    local session = globalSession(self)
+    if not (session and session.writable and session:writable()) then return end
+    local entries = session:entries()
+    if not entries[1] then return end
+
+    local before = session:arrangement()
+    local order = {}
+    for _, entry in ipairs(entries) do
+      order[#order + 1] = { mon = entry.mon, id = entry.id, cell = entry.cell }
+    end
+    for _, entry in ipairs(order) do
+      entry.key = sortKey(self.game, mode, entry)
+    end
+    table.sort(order, function(a, b)
+      if a.key ~= b.key then return a.key < b.key end
+      return a.cell < b.cell
+    end)
+
+    local cells = {}
+    for j, entry in ipairs(order) do cells[entry.id] = j end
+    session:arrange(cells)
+    -- One step back, and it is the WHOLE arrangement rather than a list of
+    -- POKeMON: what a sort changed here is where things sit, so that is what
+    -- an undo puts back.
+    self.sortUndo = { global = true, cells = before }
+  end
+
   function Screen:canUndoSort()
     local undo = self.sortUndo
-    if not undo or undo.box ~= self.game.save.currentBox then return false end
+    if not undo then return false end
+    if undo.global then
+      local session = globalSession(self)
+      return (onGlobal(self) and session and session.writable
+              and session:writable()) and true or false
+    end
+    if onGlobal(self) or undo.box ~= self.game.save.currentBox then return false end
     return sameMembers(Boxes.ensure(self.game.save)[undo.box], undo.mons)
   end
 
@@ -1633,6 +1687,11 @@ return function(mod, globalPane)
     if not self:canUndoSort() then return end
     local undo = self.sortUndo
     self.sortUndo = nil
+    if undo.global then
+      local session = globalSession(self)
+      if session then session:arrange(undo.cells) end
+      return
+    end
     local save = self.game.save
     local list = Boxes.ensure(save)[undo.box]
     local cells = layoutFor(save, undo.box)
@@ -1659,11 +1718,12 @@ return function(mod, globalPane)
     -- it pops itself before running a row's onSelect (src/ui/Menu.lua), so
     -- this pushes onto the screen rather than onto the popup.
 
-    -- A sort rewrites the order of a box.  The GLOBAL pages are the union of
-    -- every save's outbox in the order the POKeMON were sent, and that order
-    -- is what makes a page and a cell mean the same thing on both cartridges
-    -- -- so there is nothing here this save is entitled to reorder.
-    if onGlobal(self) then return end
+    -- A GLOBAL page sorts too, and sorts this save's ARRANGEMENT of the shared
+    -- box rather than anybody else's file.  See sortGlobal.
+    local global = onGlobal(self)
+    if global and not (globalSession(self) and globalSession(self):writable()) then
+      return
+    end
     local game = self.game
     local items = {}
     for _, row in ipairs(SORT_LABELS) do
@@ -1671,7 +1731,10 @@ return function(mod, globalPane)
       items[#items + 1] = {
         label = Strings(row[1]),
         value = mode,
-        onSelect = function() self:sortBox(mode) end,
+        onSelect = function()
+          if global then return self:sortGlobal(mode) end
+          return self:sortBox(mode)
+        end,
       }
     end
     if self:canUndoSort() then
@@ -1888,8 +1951,13 @@ return function(mod, globalPane)
       items[#items + 1] = { label = Strings("RELEASE"),
         onSelect = function() self:release() end }
     end
-    -- and the verbs about the BOX rather than about one POKeMON
-    if pane == "box" and not onGlobal(self) then
+    -- and the verbs about the BOX rather than about one POKeMON.  SORT is on a
+    -- GLOBAL page too: it rewrites this save's own arrangement of the shared
+    -- box, which is one file this save owns.  RELEASE is not, and that is not
+    -- the same question -- "gone forever" is not a thing this save gets to
+    -- decide about a POKeMON living in another one.
+    if pane == "box" and (not onGlobal(self)
+                          or (globalSession(self) and globalSession(self):writable())) then
       items[#items + 1] = { label = Strings("SORT"),
         onSelect = function() self:openSortMenu() end }
       if self:canUndoSort() then

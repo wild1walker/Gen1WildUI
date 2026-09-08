@@ -879,7 +879,10 @@ return function(mod, globalPane)
       -- worked: `put` answers index, page, cell -- or nil and a reason, whose
       -- reason would read as a perfectly good page number if the index were
       -- thrown away.
-      local index, page, cell = session:put(self.game, intoBox(held.mon))
+      -- Aimed at the cell the cursor is on, because a global page keeps its
+      -- holes now; an occupied cell falls back to the first free one.
+      local aimed = session:cellAt(self.globalPage, self.boxSlot)
+      local index, page, cell = session:put(self.game, intoBox(held.mon), aimed)
       if not index then return self:say(session:refusalText(page)) end
       self.globalPage, self.boxSlot = page, cell
       self.held = nil
@@ -1117,7 +1120,12 @@ return function(mod, globalPane)
     end
     -- and the verbs about the BOX rather than about one POKeMON.  SORT came
     -- here off SELECT, which is the marking key now.
-    if screen.pane == "box" and not onGlobal(screen) then
+    -- SORT is on a GLOBAL page too: it rewrites this save's own arrangement of
+    -- the shared box, which is one file this save owns.  RELEASE is not, and
+    -- that is a different question -- "gone forever" is not a thing this save
+    -- gets to decide about a POKeMON living in another one.
+    if screen.pane == "box" and (not onGlobal(screen)
+        or (globalSession(screen) and globalSession(screen):writable())) then
       items[#items + 1] = { label = Strings("SORT"), id = "sort" }
       if screen:canUndoSort() then
         items[#items + 1] = { label = Strings("UNDO"), id = "undo" }
@@ -1481,9 +1489,46 @@ return function(mod, globalPane)
     self.sortUndo = snapshot
   end
 
+  -- ------- SORT, on a GLOBAL page
+  --
+  -- Refused until now, and the reason was true of the old store: order was a
+  -- property of the union of every save's outbox, and the union is other
+  -- saves' files, which this save cannot write.  The ARRANGEMENT is not -- it
+  -- is a map of id to cell in this save's own bucket -- so a sort here
+  -- rewrites one file this save owns and asks nobody.  Red's arm, key for
+  -- key, including the tie-break on the cell each is already in.
+  function Screen:sortGlobal(mode)
+    local session = globalSession(self)
+    if not (session and session.writable and session:writable()) then return end
+    local entries = session:entries()
+    if #entries < 2 then return self:say(Strings("There is nothing\nto sort.")) end
+
+    local before = session:arrangement()
+    local order = {}
+    for _, entry in ipairs(entries) do
+      order[#order + 1] = { mon = entry.mon, id = entry.id, cell = entry.cell }
+    end
+    for _, entry in ipairs(order) do entry.key = sortKey(self, mode, entry) end
+    table.sort(order, function(a, b)
+      if a.key ~= b.key then return a.key < b.key end
+      return a.cell < b.cell
+    end)
+
+    local cells = {}
+    for j, entry in ipairs(order) do cells[entry.id] = j end
+    session:arrange(cells)
+    self.sortUndo = { global = true, cells = before }
+  end
+
   function Screen:canUndoSort()
     local undo = self.sortUndo
-    if not undo or undo.box ~= self.boxIndex then return false end
+    if not undo then return false end
+    if undo.global then
+      local session = globalSession(self)
+      return (onGlobal(self) and session and session.writable
+              and session:writable()) and true or false
+    end
+    if onGlobal(self) or undo.box ~= self.boxIndex then return false end
     local list = boxList(self.save, undo.box)
     return list ~= nil and sameMembers(list, undo.mons)
   end
@@ -1492,6 +1537,11 @@ return function(mod, globalPane)
     if not self:canUndoSort() then return end
     local undo = self.sortUndo
     self.sortUndo = nil
+    if undo.global then
+      local session = globalSession(self)
+      if session then session:arrange(undo.cells) end
+      return
+    end
     local list = boxList(self.save, undo.box)
     for j = 1, #undo.mons do list[j] = undo.mons[j] end
     -- The gaps come back with the order; a sort that closed the box up and an
@@ -1512,15 +1562,22 @@ return function(mod, globalPane)
   -- header's LEFT/RIGHT are the other two and all of them stay -- so nothing
   -- is lost by giving it the job it has on Red.
   function Screen:openSort()
-    -- A sort rewrites the order of a box.  The GLOBAL pages are the union of
-    -- every save's outbox in the order the POKeMON were sent, and that order
-    -- is what makes a page and a cell mean the same thing on both cartridges
-    -- -- so there is nothing here this save is entitled to reorder.
-    if onGlobal(self) then return end
     if self.held or self.pane == "header" then return end
-    local list = boxList(self.save, self.boxIndex)
-    if not list or #list < 2 then
-      return self:say(Strings("There is nothing\nto sort."))
+    -- A GLOBAL page sorts this save's own ARRANGEMENT of the shared box; see
+    -- sortGlobal.  What it counts is different -- there is no cartridge box
+    -- list to look at -- but the "nothing to sort" line is the same one.
+    local global = onGlobal(self)
+    if global then
+      local session = globalSession(self)
+      if not (session and session:writable()) then return end
+      if #session:entries() < 2 then
+        return self:say(Strings("There is nothing\nto sort."))
+      end
+    else
+      local list = boxList(self.save, self.boxIndex)
+      if not list or #list < 2 then
+        return self:say(Strings("There is nothing\nto sort."))
+      end
     end
     local items = {}
     for _, row in ipairs(SORT_LABELS) do
@@ -1537,6 +1594,7 @@ return function(mod, globalPane)
     self.sortMenu = nil
     if not id or id == "cancel" then return end
     if id == "undo" then return self:undoSort() end
+    if onGlobal(self) then return self:sortGlobal(id) end
     self:sortBox(id)
   end
 
