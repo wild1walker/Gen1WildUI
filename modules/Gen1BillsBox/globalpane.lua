@@ -19,8 +19,8 @@
 --     1 dataset only as a fallback for a POKeMON whose stats are missing
 --     (src/online/Convert.lua:126).  Because the deposit side guarantees they
 --     are not, a withdrawal needs no Gen 1 dataset -- which is the direction
---     this feature was asked for: everything out of the Wild Green box and
---     into Wild Crystal.
+--     this feature was asked for -- everything out of a Gen 1 game's box and
+--     into a Gen 2 one -- costs no dataset mount at all.
 --   * A Gen 2 cartridge DEPOSITING calls Convert.toGen1, which genuinely
 --     needs Gen 1's base stats, moves and growth rates
 --     (src/online/Convert.lua:236, :269, :281).  There is no way to compute a

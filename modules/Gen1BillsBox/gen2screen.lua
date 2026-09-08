@@ -385,7 +385,7 @@ return function(mod, globalPane)
   --
   -- Past BOX 14 the header keeps going: GLOBAL 1, and one more page every time
   -- the last one fills.  The store behind them is shared with every other save
-  -- on this installation, Wild Green's included (globalbox.lua), and the whole
+  -- on this installation, a plain RED's included (globalbox.lua), and the whole
   -- of what is different about them follows from that:
   --
   --   * no gaps -- the cell another cartridge's POKeMON sits in is not this

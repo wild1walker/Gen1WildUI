@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.28.2
+
+- **The GLOBAL BOX is a feature of the box mod, not of a cartridge**
+  (Gen1BillsBox 1.8.3). It always was in the code — it reads a plain
+  playthrough's save slots as well as a cartridge's — but nothing proved it
+  and everything written about it said "cartridge". Install the suite on a
+  plain RED and a plain GOLD and the box is shared between them with no
+  cartridge anywhere. Covered against the engine's real `SaveData` now: three
+  saves, two of them cartridges and one a plain GOLD, one box.
+
+- **"RED is not imported" named the wrong game.** Sending *from* a Gen 2 game
+  needs a Gen 1 dataset and any of RED, BLUE or YELLOW will do. The line names
+  all three now.
+
+- **A refusal that ran off the end of the text box.** "That can't be sent." is
+  nineteen columns in an eighteen-column box. Every refusal is measured
+  against the box now.
+
 ## 1.28.1
 
 - **A POKéMON sent from Wild Green is in Wild Crystal's GLOBAL BOX**

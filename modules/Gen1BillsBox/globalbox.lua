@@ -1,8 +1,18 @@
--- The GLOBAL BOX: one store of POKeMON that every cartridge can reach, and
--- that lives inside the saves.
+-- The GLOBAL BOX: one store of POKeMON that every SAVE on the installation can
+-- reach, and that lives inside those saves.
 --
--- Deposit a POKeMON on Wild Green, withdraw it on Wild Crystal.  That is the
--- whole feature, and everything below is what it costs.
+-- Deposit a POKeMON in one game, withdraw it in another.  That is the whole
+-- feature, and everything below is what it costs.
+--
+-- "Another game" means any other save this install has, and the distinction
+-- matters because the two kinds are registered and read differently: a plain
+-- RED/BLUE/YELLOW/GOLD/SILVER/CRYSTAL playthrough keeps its slots under
+-- saves/<version>/ and is found through SaveData.listSlots/readSlotSource,
+-- while a cartridge keeps its own under saves/cart_<id>/ and is found through
+-- listCartSlots/readCartSlotSource.  `readAll` walks BOTH, so this is a
+-- Gen1BillsBox feature and not a cartridge one: install this mod on a plain
+-- RED and a plain GOLD and the box is shared between them with no cart
+-- anywhere.  Two cartridges are simply the case that prompted it.
 --
 -- ------- where it lives, and why it is not a file of its own
 --
@@ -88,15 +98,21 @@ GlobalBox.FORMAT = 1
 
 -- The reasons Convert.refusalFor answers with, in the cartridge's own voice.
 -- `species_too_new` is the one a player meets: a Johto POKeMON cannot go in a
--- box a Gen 1 cartridge has to be able to open.
+-- box a Gen 1 game has to be able to open.
+--
+-- RED stands for the Gen 1 games here, the way the Time Capsule's own refusals
+-- do -- except in `no_gen1_data`, which is about an IMPORT and so has to name
+-- what would actually fix it.  Any of the three will (GEN1_VERSIONS below), so
+-- telling a BLUE player to import RED would be telling them to do the one
+-- thing they do not need to.
 GlobalBox.REFUSALS = {
-  not_a_mon       = "That can't be sent.",
+  not_a_mon       = "That can't be\nsent.",
   is_egg          = "An EGG can't be\nsent.",
   species_too_new = "Only POKeMON RED\nknows can go in\fthe GLOBAL BOX.",
   has_mail        = "Take the MAIL off\nfirst.",
   move_too_new    = "It knows a move\nRED has never\fheard of.",
   full            = "The GLOBAL BOX is\nfull!",
-  no_gen1_data    = "RED is not\nimported, so this\fbox can't be read.",
+  no_gen1_data    = "RED, BLUE or\nYELLOW must be\fimported to send\nfrom here.",
   no_save         = "There's no save to\nput it in.",
 }
 
@@ -153,8 +169,8 @@ end
 -- through the same proxy that wrote it.  It is not invisible to this, which
 -- reads other saves RAW off disk: a bucket looked for at "globalbox" in a save
 -- the bundle wrote is a bucket that is not there -- which is exactly the bug a
--- player saw as "I put a POKeMON in on Wild Green and Wild Crystal's GLOBAL
--- BOX is empty".
+-- player saw as "I put a POKeMON in the GLOBAL BOX in one game and the other
+-- game's is empty".
 --
 -- So the key is not what identifies a bucket; its SHAPE is.  That holds for
 -- the prefix this bundle happens to use today, for a different one tomorrow,
