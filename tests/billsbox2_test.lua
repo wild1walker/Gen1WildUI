@@ -78,10 +78,19 @@ function Boxes.canUsePc(save)
 end
 package.loaded["src.core.gen2.Boxes"] = Boxes
 
-local Mail = {}
+-- sPartyMail is a FIXED six-slot array keyed by party position, not a list:
+-- removeSlot shifts every letter behind the departing mon up one and clears
+-- the last (src/core/gen2/Mail.lua:135).  A `table.remove` stands in for that
+-- badly -- it is the same shift only while the array happens to be dense, and
+-- it raises outright on 5.4 for a slot past the end, which is how this stub
+-- was found to be wrong.
+local Mail = { PARTY_LENGTH = 6 }
 function Mail.monHoldsMail(mon) return mon and mon.mail == true end
 function Mail.removeSlot(save, slot)
-  if save.mail then table.remove(save.mail, slot) end
+  local mail = save.mail
+  if not (mail and slot and slot >= 1) then return end
+  for i = slot, Mail.PARTY_LENGTH - 1 do mail[i] = mail[i + 1] end
+  mail[Mail.PARTY_LENGTH] = nil
 end
 package.loaded["src.core.gen2.Mail"] = Mail
 
@@ -145,6 +154,8 @@ for _, level in ipairs({ "info", "warn", "error", "debug" }) do
   mod.log[level] = function() end
 end
 
+-- The BUILT copy, because that is the one the game loads.  tools/build.py
+-- --check is what guarantees it matches the pin.
 local Screen = assert(load(slurp("modules/Gen1BillsBox/gen2screen.lua"),
                            "@gen2screen.lua"))()(mod)
 
@@ -624,12 +635,25 @@ do
 end
 
 do
-  io.write("no actions over an empty cell, or with a POKeMON in hand\n")
+  io.write("the popup over an empty cell, and none with a POKeMON in hand\n")
   local save = saveWith(3, 2)
   local s = screenOn(save)
+
+  -- SORT is a verb about the BOX and it lives here now, off SELECT, so an
+  -- empty cell still has something to offer.  What it does not offer is any
+  -- of the rows that are about a POKeMON.
   s.pane, s.boxSlot = "box", 10
   s:openActions()
-  eq(s.actions, nil, "nothing to act on")
+  local labels = {}
+  for _, item in ipairs((s.actions or {}).items or {}) do
+    labels[#labels + 1] = tostring(item.label)
+  end
+  eq(table.concat(labels, ","), "SORT,CANCEL",
+    "over an empty cell it is the box's verbs and nothing else")
+
+  -- and with one in hand there is no popup at all: every row here would act
+  -- on a POKeMON that is not in the box any more
+  s.actions = nil
   s.boxSlot = 1
   s:grab()
   s:openActions()
