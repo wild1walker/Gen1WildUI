@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.31.0
+
+- **SEND is on the party half of the box screen** (Gen1BillsBox 1.11.1).
+  Selecting a party member there offered STATS and CANCEL and nothing else.
+  The row was left off on purpose, and the reason was about the wrong thing:
+  the *party menu's* SEND empties `save.party` directly, which from this
+  screen would leave its own row bookkeeping — and, on Gold, its mail slots —
+  describing a POKéMON that is no longer in the party.
+
+  A reason for the party half to have **its own** SEND, then, not none. It
+  makes the move the way this screen already makes it every time the cursor
+  lifts a POKéMON out: the pick-up's own last-POKéMON refusal in its own
+  words, the DEPOSITED tail, the letters behind it moved up with it on Gold,
+  and back into the row it came from if the store turns it away. It confirms,
+  where the box's SEND does not — out of the party is a POKéMON leaving your
+  team.
+
 ## 1.30.2
 
 - **Moving several POKéMON out of the GLOBAL BOX took the wrong ones**

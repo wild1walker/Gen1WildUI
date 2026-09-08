@@ -1517,6 +1517,76 @@ return function(mod, globalPane)
     if option("placeCry", true) then cry(self.game, taken.species) end
   end
 
+  -- ------- SEND, from the party column
+  --
+  -- Reported as "when you select a party member in box send isn't an option",
+  -- and it was left off deliberately.  The reasoning was sound about the wrong
+  -- thing: the PARTY MENU's send removes from save.party directly, and doing
+  -- that from here would leave this screen's own row bookkeeping -- partyRow,
+  -- which is what keeps the visual order and the battle order the same list --
+  -- describing a POKeMON that is not in the party any more.
+  --
+  -- All true, and not a reason to have no row.  This screen already takes
+  -- POKeMON out of the party correctly, every single time the cursor lifts
+  -- one, and `partyTake` is the routine that does it.  What the party half
+  -- needed was its own SEND, not somebody else's.
+  --
+  -- So this is the party's move made the way this screen makes it: the
+  -- pick-up's own last-POKeMON refusal in the pick-up's own words, the
+  -- DEPOSITED happiness a deposit applies, and `partyPut` back into the row it
+  -- came out of if the store turns it away.
+  --
+  -- It CONFIRMS, where the box's SEND does not, and that difference is the one
+  -- the party menu's row already draws: inside the box a send is a move
+  -- between pages, and out of the party it is a POKeMON leaving your team.
+  function Screen:sendPartyToGlobal(row)
+    local session = globalSession(self)
+    if not (session and self.pane == "party") then return end
+    local game = self.game
+    local mon = partyMonAtRow(self, row)
+    if not mon then return end
+
+    -- asked before anything moves, so a refusal leaves the party alone
+    local refusal = session:refusalFor(game, mon)
+    if refusal then return self:say(session:refusalText(refusal)) end
+    -- The pick-up's rule, in the pick-up's words.  A verb in a menu and a
+    -- cursor doing the same thing must not disagree about whether it is
+    -- allowed.
+    local lastMon = textOf(game)._CantDepositLastMonText
+      or Strings("You can't deposit\nthe last POKéMON!")
+    if #self:listFor("party") <= 1 then return self:say(lastMon) end
+
+    local name = nameOf(game, mon)
+    game.stack:push(TextBox.new(game,
+      Strings("Send %s\nto the GLOBAL BOX?", name), nil, {
+      defaultNo = true, noSound = true,
+      choice = function(yes)
+        if not yes then return end
+        -- Everything re-asked: the confirm ran a frame later and the party is
+        -- live underneath it.
+        if partyMonAtRow(self, row) ~= mon then return end
+        if #self:listFor("party") <= 1 then return self:say(lastMon) end
+        local again = session:refusalFor(game, mon)
+        if again then return self:say(session:refusalText(again)) end
+
+        local taken = partyTake(self, row)
+        if not taken then return end
+        -- `transfer` is what the cursor's own party-to-box drop calls: it sets
+        -- partyTouched and applies the DEPOSITED happiness.  Called BEFORE the
+        -- put, because the store keeps a copy.
+        self:transfer(taken, "party", "box")
+        local index, why = session:put(game, taken)
+        if not index then
+          -- back into the row it came out of, and say why
+          partyPut(self, row, taken)
+          return self:say(session:refusalText(why))
+        end
+        if option("placeCry", true) then cry(game, taken.species) end
+        self:say(Strings("Sent %s\nto the GLOBAL BOX!", name))
+      end,
+    }))
+  end
+
   -- ------- SORT
 
   function Screen:sortBox(mode)
@@ -1795,16 +1865,23 @@ return function(mod, globalPane)
       items[#items + 1] = { label = Strings("STATS"), keepOpen = true,
         onSelect = function() self:openSummary(mon) end }
     end
-    -- SEND, on the box pane only.  The PARTY half of this screen keeps its own
-    -- row bookkeeping, and a row that reached round it to empty save.party
-    -- would leave that arrangement describing a POKeMON that is not there --
-    -- so the party menu's SEND stays the party's, and here the cursor can
-    -- carry one onto a GLOBAL page anyway.
-    if mon and pane == "box" and not onGlobal(self) and globalSession(self) then
-      local cell = self.boxSlot
+    -- SEND, on BOTH panes, because both are a POKeMON this save is putting in
+    -- the shared box -- but by two different moves, which is the whole reason
+    -- the row was once left off the party half.  See sendPartyToGlobal.
+    --
+    -- Not on a GLOBAL page: sending from the shared box to the shared box is
+    -- not a move, and the cursor is how you take one OUT.  The party column is
+    -- the party whichever page the box half is showing, so its row does not
+    -- ask that question.
+    if mon and globalSession(self)
+        and (pane == "party" or (pane == "box" and not onGlobal(self))) then
+      local cell, row = self.boxSlot, self.partySlot
       if not globalSession(self):refusalFor(self.game, mon) then
         items[#items + 1] = { label = Strings("SEND"),
-          onSelect = function() self:sendToGlobal(cell) end }
+          onSelect = function()
+            if pane == "party" then return self:sendPartyToGlobal(row) end
+            return self:sendToGlobal(cell)
+          end }
       end
     end
     if mon and pane == "box" and not onGlobal(self) then

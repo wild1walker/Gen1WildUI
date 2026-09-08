@@ -1098,12 +1098,15 @@ return function(mod, globalPane)
     if mon then
       items[#items + 1] = { label = Strings("STATS"), id = "stats" }
     end
-    -- SEND, on the box pane only.  The PARTY half of this screen keeps its own
-    -- row bookkeeping and its own mail slots; a row that reached round both to
-    -- empty save.party would leave each describing a POKeMON that is not
-    -- there.  The party MENU has SEND, and here the cursor can carry one onto
-    -- a GLOBAL page anyway.
-    if mon and screen.pane == "box" and not onGlobal(screen) then
+    -- SEND, on BOTH panes, because both are a POKeMON this save is putting in
+    -- the shared box -- by two different moves, which is why the party half
+    -- once had no row at all.  See sendPartyToGlobal.
+    --
+    -- Not on a GLOBAL page: the shared box to the shared box is not a move,
+    -- and the cursor is how you take one out.  The party column is the party
+    -- whichever page the box half is showing, so its row does not ask that.
+    if mon and (screen.pane == "party"
+                or (screen.pane == "box" and not onGlobal(screen))) then
       local session = globalSession(screen)
       if session and not session:refusalFor(screen.game, mon) then
         items[#items + 1] = { label = Strings("SEND"), id = "send" }
@@ -1309,6 +1312,82 @@ return function(mod, globalPane)
       boxPut(self.save, self.boxIndex, cell, taken)
       return self:say(session:refusalText(why))
     end
+  end
+
+  -- ------- SEND, from the party column
+  --
+  -- Reported as "when you select a party member in box send isn't an option",
+  -- and it was left off deliberately.  The reasoning was sound about the wrong
+  -- thing: the PARTY MENU's send removes from save.party directly, and doing
+  -- that from here would leave this screen's row bookkeeping AND its mail
+  -- slots describing a POKeMON that is not in the party any more.
+  --
+  -- All true, and not a reason to have no row.  This screen already takes
+  -- POKeMON out of the party correctly, every time the cursor lifts one --
+  -- `partyTake` and `Mail.removeSlot`, together, in that order.  What the
+  -- party half needed was its own SEND, not somebody else's.
+  --
+  -- It CONFIRMS, where the box's SEND does not: inside the box a send is a
+  -- move between pages, and out of the party it is a POKeMON leaving the team.
+  function Screen:sendPartyToGlobal(row)
+    local session = globalSession(self)
+    if not (session and self.pane == "party") then return end
+    local mon = partyMonAtRow(self, row)
+    if not mon then return end
+    local refusal = session:refusalFor(self.game, mon)
+    if refusal then return self:say(session:refusalText(refusal)) end
+    -- The pick-up's two rules, in the pick-up's words.  A verb in a menu and a
+    -- cursor doing the same thing must not disagree about what is allowed.
+    -- (MAIL is refused by the store as well -- Gold will not put a POKeMON
+    -- holding it into storage at all -- so the row is not even offered; this
+    -- is the second lock, because a menu can be reached in more than one way.)
+    if #partyOf(self.save) <= 1 then
+      return self:say(Strings("You can't deposit\nthe last POKéMON!"))
+    end
+    if Mail.monHoldsMail(mon) then return self:say(Strings("Remove MAIL.")) end
+
+    local name = nameOf(self, mon)
+    self.confirm = {
+      mon = mon, choice = 2, kind = "send",
+      text = Strings("Send %s\nto the GLOBAL BOX?", name),
+      onYes = function() self:doSendParty(row, mon, name) end,
+    }
+  end
+
+  function Screen:doSendParty(row, mon, name)
+    local session = globalSession(self)
+    if not session then return end
+    -- Everything re-asked: the confirm is a frame of input, and the party is
+    -- live underneath it.
+    if partyMonAtRow(self, row) ~= mon then return end
+    if #partyOf(self.save) <= 1 then
+      return self:say(Strings("You can't deposit\nthe last POKéMON!"))
+    end
+    local refusal = session:refusalFor(self.game, mon)
+    if refusal then return self:say(session:refusalText(refusal)) end
+
+    -- The index BEFORE the take, because that is the mail slot that leaves
+    -- with it -- and the slot to put back if the store turns the POKeMON away.
+    local index = partyIndexAtRow(self, row)
+    local taken = partyTake(self, row)
+    if not taken then return end
+    if index then Mail.removeSlot(self.save, index) end
+    -- `intoBox` is Gold's own deposit tail -- PP restored, status cleared, HP
+    -- full -- and it runs on the POKeMON itself because the store keeps a COPY
+    -- of what it is handed, so a deposited POKeMON has to BE deposited before
+    -- it is copied.  Which means the put below cannot un-do it: a POKeMON put
+    -- back into the party after a refusal comes back healed.  Left as it is
+    -- rather than papered over, because the refusal cannot happen from here --
+    -- `refusalFor` was asked one line ago and it is the same two questions
+    -- `put` answers, full and writable -- and a fake heal on a path that
+    -- cannot run is a worse thing to carry than a sentence about it.
+    local landed, why = session:put(self.game, intoBox(taken))
+    if not landed then
+      local at = partyPut(self, row, taken)
+      if at then mailInsertSlot(self.save, at) end
+      return self:say(session:refusalText(why))
+    end
+    self:say(Strings("Sent %s\nto the GLOBAL BOX!", name))
   end
 
   -- ------- sorting a box, and one step back
@@ -1526,7 +1605,12 @@ return function(mod, globalPane)
     local cell = self.boxSlot
     self.actions = nil
     if id == "stats" then return self:openStats() end
-    if id == "send" then return self:sendToGlobal(cell) end
+    if id == "send" then
+      if self.pane == "party" then
+        return self:sendPartyToGlobal(self.partySlot)
+      end
+      return self:sendToGlobal(cell)
+    end
     if id == "release" then return self:askRelease() end
     if id == "sort" then return self:openSort() end
     if id == "undo" then return self:undoSort() end
@@ -1579,8 +1663,14 @@ return function(mod, globalPane)
         self.confirm.choice = self.confirm.choice == 1 and 2 or 1
       elseif input:wasPressed("a") then
         local yes = self.confirm.choice == 1
+        -- `kind` rather than "the confirm is always RELEASE": SEND from the
+        -- party column asks too, and a second boolean here would have been
+        -- one more thing to get wrong the next time something asks.
+        local kind, run = self.confirm.kind, self.confirm.onYes
         self.confirm = nil
-        if yes then self:doRelease() end
+        if yes then
+          if kind == "send" and run then run() else self:doRelease() end
+        end
       elseif input:wasPressed("b") then
         self.confirm = nil
       end
