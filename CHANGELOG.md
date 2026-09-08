@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.30.0
+
+- **Anything drawn over a POKéMON in the box came back inverted**
+  (Gen1BillsBox 1.10.0). Reported with a screenshot: the STATS/RELEASE popup
+  with white blocks punched through it, in a grid, exactly the size and
+  position of the cells underneath. A true-colour mark says *this rectangle is
+  re-blitted raw at composite time*, and by then the popup is drawn over part
+  of it — so the overlap came back the one colour the theme did not touch. An
+  icon a menu is covering does not claim true colour any more.
+
+- **SELECT marks, and A moves everything marked.** Mark six in BOX 1, walk to
+  BOX 3, press A. The marks survive a box change; B clears them; a box with
+  room for some but not all of them takes none and says so.
+
+- **SORT moved from SELECT into the popup START opens**, beside the other
+  verbs — which is what freed SELECT. UNDO came with it.
+
+- **SEND is on the box popup too**, not only the party menu's, and it is the
+  box's own move rather than the party's.
+
+All four on both cartridges.
+
 ## 1.29.1
 
 - **The caught marker and the EXP bar, under DARK.** Reported twice, and the

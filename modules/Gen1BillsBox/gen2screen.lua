@@ -633,6 +633,8 @@ return function(mod, globalPane)
     -- "this screen has fourteen boxes".
     self.globalPage = nil
     self.global = nil
+    -- what SELECT has marked, in the order it was marked
+    self.picked = {}
     if type(globalPane) == "function" then
       local pane = globalPane()
       if pane then
@@ -1090,14 +1092,195 @@ return function(mod, globalPane)
   -- behind it, and the whole point of the verbs is that you can still see
   -- what they are about.
   local function actionsFor(screen)
-    local mon = (not screen.held) and screen:monUnder() or nil
-    if not mon then return nil end
-    local items = { { label = Strings("STATS"), id = "stats" } }
-    if screen.pane == "box" and not onGlobal(screen) then
+    if screen.held then return nil end
+    local mon = screen:monUnder()
+    local items = {}
+    if mon then
+      items[#items + 1] = { label = Strings("STATS"), id = "stats" }
+    end
+    -- SEND, on the box pane only.  The PARTY half of this screen keeps its own
+    -- row bookkeeping and its own mail slots; a row that reached round both to
+    -- empty save.party would leave each describing a POKeMON that is not
+    -- there.  The party MENU has SEND, and here the cursor can carry one onto
+    -- a GLOBAL page anyway.
+    if mon and screen.pane == "box" and not onGlobal(screen) then
+      local session = globalSession(screen)
+      if session and not session:refusalFor(screen.game, mon) then
+        items[#items + 1] = { label = Strings("SEND"), id = "send" }
+      end
+    end
+    if mon and screen.pane == "box" and not onGlobal(screen) then
       items[#items + 1] = { label = Strings("RELEASE"), id = "release" }
     end
+    -- and the verbs about the BOX rather than about one POKeMON.  SORT came
+    -- here off SELECT, which is the marking key now.
+    if screen.pane == "box" and not onGlobal(screen) then
+      items[#items + 1] = { label = Strings("SORT"), id = "sort" }
+      if screen:canUndoSort() then
+        items[#items + 1] = { label = Strings("UNDO"), id = "undo" }
+      end
+    end
+    -- START on an EMPTY cell with no box verbs is a wasted press.  Over a
+    -- POKeMON it always opens, even when CANCEL is the only row.
+    if not (items[1] or mon) then return nil end
     items[#items + 1] = { label = Strings("CANCEL"), id = "cancel" }
     return items
+  end
+
+  -- ------- picking several up at once
+  --
+  -- SELECT used to open SORT.  SORT is a verb about the whole box, so it has
+  -- moved to the popup START opens, where the other verbs already are -- and
+  -- SELECT is free for what a grid of twenty actually wants: marking.
+  --
+  -- The same key, the same rules and the same drawing as Red's screen
+  -- (modules/Gen1BillsBox/screen.lua, "picking several up at once"), because a
+  -- player who learns it on one cartridge should not have to learn it again on
+  -- the other.  What differs underneath is only which calls take and put.
+  local function markIndex(screen, page, cell)
+    for i, entry in ipairs(screen.picked or {}) do
+      if entry.cell == cell and entry.global == page.global
+         and entry.box == page.box then
+        return i
+      end
+    end
+    return nil
+  end
+
+  local function currentPage(screen)
+    return { global = screen.globalPage ~= nil,
+             box = screen.globalPage or screen.boxIndex }
+  end
+
+  function Screen:toggleMark()
+    if self.held or self.pane ~= "box" then return end
+    self.picked = self.picked or {}
+    local page = currentPage(self)
+    local at = markIndex(self, page, self.boxSlot)
+    if at then table.remove(self.picked, at) return end
+    local mon = pageMonAt(self, self.boxSlot)
+    if not mon then return end
+    self.picked[#self.picked + 1] = {
+      mon = mon, cell = self.boxSlot, global = page.global, box = page.box,
+    }
+  end
+
+  function Screen:markedAt(slot)
+    if not (self.picked and self.picked[1]) then return false end
+    return markIndex(self, currentPage(self), slot) ~= nil
+  end
+
+  function Screen:clearMarks()
+    local had = self.picked and self.picked[1] ~= nil
+    self.picked = {}
+    return had and true or false
+  end
+
+  function Screen:placeMarks()
+    local picked = self.picked or {}
+    if not picked[1] then return false end
+    local page = currentPage(self)
+    local session = globalSession(self)
+
+    local moving = {}
+    for _, entry in ipairs(picked) do
+      if not (entry.global == page.global and entry.box == page.box) then
+        moving[#moving + 1] = entry
+      end
+    end
+    if not moving[1] then self:clearMarks() return true end
+
+    local room = pageCapacity(self) - pageCount(self)
+    if room < #moving then
+      self:say(Strings("The BOX is full."))
+      return false
+    end
+
+    -- A global page's own rules, asked of ALL of them before one is taken:
+    -- half a mark deposited and half refused is what this avoids.
+    if page.global and session then
+      for _, entry in ipairs(moving) do
+        local refusal = session:refusalFor(self.game, entry.mon)
+        if refusal then
+          self:say(session:refusalText(refusal))
+          return false
+        end
+      end
+    end
+
+    local taken, tickets = {}, {}
+    local function putBack()
+      for i = #taken, 1, -1 do
+        local entry = moving[i]
+        if entry.global then
+          if session then session:untake(tickets[i]) end
+        else
+          boxPut(self.save, entry.box, entry.cell, taken[i])
+        end
+      end
+    end
+
+    for i, entry in ipairs(moving) do
+      local mon, ticket
+      if entry.global then
+        if not session then putBack() return false end
+        mon, ticket = session:take(self.game, entry.box, entry.cell)
+        if not mon then
+          putBack()
+          self:say(session:refusalText(ticket))
+          return false
+        end
+      else
+        mon = boxTake(self.save, entry.box, entry.cell)
+        if not mon then putBack() return false end
+      end
+      taken[i], tickets[i] = mon, ticket
+    end
+
+    for _, mon in ipairs(taken) do
+      if page.global then
+        local index, why = session:put(self.game, intoBox(mon))
+        if not index then
+          self:say(session:refusalText(why))
+          return false
+        end
+      else
+        local cell = freeCell(self.save, page.box)
+        if not cell then putBack() return false end
+        boxPut(self.save, page.box, cell, intoBox(mon))
+      end
+    end
+
+    self:clearMarks()
+    if option("placeCry", true) and taken[1] then
+      pcall(function()
+        require("src.core.Sound").playCry(self.game.data, taken[1].species)
+      end)
+    end
+    return true
+  end
+
+  -- ------- SEND, from the box
+  --
+  -- The party menu's SEND takes a POKeMON out of the PARTY -- it asks whether
+  -- the party can spare it and it removes it from save.party.  Handing a BOXED
+  -- POKeMON to that would deposit it in the GLOBAL BOX and leave the original
+  -- where it was: one POKeMON, two places.  So the box's SEND is the box's
+  -- own, and it is the move the cursor already makes.
+  function Screen:sendToGlobal(cell)
+    local session = globalSession(self)
+    if not (session and self.pane == "box" and not onGlobal(self)) then return end
+    local mon = boxMonAt(self.save, self.boxIndex, cell)
+    if not mon then return end
+    local refusal = session:refusalFor(self.game, mon)
+    if refusal then return self:say(session:refusalText(refusal)) end
+    local taken = boxTake(self.save, self.boxIndex, cell)
+    if not taken then return end
+    local index, why = session:put(self.game, intoBox(taken))
+    if not index then
+      boxPut(self.save, self.boxIndex, cell, taken)
+      return self:say(session:refusalText(why))
+    end
   end
 
   -- ------- sorting a box, and one step back
@@ -1312,9 +1495,13 @@ return function(mod, globalPane)
   end
 
   function Screen:chooseAction(id)
+    local cell = self.boxSlot
     self.actions = nil
     if id == "stats" then return self:openStats() end
+    if id == "send" then return self:sendToGlobal(cell) end
     if id == "release" then return self:askRelease() end
+    if id == "sort" then return self:openSort() end
+    if id == "undo" then return self:undoSort() end
   end
 
   -- ------- input
@@ -1425,15 +1612,29 @@ return function(mod, globalPane)
 
     if input:wasPressed("l") then self:changeBox(-1) end
     if input:wasPressed("r") then self:changeBox(1) end
-    if input:wasPressed("select") then self:openSort() end
+    -- SELECT marks.  It used to open SORT, which is a verb about the whole box
+    -- and now lives in the popup START opens, beside the other verbs.
+    if input:wasPressed("select") then self:toggleMark() end
 
     if input:wasPressed("a") then
       -- A on the header is not a grab: there is nothing under it to pick up,
       -- and LEFT/RIGHT are what it is for.
       if self.pane == "header" then return end
-      if self.held then self:place() else self:grab() end
+      if self.held then
+        self:place()
+      elseif self.picked and self.picked[1] and self.pane == "box" then
+        -- Something is marked, so A is about the MARK: put all of it here.
+        self:placeMarks()
+      else
+        self:grab()
+      end
     elseif input:wasPressed("b") then
-      if self.held then self:returnHeld() else self:close() end
+      -- B undoes the marks before it undoes anything else: leaving the screen
+      -- with six POKeMON marked and nothing said about it is how a player
+      -- loses track of what they were doing.
+      if self.held then self:returnHeld()
+      elseif self:clearMarks() then return
+      else self:close() end
     elseif input:wasPressed("start") then
       self:openActions()
     end
@@ -1514,6 +1715,11 @@ return function(mod, globalPane)
       if not (carried and not self:flashOn()) then
         self:drawCell(self:monDrawnAt("box", cell), x + ICON_DX, y + ICON_DY,
                       selected)
+      end
+      if self:markedAt(cell) then
+        -- A marked cell wears a filled square in its top-left corner, the way
+        -- Red's does: the cursor already means "here", and a cell can be both.
+        line(x + 2, y + 2, 3, 3)
       end
       if selected then
         arrow(x + ARROW_DX, y + ARROW_DY, "down", self.held ~= nil)
