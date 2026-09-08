@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.28.1
+
+- **A POKéMON sent from Wild Green is in Wild Crystal's GLOBAL BOX**
+  (Gen1BillsBox 1.8.2). Reported as exactly that, and it was not: the other
+  cartridge's outbox was invisible, so the box read empty on every save but
+  the one you were in.
+
+  The cause is in *this* bundle. Every vendored mod's `mod.save` here is a
+  facade that prefixes each key with the feature's id
+  (`runtime/facade.lua`, `keyedProxy`/`joinKey`) — so what the box mod writes
+  as `globalbox` is filed as `box.globalbox`. Invisible to the mod, which
+  reads back through the same proxy; fatal to a feature that reads *other*
+  saves raw off disk and was looking for the bare key. A bucket is found by
+  its shape now rather than by its key, which holds for this prefix, a
+  different one later, and the standalone mod's bare key alike.
+
 ## 1.28.0
 
 - **The GLOBAL BOX** (Gen1BillsBox 1.8.0, 1.8.1). Past the last of your

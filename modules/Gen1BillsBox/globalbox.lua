@@ -127,13 +127,50 @@ end
 -- written by a LATER format reads as ABSENT rather than as one to rewrite: a
 -- rewrite would drop whatever this build did not understand, and dropping is
 -- how a POKeMON disappears.
+function GlobalBox.isBucket(value)
+  if type(value) ~= "table" then return false end
+  if tonumber(value.format) ~= GlobalBox.FORMAT then return false end
+  if type(value.origin) ~= "string" or value.origin == "" then return false end
+  return true
+end
+
 function GlobalBox.bucketOf(modSave)
   if type(modSave) ~= "table" then return nil end
   local bucket = modSave[GlobalBox.KEY]
-  if type(bucket) ~= "table" then return nil end
-  if tonumber(bucket.format) ~= GlobalBox.FORMAT then return nil end
-  if type(bucket.origin) ~= "string" or bucket.origin == "" then return nil end
+  if not GlobalBox.isBucket(bucket) then return nil end
   return bucket
+end
+
+-- Every bucket in one mod's save data, WHATEVER KEY it was filed under.
+--
+-- `mod.save:set(KEY, ...)` does not necessarily write at KEY.  Inside the
+-- Gen1WildUI bundle each vendored mod gets a facade whose save proxy prefixes
+-- every key with the feature's id (runtime/facade.lua, keyedProxy/joinKey), so
+-- the bucket this mod writes as "globalbox" is filed as "box.globalbox" -- and
+-- the standalone mod, with no facade in front of it, writes the bare name.
+--
+-- That is invisible to a mod reading back its OWN data, because it reads
+-- through the same proxy that wrote it.  It is not invisible to this, which
+-- reads other saves RAW off disk: a bucket looked for at "globalbox" in a save
+-- the bundle wrote is a bucket that is not there -- which is exactly the bug a
+-- player saw as "I put a POKeMON in on Wild Green and Wild Crystal's GLOBAL
+-- BOX is empty".
+--
+-- So the key is not what identifies a bucket; its SHAPE is.  That holds for
+-- the prefix this bundle happens to use today, for a different one tomorrow,
+-- and for the standalone mod's bare key, without any of them having to be
+-- named here.
+function GlobalBox.bucketsIn(modSave)
+  local out = {}
+  if type(modSave) ~= "table" then return out end
+  local keys = {}
+  for key in pairs(modSave) do keys[#keys + 1] = key end
+  table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+  for _, key in ipairs(keys) do
+    local value = modSave[key]
+    if GlobalBox.isBucket(value) then out[#out + 1] = value end
+  end
+  return out
 end
 
 -- The same, but minting the bucket when the save has none.  Only ever called
@@ -201,7 +238,9 @@ function GlobalBox.readAll(deps)
   local SaveData = want("SaveData", "src.core.SaveData")
   local Serializer = want("Serializer", "src.core.SaveSerializer")
   local GameVersion = want("GameVersion", "src.core.GameVersion")
-  local modId = deps.modId
+  -- `modId` is no longer how a bucket is found -- it is accepted and ignored,
+  -- because a caller that stopped passing it would otherwise read as a caller
+  -- that meant something by it.
   local sources = {}
 
   local liveKey = deps.liveKey
@@ -209,29 +248,27 @@ function GlobalBox.readAll(deps)
   local liveSource = liveKey and sourceFrom(liveKey, liveBucket, true) or nil
   if liveSource then sources[#sources + 1] = liveSource end
 
-  if type(SaveData) ~= "table" or type(Serializer) ~= "table"
-     or type(modId) ~= "string" then
+  if type(SaveData) ~= "table" or type(Serializer) ~= "table" then
     return sources
   end
 
-  -- Every bucket in a save, not just the one this build's mod id wrote.
+  -- Every bucket in a save: every mod id, and every key under each of them.
   --
-  -- `save.modData` is keyed by MOD ID, and the same feature ships under more
-  -- than one: the stable bundle, the nightly channel's copy of it, and the
-  -- standalone mod are three ids over one installation's saves.  Reading only
-  -- our own would mean a player who moved from the nightly to the stable
-  -- bundle opening the GLOBAL BOX and finding it empty, with their POKeMON
-  -- still sitting in the save under the other name.
+  -- Neither half of that is optional.  `save.modData` is keyed by MOD ID, and
+  -- the same feature ships under more than one -- the stable bundle, the
+  -- nightly channel's copy of it, and the standalone mod.  And the KEY inside
+  -- one of those is not the key this mod asked for, because a bundle facade
+  -- may prefix it (see `bucketsIn`).  Reading only "our id, our key" is
+  -- reading only saves written by this exact build, which is not what a box
+  -- shared across two cartridges means.
   --
-  -- So every id is read.  A bucket is recognised by its own shape --
-  -- `bucketOf` wants the format, an origin and the two tables -- rather than
-  -- by whose it is, and the origin in it is what keeps two channels' entries
-  -- apart once they are in the same box.  Writing is unchanged: the only
-  -- bucket anybody ever writes is their own, through mod.save.
-  --
-  -- The live save's OWN bucket is the exception, and only that one: the copy
-  -- in memory is ahead of the copy on disk.  Its other buckets are read like
-  -- anyone else's.
+  -- The live save's OWN bucket is the one thing skipped, and it is recognised
+  -- by its ORIGIN rather than by where it was filed: the copy in memory is
+  -- ahead of the copy on disk, and reading both would show every deposit made
+  -- since the last save twice.  Any OTHER bucket in the live save -- one this
+  -- save carries from a different channel -- is read like anyone else's.
+  local liveOrigin = type(liveBucket) == "table" and liveBucket.origin or nil
+
   local function take(key, body)
     if type(body) ~= "string" or body == "" then return end
     local okDecode, save = pcall(Serializer.decode, body)
@@ -239,13 +276,14 @@ function GlobalBox.readAll(deps)
     local modData = save.modData
     if type(modData) ~= "table" then return end
     local ids = {}
-    for id in pairs(modData) do ids[#ids + 1] = tostring(id) end
-    table.sort(ids)
+    for id in pairs(modData) do ids[#ids + 1] = id end
+    table.sort(ids, function(a, b) return tostring(a) < tostring(b) end)
     for _, id in ipairs(ids) do
-      if not (key == liveKey and id == modId) then
-        local bucket = GlobalBox.bucketOf(modData[id])
-        local source = sourceFrom(key, bucket, false)
-        if source then sources[#sources + 1] = source end
+      for _, bucket in ipairs(GlobalBox.bucketsIn(modData[id])) do
+        if not (liveOrigin and bucket.origin == liveOrigin) then
+          local source = sourceFrom(key, bucket, false)
+          if source then sources[#sources + 1] = source end
+        end
       end
     end
   end
