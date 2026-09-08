@@ -551,6 +551,36 @@ end
 local ART_CAP = 40
 local ART_LIST = "__gen1WildArtRects"
 
+-- ------- art with no seam to hide
+--
+-- The ring exists for art the theme did not draw: a raw-blitted sprite or icon
+-- whose edge bleeds a sliver of whatever is under it.  Some marks are not that
+-- at all.  A caught-indicator POKeBALL and the EXP bar's blue fill are FLAT
+-- COLOUR the mod painted itself, pixel by pixel, and it knows exactly which
+-- pixels those are -- there is no seam, and a ring round them is pure damage:
+--
+--   * the ball is drawn one contiguous run per row, so the ring round each run
+--     lands in the CONCAVE corners the ball never draws -- twelve pixels of
+--     dark inside its own 7x7, which is what turned it into a rounded blob.
+--   * the bar is one flat rect, so the ring is a complete 1px outline round
+--     it, drawn on the light HUD panel: a black box round the blue fill.
+--
+-- Both were reported together, twice.  So a caller that painted its own art
+-- can say so, and this marks it WITHOUT ringing it -- the rect still goes in
+-- the list, because the ART_PAGE zone is what keeps the colour and every
+-- true-colour rect needs one whether or not it wants an outline.
+--
+-- Reached by name rather than by an argument, because the two callers are in
+-- two different bundles and only ONE of them carries this file: Gen1WildQOL
+-- has no runtime/theme.lua and no `mod.theme`, so a contract that went through
+-- the theme object could not reach the ball at all.  A caller does
+--
+--     local flat = rawget(PaletteFX, "__gen1WildMarkFlat")
+--     ;(flat or PaletteFX.markTrueColor)(x, y, w, h)
+--
+-- which is the plain mark on a build with no theme installed.
+local MARK_FLAT = "__gen1WildMarkFlat"
+
 -- ------- and the one row the ring must not reach
 --
 -- The title screen is black to row 135 and WHITE from 136: the copyright line
@@ -778,6 +808,47 @@ local function watchArt(skirt, shaded)
   if rawget(PaletteFX, MARK_MARK) then return true end
   local base = PaletteFX.markTrueColor
   if type(base) ~= "function" then return false end
+
+  -- One recording, two doors into it.  `ring` says whether the caller wants
+  -- the one-pixel skirt: true for art the theme did not draw, false for a
+  -- caller that painted flat colour it can account for pixel by pixel.
+  local function record(x, y, w, h, ring)
+    local list = type(PaletteFX.trueColorRects) == "function"
+      and PaletteFX.trueColorRects("ui") or nil
+    local before = type(list) == "table" and #list or nil
+    local result = base(x, y, w, h)
+    if before and #list > before then
+      local landed = list[#list]
+      -- ------- two jobs, and only one of them is the ring
+      --
+      -- RECORDING where the art is, and PAINTING a one-pixel ring round it,
+      -- used to be the same `if`: no skirt colour, no entry in the list. They
+      -- are not the same question.
+      --
+      -- The list is what `withArt` turns into the frame's ART_PAGE zone, and
+      -- every screen with true-colour art on it needs that zone whether or not
+      -- it is a page. A battle is the case that proves it: it is deliberately
+      -- not a page, so gating the list on the skirt dropped its art zone
+      -- entirely and the whole battle came back unthemed.
+      --
+      -- The ring is the narrower job. It hides the seam where a raw-blitted
+      -- mark meets a SHADED page, so it is painted only where there is a page
+      -- to shade -- on a screen the theme leaves alone it is the only thing
+      -- you can see, which is the black box round Oak and the NIDORINO.
+      local ours = artList()
+      if ours and #ours < ART_CAP then
+        local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h }
+        ours[#ours + 1] = rect
+        -- `ring` is false for a caller that painted its own flat colour: the
+        -- rect is recorded, so it still gets its ART_PAGE zone, and nothing is
+        -- drawn round it.
+        local colour = ring and shaded(rect) and skirt() or nil
+        if colour then paintSkirt(colour, rect, ours, artClip()) end
+      end
+    end
+    return result
+  end
+
   PaletteFX.markTrueColor = function(x, y, w, h)
     -- A sprite's own cell, reported from inside the battle wipe: not a page's
     -- art, never a zone, never a ring.  See SPRITE_DEPTH above.
@@ -809,37 +880,12 @@ local function watchArt(skirt, shaded)
     --
     -- Now a skirt cannot exist without the mark it belongs to, whichever pass
     -- is running and whether or not there is one.
-    local list = type(PaletteFX.trueColorRects) == "function"
-      and PaletteFX.trueColorRects("ui") or nil
-    local before = type(list) == "table" and #list or nil
-    local result = base(x, y, w, h)
-    if before and #list > before then
-      local landed = list[#list]
-      -- ------- two jobs, and only one of them is the ring
-      --
-      -- RECORDING where the art is, and PAINTING a one-pixel ring round it,
-      -- used to be the same `if`: no skirt colour, no entry in the list. They
-      -- are not the same question.
-      --
-      -- The list is what `withArt` turns into the frame's ART_PAGE zone, and
-      -- every screen with true-colour art on it needs that zone whether or not
-      -- it is a page. A battle is the case that proves it: it is deliberately
-      -- not a page, so gating the list on the skirt dropped its art zone
-      -- entirely and the whole battle came back unthemed.
-      --
-      -- The ring is the narrower job. It hides the seam where a raw-blitted
-      -- mark meets a SHADED page, so it is painted only where there is a page
-      -- to shade -- on a screen the theme leaves alone it is the only thing
-      -- you can see, which is the black box round Oak and the NIDORINO.
-      local ours = artList()
-      if ours and #ours < ART_CAP then
-        local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h }
-        ours[#ours + 1] = rect
-        local colour = shaded(rect) and skirt() or nil
-        if colour then paintSkirt(colour, rect, ours, artClip()) end
-      end
-    end
-    return result
+    return record(x, y, w, h, true)
+  end
+  -- The same recording, with no ring: see MARK_FLAT above.
+  PaletteFX[MARK_FLAT] = function(x, y, w, h)
+    if dropsSpriteMark(spriteDepth(), inWorldPass()) then return end
+    return record(x, y, w, h, false)
   end
   local assigned = pcall(function() PaletteFX[MARK_MARK] = true end)
   return assigned and true or false

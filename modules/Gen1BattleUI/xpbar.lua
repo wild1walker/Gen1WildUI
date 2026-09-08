@@ -67,6 +67,33 @@ local XP_TILE_ROWS = {
   "oooooooo",
 }
 
+-- ------- marking flat colour without a ring round it
+--
+-- DARK paints a one-pixel skirt round every true-colour mark inside a box
+-- (Gen1WildUI runtime/theme.lua, watchArt), suppressed only where it lands
+-- inside a rect already recorded.  That is right for art the theme did not
+-- draw -- a raw-blitted icon whose edge bleeds -- and wrong for everything in
+-- this file, which paints its own flat colour and knows exactly which pixels
+-- it painted:
+--
+--   * the bar is one rect, so its skirt is a complete outline round it, drawn
+--     on the light HUD panel.  A black box round the blue fill, reported as
+--     "the exp bar looks broken".
+--   * the burst is eight blobs, so every one of them wore a ring.
+--
+-- So both mark through the theme's FLAT mark, which records the rect -- the
+-- ART_PAGE zone is what keeps the colour, and a mark without one comes back in
+-- the palette's four shades -- and draws nothing round it.  Reached by name
+-- and falling back to the plain mark, so a standalone install with no theme
+-- behaves exactly as it did.
+local FLAT_MARK = "__gen1WildMarkFlat"
+
+local function markFlat(PaletteFX, x, y, w, h)
+  local flat = rawget(PaletteFX, FLAT_MARK)
+  if type(flat) == "function" then return flat(x, y, w, h) end
+  return PaletteFX.markTrueColor(x, y, w, h)
+end
+
 -- one particle of the level-up burst
 local EXP_BURST_TILE_ROWS = {
   "oooooooo",
@@ -332,11 +359,35 @@ return function(mod, C, panelRect)
             local dotY = y + (py - 1) * scale
             if not (minX and dotX < minX) then
               g.rectangle("fill", dotX, dotY, scale, scale)
-              if mark then PaletteFX.markTrueColor(dotX, dotY, scale, scale) end
             end
           end
         end
       end
+      -- ------- and the mark is three rects, not twenty-four
+      --
+      -- This used to mark every pixel it drew: twenty-four per particle, eight
+      -- particles, ONE HUNDRED AND NINETY-TWO rects in a frame against the
+      -- theme's ART_CAP of forty.  Everything after the fortieth got no
+      -- ART_PAGE zone and came back unthemed -- which on a level-up is the
+      -- bar's own mark and the caught indicator's, the two things the player
+      -- was looking at.
+      --
+      -- EXP_BURST_TILE_ROWS is a circle, and a circle of this size is exactly
+      -- three rectangles: a 2-wide upright through rows 2..7, a 6-wide crossbar
+      -- through rows 4..5, and a 4-wide square through rows 3..6.  Their union
+      -- is precisely the "x" pixels above -- no drawn pixel unmarked, no
+      -- undrawn pixel claimed -- so the marks stay honest and the frame's
+      -- budget goes from 192 to 24.
+      if not mark then return end
+      local function claim(col, rowFrom, cols, rowsTall)
+        local rx = x + (col - 1) * scale
+        if minX and rx < minX then return end
+        markFlat(PaletteFX, rx, y + (rowFrom - 1) * scale,
+                 cols * scale, rowsTall * scale)
+      end
+      claim(4, 2, 2, 6)
+      claim(2, 4, 6, 2)
+      claim(3, 3, 4, 4)
     end
 
     g.setShader()
@@ -386,7 +437,7 @@ return function(mod, C, panelRect)
     if fill > 0 then
       g.setColor(color[1], color[2], color[3], color[4])
       g.rectangle("fill", WIDE_EXP_X + sx, WIDE_EXP_Y + 3 + sy, fill, 2)
-      PaletteFX.markTrueColor(WIDE_EXP_X + sx, WIDE_EXP_Y + 3 + sy, fill, 2)
+      markFlat(PaletteFX, WIDE_EXP_X + sx, WIDE_EXP_Y + 3 + sy, fill, 2)
     end
   end
 
@@ -578,7 +629,7 @@ return function(mod, C, panelRect)
     -- back into the zone's own four shades.  The rect MARKED is the rect
     -- DRAWN, always: a mark over ground this bar did not paint re-blits
     -- whatever is there raw, which is the same bug pointed the other way.
-    PaletteFX.markTrueColor(left, y, width, 2)
+    markFlat(PaletteFX, left, y, width, 2)
     -- The same edge, asked on the bar's own rows: the burst is thrown from one
     -- pixel under them and the panel is forty rows tall, so a panel lying
     -- across the bar lies across the burst too.

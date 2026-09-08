@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.29.1
+
+- **The caught marker and the EXP bar, under DARK.** Reported twice, and the
+  first fix was for the wrong half.
+
+  DARK paints a one-pixel ring round every true-colour mark inside a box,
+  suppressed only where it lands inside a rect **already** recorded. That is
+  right for art the theme did not draw — a raw-blitted icon whose edge bleeds
+  a sliver of the paper behind it. It is wrong for a mod that painted its own
+  flat colour and knows exactly which pixels it painted:
+
+  - the caught indicator's POKéBALL is marked one contiguous run per row, so
+    each run's ring reached into the **concave corners** the next row has not
+    drawn yet and the row above never draws at all — twelve pixels of dark
+    inside its own 7x7, which is the rounded blob.
+  - the EXP bar is one flat rect, so its ring was a complete outline round it,
+    drawn on the light HUD panel: a black box round the blue fill.
+
+  The theme publishes a **flat mark** now. It records the rect — the ART_PAGE
+  zone is what keeps the colour, and every true-colour rect needs one whether
+  or not it wants an outline — and draws nothing round it. Reached by name,
+  falling back to the ordinary mark, because Gen1WildQOL carries no
+  `runtime/theme.lua` and no `mod.theme`: a contract routed through the theme
+  object could not have reached the POKéBALL at all.
+
+- **A level-up no longer takes the rest of the frame's colour with it**
+  (Gen1BattleUI 1.8.1). The EXP burst marked 192 rectangles in one frame —
+  twenty-four pixels a particle, eight particles — against a cap of forty, so
+  everything past the fortieth mark lost its zone and came back unthemed.
+  Which on a level-up is the bar's own mark and the caught indicator's. The
+  particle is a circle, and a circle that size is exactly three rectangles;
+  eight of them now cost 24 rects instead of 192.
+
 ## 1.29.0
 
 - **The GLOBAL BOX holds both generations, each POKéMON in its own shape**
