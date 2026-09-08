@@ -242,5 +242,130 @@ do
   eq(chosen, PaletteFX.markTrueColor, "so the plain mark is what gets called")
 end
 
+-- ------------------------------------------- and the ZONE draws no ring either
+--
+-- The half 1.29.1 missed, and the reason the report came back a third time
+-- unchanged.
+--
+-- Taking away the painted skirt was not taking away the ring.  `withArt`
+-- grows every art rect by ONE PIXEL on each side and zones the result
+-- ART_PAGE, and the renderer splices the raw re-blit at the rect ITSELF -- so
+-- the grown pixel is the only ground that palette is ever read through, and
+-- ART_PAGE pins both ends to black.  White page in, black pixel out: a
+-- complete outline round the bar and twelve dark pixels in the ball's
+-- corners, drawn by the palette instead of by the brush, in exactly the same
+-- places.
+--
+-- So a rect marked FLAT is zoned as itself.  Asserted against the real
+-- `theme.apply`, on a battle frame, because a zone list is the only place the
+-- difference exists.
+
+do
+  io.write("the flat rect's zone is the rect, with nothing grown round it\n")
+
+  local function battleState()
+    return { isBattle = true, sgbPalettes = function() end }
+  end
+  local function gameWith(states)
+    return { stack = { states = states, top = function() return states[#states] end } }
+  end
+
+  -- The ART_PAGE zones on the frame, in the order withArt appended them.
+  local function artZones()
+    local out = theme.apply(gameWith({ battleState() }), nil) or {}
+    local zones = {}
+    for _, zone in ipairs(out) do
+      local c = zone.colors
+      if type(c) == "table" and c[1][1] == 0 and c[4][1] == 0
+         and c[2][1] == 85 and c[3][1] == 170 then
+        zones[#zones + 1] = zone
+      end
+    end
+    return zones
+  end
+
+  reset()
+  PaletteFX.setPass("ui")
+  FLAT(40, 30, 32, 2)
+  local flatZones = artZones()
+  eq(#flatZones, 1, "the flat bar gets one art zone")
+  local z = flatZones[1]
+  ok(z and z.x == 40 and z.y == 30 and z.w == 32 and z.h == 2,
+    "and it is the marked rectangle exactly -- the raw re-blit covers all of "
+    .. "it, so no pixel of ART_PAGE is ever read")
+
+  -- The ordinary mark keeps the grown zone, because it has a skirt in it:
+  -- flat black paint, which is what ART_PAGE's black ends were written for.
+  reset()
+  PaletteFX.setPass("ui")
+  PaletteFX.markTrueColor(40, 30, 32, 2)
+  local ringed = artZones()
+  eq(#ringed, 1, "the ordinary mark gets one too")
+  local r = ringed[1]
+  ok(r and r.x == 39 and r.y == 29 and r.w == 34 and r.h == 4,
+    "grown by one on every side, which is the skirt it has to cover")
+end
+
+-- ---------------------------------- and the ball's corners, counted in ZONES
+--
+-- The same twelve pixels the painted skirt used to put there, asked of the
+-- zone list instead.  This is the assertion that fails against 1.29.1: the
+-- paint was gone and the count was still twelve.
+
+do
+  io.write("nothing is zoned into the POKeBALL's corners\n")
+
+  local function battleState()
+    return { isBattle = true, sgbPalettes = function() end }
+  end
+  local function gameWith(states)
+    return { stack = { states = states, top = function() return states[#states] end } }
+  end
+
+  local function strayZonedInsideBall()
+    local out = theme.apply(gameWith({ battleState() }), nil) or {}
+    -- Every pixel an ART_PAGE zone covers, minus every pixel the raw re-blit
+    -- puts back: the renderer splices the marked rects last, so those win.
+    local zoned = {}
+    for _, zone in ipairs(out) do
+      local c = zone.colors
+      if type(c) == "table" and c[1][1] == 0 and c[4][1] == 0 then
+        for px = zone.x, zone.x + zone.w - 1 do
+          for py = zone.y, zone.y + zone.h - 1 do
+            zoned[px .. "," .. py] = true
+          end
+        end
+      end
+    end
+    for _, m in ipairs(rects.ui) do
+      for px = m.x, m.x + m.w - 1 do
+        for py = m.y, m.y + m.h - 1 do zoned[px .. "," .. py] = nil end
+      end
+    end
+    local n = 0
+    for key in pairs(zoned) do
+      local px, py = key:match("^(-?%d+),(-?%d+)$")
+      px, py = tonumber(px), tonumber(py)
+      if px >= BALL_X and px < BALL_X + 7
+         and py >= BALL_Y and py < BALL_Y + 7 then
+        n = n + 1
+      end
+    end
+    return n
+  end
+
+  reset()
+  PaletteFX.setPass("ui")
+  drawBall(PaletteFX.markTrueColor)
+  eq(strayZonedInsideBall(), 12,
+    "the ordinary mark zones twelve pixels the ball never draws -- the same "
+    .. "twelve its skirt used to paint")
+
+  reset()
+  PaletteFX.setPass("ui")
+  drawBall(FLAT)
+  eq(strayZonedInsideBall(), 0, "and the flat mark zones none of them")
+end
+
 io.write(("\nbattleart: %d passed, %d failed\n"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

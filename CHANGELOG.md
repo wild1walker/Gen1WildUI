@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.30.1
+
+- **The caught marker and the EXP bar, under DARK.** Reported a third time,
+  unchanged, because 1.29.1 only took away half of the ring.
+
+  A ring is a ring whether a brush or a palette makes it. 1.29.1 stopped
+  *painting* the one-pixel skirt round a mod's own flat colour, and left
+  `withArt` growing that mod's rectangle by one pixel on every side and zoning
+  the result `ART_PAGE` — a palette that pins **both ends to black**, written
+  for a ring with flat black paint in it. The renderer re-blits the rect
+  itself raw, so the grown pixel is the only ground that palette is ever read
+  through, and on Red that ground is the white HUD panel. White in, black out:
+  the identical pixel, in the identical place, drawn by the zone instead of by
+  the brush.
+
+  - the EXP bar is one rect, so its ring was a complete outline round the blue
+    fill;
+  - the POKéBALL is seven rects, one per row-run, so each ring reached into
+    the concave corners the next row has not drawn and the row above never
+    draws — twelve black pixels inside its own 7x7.
+
+  A rect a caller marked flat is now zoned **as itself**: nothing grown,
+  nothing ringed, and the raw re-blit lands on exactly the rectangle the zone
+  covers. The ordinary mark keeps its grown zone, because it has a skirt in it
+  and that is what the black ends were for.
+
+  `tests/battleart_test.lua` counts the ring in the ZONE LIST as well as in
+  the paint, which is what it was missing: twelve stray pixels in the ball's
+  corners with the ordinary mark, zero with the flat one, and the bar's zone
+  equal to the bar. Both new assertions fail against 1.29.1.
+
 ## 1.30.0
 
 - **Anything drawn over a POKéMON in the box came back inverted**

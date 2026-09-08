@@ -837,7 +837,11 @@ local function watchArt(skirt, shaded)
       -- you can see, which is the black box round Oak and the NIDORINO.
       local ours = artList()
       if ours and #ours < ART_CAP then
-        local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h }
+        -- `flat` travels with the rect all the way to `withArt`, because the
+        -- ring is TWO things and 1.29.1 only took away one of them.  See the
+        -- note over withArt.
+        local rect = { x = landed.x, y = landed.y, w = landed.w, h = landed.h,
+                       flat = not ring }
         ours[#ours + 1] = rect
         -- `ring` is false for a caller that painted its own flat colour: the
         -- rect is recorded, so it still gets its ART_PAGE zone, and nothing is
@@ -1475,16 +1479,51 @@ function Theme.new(context)
 
   -- Appended after the panels so it wins over them, and before the engine
   -- splices the true-colour rects so those still win inside the art itself.
+  --
+  -- ------- the one pixel, and why a FLAT rect must not have it
+  --
+  -- The zone is the art's rectangle GROWN BY ONE on every side, and the grown
+  -- part is the whole of the difference between it and the raw re-blit the
+  -- engine splices after it: the renderer draws the rect itself raw, so the
+  -- only pixels this palette is ever read through are the ring.
+  --
+  -- That ring is the skirt's, and it is there to serve the skirt.  Read the
+  -- palette back with that in mind -- ART_PAGE pins BOTH ENDS to black, so
+  -- "a black skirt reads black and the white page under it reads black too".
+  -- It is written for a ring that has flat black paint in it.
+  --
+  -- Grow a rect that has NO skirt and the same palette is read through the
+  -- page instead, and the page is white: one pixel of BLACK all the way
+  -- round the art.  Which is the report, twice over --
+  --
+  --   * the EXP bar is one rect, so its ring is a complete outline round the
+  --     blue fill, on the light HUD panel.  A black box.
+  --   * the POKeBALL is seven rects, one per run, and each one's ring reaches
+  --     into the CONCAVE corners the next row has not drawn and the row above
+  --     never draws.  Twelve black pixels inside its own 7x7.
+  --
+  -- 1.29.1 went at this and took away the PAINTED skirt, which was half of
+  -- it.  The other half is here, and it draws the identical pixel in the
+  -- identical place -- so the report came back unchanged and the fix read as
+  -- if it had never shipped.  A ring is a ring whether a brush or a palette
+  -- makes it.
+  --
+  -- So the rect a caller marked FLAT is zoned AS ITSELF.  Nothing is grown,
+  -- nothing is ringed, and the raw re-blit lands on exactly the rectangle the
+  -- zone covers -- which is what "it painted its own colour and knows which
+  -- pixels" meant in the first place.
   local function withArt(list, art, clip)
     if not (art and art[1]) then return list end
     local out = {}
     for _, zone in ipairs(list or {}) do out[#out + 1] = zone end
     for _, rect in ipairs(art) do
-      local y, h = rect.y - 1, rect.h + 2
+      local grow = rect.flat and 0 or 1
+      local y, h = rect.y - grow, rect.h + 2 * grow
       if clip then h = math.min(h, clip - y) end
       if h > 0 then
         out[#out + 1] = { colors = ART_PAGE,
-                          x = rect.x - 1, y = y, w = rect.w + 2, h = h }
+                          x = rect.x - grow, y = y,
+                          w = rect.w + 2 * grow, h = h }
       end
     end
     return out
