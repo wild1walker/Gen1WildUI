@@ -1312,6 +1312,13 @@ return function(mod, globalPane)
              box = screen.globalPage or screen.game.save.currentBox }
   end
 
+  local function globalIdAt(screen, cell)
+    local session = globalSession(screen)
+    if not (session and screen.globalPage) then return nil end
+    local ok, entry = pcall(session.entryAt, session, screen.globalPage, cell)
+    return ok and type(entry) == "table" and entry.id or nil
+  end
+
   function Screen:toggleMark()
     if self.held then return end
     if self.pane ~= "box" then return end
@@ -1324,8 +1331,18 @@ return function(mod, globalPane)
     end
     local mon = pageMonAt(self, self.boxSlot)
     if not mon then return end
+    -- ------- and a GLOBAL mark remembers WHICH ONE, not just where
+    --
+    -- A cartridge box keeps its arrangement beside it, so a cell there is a
+    -- place and stays one however many POKeMON are taken out of it.  The
+    -- GLOBAL BOX is a QUEUE: withdrawing closes it up, and every cell after
+    -- the gap moves down one.  So the cell a mark was made on is not the cell
+    -- that POKeMON is in by the time the mark before it has been taken.
+    --
+    -- The id is what survives that, which is what `Session:locate` is for.
     self.picked[#self.picked + 1] = {
       mon = mon, cell = self.boxSlot, global = page.global, box = page.box,
+      id = page.global and globalIdAt(self, self.boxSlot) or nil,
     }
   end
 
@@ -1414,7 +1431,18 @@ return function(mod, globalPane)
       local mon, ticket
       if entry.global then
         if not session then putBack() return false end
-        mon, ticket = session:take(self.game, entry.box, entry.cell)
+        -- Where it is NOW.  Every take before this one closed the queue up
+        -- behind it, so `entry.cell` is where this POKeMON was when the mark
+        -- was made and not where it is; taking by that cell took whichever
+        -- POKeMON had moved into it, and ran off the end of the page saying
+        -- "That can't be sent".
+        local page2, cell2 = session:locate(entry.id)
+        if not page2 then
+          putBack()
+          self:say(session:refusalText("empty_cell"))
+          return false
+        end
+        mon, ticket = session:take(self.game, page2, cell2)
         if not mon then
           putBack()
           self:say(session:refusalText(ticket))

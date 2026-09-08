@@ -149,6 +149,14 @@ GlobalBox.REFUSALS = {
   move_too_new    = "It knows a move\nRED has never\fheard of.",
   full            = "The GLOBAL BOX is\nfull!",
   no_save         = "There's no save to\nput it in.",
+  -- Asked for by a cell that no longer holds what the caller was told it
+  -- held.  The GLOBAL BOX is a QUEUE and a withdrawal closes it up, so a
+  -- position taken a moment ago is not a position now -- which is why every
+  -- caller should be resolving its ID again first (Session:locate).  This
+  -- is what a caller that did not gets told, and it used to fall through
+  -- to "That can't be sent" -- a sentence about the POKeMON, when the
+  -- POKeMON was never the problem.
+  empty_cell      = "It's not in the\nGLOBAL BOX now.",
 }
 
 function GlobalBox.refusalText(reason)

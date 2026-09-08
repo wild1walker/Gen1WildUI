@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.30.2
+
+- **Moving several POKéMON out of the GLOBAL BOX took the wrong ones**
+  (Gen1BillsBox 1.10.1). A mark records where a POKéMON is, which is enough in
+  a cartridge box — those keep their arrangement, so taking one out leaves
+  every other cell where it was. The GLOBAL BOX is a **queue**: a withdrawal
+  closes it up and every cell after the gap moves down one. So the first mark
+  came out right, the second took whatever had moved into its cell, and the
+  last ran off the end and said "That can't be sent." Mark ONE and TWO and you
+  moved ONE and THREE.
+
+  A mark on a global page carries the entry's id now, and every take resolves
+  it to where that POKéMON is at the moment of the take. Both box screens.
+
 ## 1.30.1
 
 - **The caught marker and the EXP bar, under DARK.** Reported a third time,
