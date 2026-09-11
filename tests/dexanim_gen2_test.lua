@@ -55,7 +55,10 @@ end
 -- ---- the runner, and the summary's use of it, read off the engine
 
 local viewSrc = assert(slurp(ENGINE .. "/src/render/MonAnimView.lua"))
-ok(viewSrc:find("function MonAnimView.start(def, mon, scene, imageFn, onCry)",
+-- The four the arm passes, in order, and no closing paren: the engine is free
+-- to grow optional arguments after them (it has -- `opts`, for a replacement
+-- sheet) and a runner that still takes these four still takes the call below.
+ok(viewSrc:find("function MonAnimView.start(def, mon, scene, imageFn, onCry",
                 1, true) ~= nil,
    "MonAnimView.start takes a species def, a mon, a scene and a loader")
 ok(viewSrc:find("local data = MonAnimView.animData(def, mon)", 1, true) ~= nil,
