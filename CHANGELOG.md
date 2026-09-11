@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.33.0
+
+Two Gen 2 reports, both fixed at the source.
+
+- **A full-colour trainer is cut out of its square too** (Gen1Arena 0.26.0).
+  Reported as "some trainers didn't appear with the background removed" — a
+  SAILOR in a white box beside a player whose box was gone. The gate was a
+  colour *count*: four is a 2bpp cart pic exactly, and a replacement trainer
+  has a dozen, so every one was refused and the refusal cached. The count was
+  standing in for "is this a figure in a field", which the **border** answers
+  directly. Art that bleeds to its own edge is still left alone.
+
+- **The AREA page can say GIFT** (Gen1Dex 1.12.0). Reported twice — the
+  starters missing from the dex's area search, and EEVEE saying no area after
+  being met on Route 34. Bill's house is on Route 34, so both are the same
+  thing: a POKéMON somebody hands you. The data was never missing; there was
+  simply no reading for a gift, so the page fell through to NO RECORD REMAINS.
+  It is read out of the cart's own `givepoke` now, species and level and all.
+
 ## 1.32.0
 
 - **The battle is not greyscale any more** (Gen1Arena 0.25.1). Reported three

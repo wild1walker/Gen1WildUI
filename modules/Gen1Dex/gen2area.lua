@@ -312,6 +312,81 @@ return function(mod, DexData)
     return nil
   end
 
+  -- ------- given, not found
+  --
+  -- Reported as two bugs and it is one: "some pokemon like the other starters
+  -- aren't showing in the dex search area. So means their data isn't in the
+  -- dex?", and "Eevee doesn't show up in the dex as well. Encountered it on
+  -- Route 34 ... it said No Area recorded".
+  --
+  -- The data is all there.  The starters and EEVEE are GIFTS -- and Bill's
+  -- house, which is where EEVEE comes from, IS on Route 34, so the second
+  -- report is the first one twice.  Neither is in any wild table, and neither
+  -- evolves from anything, so every reading above answered nil and the page
+  -- fell through to NO RECORD REMAINS.  Which reads as "this cartridge has
+  -- lost your POKeMON's data", and the truth is the opposite: somebody hands
+  -- it to you.
+  --
+  -- `givepoke` is the cart's own word for that, and the extractor keeps it --
+  -- species, level and all -- in the script pool.  So the answer is read out
+  -- of the same bytecode the game runs when it gives you one.
+  --
+  -- The species is a RAW ROM BYTE there, not a key: `cmd.species = args[1]`,
+  -- which `src/world/gen2/World.lua` resolves through `def.index` when it
+  -- actually gives the POKeMON.  Resolved the same way here, so a cartridge
+  -- whose species order is not the vanilla one still answers correctly.
+  --
+  -- Scanned ONCE per dataset and remembered against it: the caption is built
+  -- on every frame of the AREA page, and walking the whole script pool sixty
+  -- times a second is a stutter on the one screen that is meant to sit still.
+  local giftsByData = setmetatable({}, { __mode = "k" })
+
+  local function speciesByIndex(pokemon, index)
+    if not (pokemon and index) then return nil end
+    for id, def in pairs(pokemon) do
+      if type(def) == "table" and def.index == index then return id end
+    end
+    return nil
+  end
+
+  local function giftsIn(game)
+    local data = game and game.data
+    if type(data) ~= "table" then return {} end
+    local hit = giftsByData[data]
+    if hit then return hit end
+
+    local out = {}
+    for _, script in pairs(data.gen2Scripts or {}) do
+      if type(script) == "table" then
+        for _, cmd in ipairs(script) do
+          if type(cmd) == "table" and cmd.op == "givepoke" then
+            local index = cmd.species or (cmd.args and cmd.args[1])
+            local id = speciesByIndex(data.pokemon, index)
+            if id then
+              local level = tonumber(cmd.level
+                or (cmd.args and cmd.args[2])) or nil
+              local row = out[id]
+              if not row then
+                out[id] = { lo = level, hi = level }
+              elseif level then
+                row.lo = math.min(row.lo or level, level)
+                row.hi = math.max(row.hi or level, level)
+              end
+            end
+          end
+        end
+      end
+    end
+    giftsByData[data] = out
+    return out
+  end
+
+  local function fromGift(game, species)
+    local row = giftsIn(game)[species]
+    if not row then return nil end
+    return { how = "GIFT", lo = row.lo, hi = row.hi }
+  end
+
   -- ------- not wild anywhere
   --
   -- Gold's evolution rows spell the target `into`, not `species`, and their
@@ -483,6 +558,14 @@ return function(mod, DexData)
     if tree then return packed(tree.how, band(tree.lo, tree.hi)) end
     local roam = fromRoamer(game, species)
     if roam then return packed(roam.how, band(roam.lo, roam.hi)) end
+
+    -- Somebody hands it to you: the starters, EEVEE, the fossils, the Odd
+    -- Egg's TOGEPI, the Karate King's TYROGUE.  Before `evolvesFrom` on
+    -- purpose -- a gift is a place to walk to, an evolution is a thing to do
+    -- to a POKeMON you may not have yet -- and after every wild reading,
+    -- because a species that is both (DRATINI) is worth finding in the grass.
+    local gift = fromGift(game, species)
+    if gift then return packed(gift.how, band(gift.lo, gift.hi)) end
 
     -- Not obtainable in the wild at all on this cartridge: the baby stages
     -- that only hatch, the stone and trade evolutions, and everything a mod
