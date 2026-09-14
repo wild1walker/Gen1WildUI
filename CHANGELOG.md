@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.41.0
+
+Gen1Arena 0.34.0.
+
+- **The bar of solid colour at the bottom is gone.** Reported with both of
+  them circled in red, on BATTLE SIZE = FIXED, which otherwise looked right.
+
+  It is the artwork, and it is the artwork being correct. Every backdrop is
+  authored with its last rows in one flat colour, because those are the rows
+  the cart's message box sits on — 48 of them on the 160-wide art, exactly the
+  box's six tiles, and 40 on the 304-wide art. On the game screen nobody ever
+  sees them. The *bars* see them: on the classic surface the mod bleeds the
+  wide art into the wings either side, and out there the cart has no message
+  box, so the band arrives as a slab.
+
+  The bars stop at it now. The wings' bottom edge lands level with the top of
+  the message box. The band is measured off each file rather than assumed, so
+  re-authored art is followed.
+
+  Cutting it off is also the only version of this that moves nothing:
+  cropping the band and re-covering would zoom the picture by 144/104, which
+  lifts the horizon past the enemy's feet and stands it in the sky.
+
 ## 1.40.0
 
 Gen1Arena 0.33.0.
