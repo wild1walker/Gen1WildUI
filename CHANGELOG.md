@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.36.0
+
+Gen1Arena 0.29.0.
+
+- **The ground runs on to the bottom of the display.** Below the backdrop
+  there is no more backdrop — the art is 144 rows — so 1.35.0 left the band
+  under it as the surround's colour. It doesn't have to be: every wide
+  backdrop in the pack has a perfectly flat bottom row, because that is the
+  field the cart's text box sits on, so that row simply carries on downwards.
+  It is the same colour it already is, which makes it an extension of the
+  picture rather than a smear, and no seam can show.
+
+  The band *above* keeps the surround's colour, and that is deliberate: the
+  top row is sky or ceiling on every backdrop, so pulling it up would be the
+  stretching 1.35.0 removed.
+
+### Fixed
+
+- **A backdrop that vanished after the first frame of a battle.** 1.35.0's
+  letterbox placement returned one more value than its own cache did, so the
+  first frame was right and every frame after it threw — inside a `pcall`,
+  which turned it into a log line and a battle with no bars at all. Caught by
+  a test written for the band above.
+
 ## 1.35.0
 
 Gen1Arena 0.28.0, the arena composition report.
