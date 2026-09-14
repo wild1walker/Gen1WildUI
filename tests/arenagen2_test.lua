@@ -1,4 +1,4 @@
--- Headless coverage of BACKDROPS' Gold selection (modules/Gen1Arena/main.lua).
+-- Headless coverage of BACKDROPS' Gold selection (main.lua).
 --
 -- The drawing needs a window and cannot be tested here.  The SELECTION can,
 -- and it is the whole of what is Gen 2-specific: a map header and a battle in,
@@ -64,7 +64,7 @@ package.loaded["src.core.GameVersion"] = {
 }
 
 local mod = {
-  id = "gen1_wild_ui",
+  id = "gen1_wild_ui_nightly",
   path = "modules/Gen1Arena",
   exports = {},
   stored = {},

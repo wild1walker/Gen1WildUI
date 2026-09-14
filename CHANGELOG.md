@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.35.0
+
+Gen1Arena 0.28.0, the arena composition report.
+
+- **One photograph, at one scale.** Reported with a Crystal battle at BATTLE
+  SIZE = FILL: a crisp rectangle of backdrop in the middle of the screen and a
+  visibly bigger, blurrier copy of the same scene around it, with a hard seam
+  between them. The field is painted on the battle surface and the engine
+  scales that surface to the window; the bars around it were being filled by
+  cover-fitting the same picture to the *whole window*, a different and always
+  larger scale. One photograph at two magnifications, joined at the surface's
+  edge. The bars take the surface's own scale and alignment now, so the
+  composite is one continuous image, and nothing is stretched to reach.
+
+- **The art is picked for the shape of the screen, not for the setting.**
+  BATTLE LAYOUT picks the surface; the art used to be picked to match it,
+  which is right only while the surface is the whole picture. As soon as the
+  window is wider there are side bars, and a 160-wide backdrop has nothing
+  outside itself to put in them. A 304×144 one has 72 authored columns each
+  side, so that is what gets asked for — on the classic surface too, centred
+  at 1:1 so the field is exactly the picture it always was.
+
+  This is what makes FILL and FIXED behave on both cartridges: the rule reads
+  the shape of the composition rather than which option was set.
+
 ## 1.34.0
 
 Gen1Arena 0.27.0, the EDGE TO EDGE report.
