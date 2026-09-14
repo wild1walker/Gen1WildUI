@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.39.0
+
+Gen1Arena 0.32.0.
+
+- **Reverted 1.38.0's FILL zoom.** It made the backdrop reach every edge of the
+  window, and on a handheld it lands beside a battle surface the engine has
+  scaled by a different rule — so the screen carries the scene at two
+  magnifications with the surface's edge as the join. A picture-in-picture,
+  which is worse than the bars it removed.
+
+  Under FILL the viewport handed to the mod does not describe the scale the
+  surface was actually drawn at, so the two halves cannot be reconciled from
+  the numbers available. Out until that is settled against a real frame.
+
 ## 1.38.0
 
 Gen1Arena 0.31.0.
