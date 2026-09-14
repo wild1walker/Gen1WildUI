@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.38.0
+
+Gen1Arena 0.31.0.
+
+- **BATTLE SIZE = FILL fills the screen.** FILL means "no bars", and the
+  engine's own FILL gets half of it: the battle surface is scaled to the
+  window's height, which closes the bands above and below and leaves the ones
+  at the sides, because a 10:9 or 19:9 surface is not the shape of a display.
+
+  The backdrop closes them now. Unlike the surface it is allowed to hang off
+  the edge — nothing outside the surface is interactive — so under FILL it is
+  drawn big enough to reach every edge of the window, on both cartridges and
+  both layouts.
+
+  The battlers still land where they belong: the zoom is the smallest one that
+  can cover, it is anchored on the surface's own centre so the displacement is
+  least exactly where the battlers and HUD are, and it only slides off that
+  centre when the surface itself sits off-centre in the window — then by the
+  minimum that covers, never past it.
+
+  Under FIXED nothing changes.
+
 ## 1.37.0
 
 Gen1Arena 0.30.0.
