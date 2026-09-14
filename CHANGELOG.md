@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.40.0
+
+Gen1Arena 0.33.0.
+
+- **The bars now go round the battle.** On Gold and Crystal they were going
+  round a rectangle the battle isn't in.
+
+  The engine's `render.letterbox` payload reports the CLASSIC 160x144 panel at
+  the classic integer scale, whatever the battle is actually doing. A wide
+  battle is a 304x144 surface at its own scale, in its own place. On a
+  1600x900 window with BATTLE LAYOUT = WIDE and BATTLE SIZE = FIXED the battle
+  is at 40,90 1520x720 and the payload says 320,18 960x864 — so the "bars"
+  ran 280 columns of black straight onto the battle down each side, and left
+  the 90 rows of real surround above and below it to the engine's white paper.
+
+  That is both halves of the report: the giant white box around the top, and
+  the background filled with a square pasted on top of it. CLASSIC + FIXED is
+  the one shape the payload does describe, which is why it took this long to
+  find.
+
+  The rect is asked of the engine now, through the two calls `WideBattle.draw`
+  itself uses, while the live battle is in hand. Gen 1 and Gold's classic
+  fixed battle keep the payload, which is right for them.
+
+- **A render harness**, `tools/arenaview` in Gen1Arena. It composes the Gen 2
+  battle frame in the engine's own order — from a line-referenced
+  transcription of Chrome, WideBattle and Game2 — with the real backdrops and
+  the real bleed code, and saves a PNG for every display size, layout, fit and
+  UI LETTERBOX. The last three arena changes were argued on paper and judged
+  worse on a phone; this one was looked at first.
+
 ## 1.39.0
 
 Gen1Arena 0.32.0.
