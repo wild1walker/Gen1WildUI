@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.34.0
+
+Gen1Arena 0.27.0, the EDGE TO EDGE report.
+
+- **Turning EDGE TO EDGE off left the backdrop standing in a white frame.**
+  Reported with two screenshots side by side, every other mod disabled, on a
+  PC window and a handheld both.
+
+  The white was never the mod's paint. The engine fills the void around the
+  screen with the paper shade for any state that asks for a white surround,
+  and a battle asks *because its field is white paper* — so the paper reads as
+  running off the edges instead of stopping at a rectangle. Put a photograph
+  in the field and that premise is gone: the surround is then the only white
+  left, and a white rectangle around a picture is a frame, not an edge.
+
+  So off no longer means "leave the bars alone". The picture stops at the
+  surface and the bars go black — the engine's own default for a screen that
+  never asked for paper, the same thing BATTLE BG = BLACK and FAITHFUL RATIO's
+  mobile lock already give. The toggle is back to meaning the one thing its
+  label says: whether the picture reaches the edges.
+
+  UI LETTERBOX still wins. BLACK, WHITE and PALETTE come back as whatever you
+  set; only AUTO, which was deducing white from the battle's own request,
+  changes. And a battle the backdrop did not take is untouched — white paper
+  running off the edge of the screen is right when the field really is white
+  paper.
+
 ## 1.33.0
 
 Two Gen 2 reports, both fixed at the source.
