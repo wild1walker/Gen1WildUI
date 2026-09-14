@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.37.0
+
+Gen1Arena 0.30.0.
+
+- **Reverted 1.36.0's bottom band.** It filled everything below the backdrop
+  with the picture's own bottom row, on the reasoning that the row is a flat
+  field colour so extending it could not smear. On a phone it is a flat slab
+  of yellow-green across the bottom quarter of the display, next to a white
+  surround — worse than the plain surround it replaced.
+
+  The bands above and below the backdrop are the surround's colour again. The
+  art is 144 rows; reaching the top and bottom edges of a modern display needs
+  rows that exist.
+
 ## 1.36.0
 
 Gen1Arena 0.29.0.
