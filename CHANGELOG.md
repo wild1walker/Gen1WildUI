@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.42.0
+
+Gen1Arena 0.35.0 and 0.36.0.
+
+- **A new grass backdrop, for testing.** Author's art, installed byte for byte
+  into the four slots a grass battle can reach. It carries no flat bottom
+  band — the grass runs to the last row — so there is nothing for the
+  letterbox to trim and the bar at the bottom of the wings is gone at the
+  source.
+
+  It is 256 × 144, which is narrower than today's 304-wide art: on a 2340 px
+  landscape phone it covers 1792 px against 2128, so the black either side
+  grows from 106 px to 274 px. It is also narrower than the wide battle
+  surface, so under BATTLE LAYOUT = WIDE it is scaled up 1.1875× with 13 rows
+  cropped top and bottom. Under BATTLE LAYOUT = CLASSIC — the default — it is
+  placed 1:1 with 48 authored columns either side of the screen.
+
+- **Art bigger than the battle surface is placed 1:1 and cropped by the
+  display**, instead of being cover-fitted. Cover-fitting a 608 × 288 file
+  onto a 304 × 144 surface scales it back *down* to 304 × 144 and throws every
+  extra pixel away: with the same aspect as the surface, bigger art covers
+  exactly the surface and nothing more, however big it is.
+
+  Oversized art now goes down at 1:1 with its centre on the surface's centre,
+  so the middle 304 × 144 lands exactly where the old art did and the mon do
+  not move. Both rules live in one function that the field paint and the bar
+  paint share, so they cannot drift apart — that drift was the
+  picture-in-picture bug.
+
+  Nothing changes for art authored at the surface's size, which is everything
+  else that ships.
+
 ## 1.41.0
 
 Gen1Arena 0.34.0.
