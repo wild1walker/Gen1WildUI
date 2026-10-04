@@ -365,5 +365,76 @@ do
   eq(frame, 0, "and so does an unhovered cart icon")
 end
 
+-- ---- the engine's INLINE bind
+--
+-- Everything above stands the engine's draw up the way it used to be written:
+-- `GbcPalette.with(colors, paint)`.  The frame-time pass in 0.3.5x rewrote it
+-- -- "GbcPalette.with without the closure: set, draw, restore" -- so the live
+-- `drawIcon` calls `GbcPalette.use(colors)`, draws, and puts the previous
+-- shader back.  A wrap that swapped `with` alone stopped reaching it, and
+-- every colour icon went back through the four-shade remap with nothing to
+-- say so.  The same decisions, against that shape.
+
+if ENGINE then
+  local partySrc = slurp(ENGINE .. "/src/ui/gen2/PartyMenu.lua") or ""
+  local body = partySrc:match("function PartyMenu:drawIcon%(.-\nend\n") or ""
+  ok(body:find("GbcPalette.use(colors)", 1, true) ~= nil
+     or body:find("GbcPalette.with(", 1, true) ~= nil,
+     "the engine's drawIcon binds through `use` or `with`, both of which "
+     .. "the wrap now stands down")
+end
+
+do
+  io.write("the inline bind: a colour icon still keeps its colours\n")
+  local shader = nil
+  _G.love = _G.love or {}
+  love.graphics = love.graphics or {}
+  love.graphics.getShader = function() return shader end
+  love.graphics.setShader = function(s) shader = s end
+  GbcPalette.use = function()
+    binds[#binds + 1] = "palette"
+    shader = "remap"
+    return true
+  end
+
+  local Inline = {}
+  Inline.iconIdFor = PartyMenu.iconIdFor
+  Inline.iconFor = PartyMenu.iconFor
+  -- Today's engine, reduced the same way the stub above is.
+  Inline.drawIcon = function(menu, mon, px, py)
+    drawn[#drawn + 1] = { mon = mon, px = px, py = py }
+    local colors = menu.palettes and menu.palettes.partyMenu
+      and menu.palettes.partyMenu[1]
+    local shaded = colors and GbcPalette.available()
+    local previous
+    if shaded then
+      previous = love.graphics.getShader()
+      GbcPalette.use(colors)
+    end
+    binds[#binds + 1] = shader and ("blit:" .. shader) or "blit"
+    if shaded then love.graphics.setShader(previous) end
+    return true
+  end
+  package.loaded["src.ui.gen2.PartyMenu"] = Inline
+  local Fresh = chunkOf("runtime/icons2.lua")
+  eq(Fresh.install(context), true, "the wrap installs on the inline shape")
+  local inlineMenu = setmetatable({
+    icons = menu.icons, palettes = menu.palettes, game = menu.game,
+  }, { __index = Inline })
+
+  binds, drawn = {}, {}
+  Inline.drawIcon(inlineMenu, { iconId = "FOLLOWER" }, 8, 24)
+  eq(binds[#binds], "blit",
+     "the follower is blitted with no remap bound -- it was `blit:remap` "
+     .. "before the wrap learned about `use`")
+  eq(shader, nil, "and the caller's shader is back afterwards")
+
+  binds, drawn = {}, {}
+  Inline.drawIcon(inlineMenu, { iconId = "GREY" }, 8, 24)
+  eq(binds[1], "palette", "a grey icon still binds the cart's palette")
+  eq(binds[2], "blit:remap", "and is blitted through it")
+  eq(type(GbcPalette.use), "function", "with `use` itself put back")
+end
+
 io.write(("icons2: %d passed, %d failed\n"):format(passed, failed))
 os.exit(failed == 0 and 0 or 1)

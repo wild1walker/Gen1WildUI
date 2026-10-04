@@ -67,7 +67,14 @@ local src = assert(slurp("runtime/cutout2.lua"))
 local sheetSrc = assert(slurp(ENGINE .. "/src/ui/gen2/TileSheet.lua"))
 ok(sheetSrc:find("if colors and GbcPalette.available() then", 1, true) ~= nil,
    "a tile sheet only goes through the palette when it HAS one")
-ok(sheetSrc:find("else\n    body()\n  end", 1, true) ~= nil,
+-- Two spellings of the same draw, and both are the engine's.  Up to 0.3.50
+-- the sheet built a closure and handed it to GbcPalette.with; the frame-time
+-- pass that followed inlines the bind ("GbcPalette.with / withRaw without the
+-- closure: set, draw, restore") and draws the raw arm with a bare G.draw.
+-- What this file relies on is the claim, not the spelling: no palette, no
+-- shader, the file's own pixels.
+ok(sheetSrc:find("else\n    body()\n  end", 1, true) ~= nil
+   or sheetSrc:find("if batch then self:suspend() end\n    G.draw(image, quad", 1, true) ~= nil,
    "and is drawn raw otherwise -- baked pixels, nothing to substitute")
 
 local cardSrc = assert(slurp(ENGINE .. "/src/ui/gen2/TrainerCard.lua"))
@@ -109,7 +116,8 @@ ok(src:find("Cutout2.cut(canvas:newImageData(), w, h, true)", 1, true) ~= nil,
 -- `TileSheet:draw` lays its tiles inside GbcPalette.with when the sheet has a
 -- palette, so the source pixels are 2bpp shades and the COLOUR is the shader:
 -- replaying the blits raw came out greyscale.
-ok(sheetSrc:find("GbcPalette.with(colors, body)", 1, true) ~= nil,
+ok(sheetSrc:find("GbcPalette.with(colors, body)", 1, true) ~= nil
+   or sheetSrc:find("GbcPalette.use(colors)", 1, true) ~= nil,
    "a sheet with a palette draws through a shader, so its file is greyscale")
 ok(src:find("pcall(job.base, job.screen, unpack(job.args))", 1, true) ~= nil,
    "so the block is replayed by calling the engine's own draw")
@@ -290,6 +298,35 @@ do
     eq(out:alphaAt(2, 2), 1, "the body stays")
     eq(out:alphaAt(3, 3), 1, "and so does the WHITE SHIRT inside it")
     eq(out:alphaAt(4, 4), 1, "all of it")
+  end
+end
+
+do
+  -- "There are sprites where white areas are being ignored and/or cropped
+  -- incorrectly."  The trainer card's portrait is the player cut off at the
+  -- chest by its own frame: the body runs into the BOTTOM EDGE, and the white
+  -- shirt inside it touches that edge too.  Every border pixel used to seed
+  -- the flood, so it poured in through the shirt and cut it away.
+  --
+  -- 10x10: a body of ink from (2,3) down to the bottom row, columns 2-7, with
+  -- a white shirt inside it at columns 3-6 from row 5 to the bottom.
+  local function plot(x, y)
+    local inBody = x >= 2 and x <= 7 and y >= 3
+    local inShirt = x >= 3 and x <= 6 and y >= 5
+    if inBody and not inShirt then return 0 end
+    return 1
+  end
+  local out = Cutout2.cut(dataOf(10, 10, plot), 10, 10)
+  ok(out ~= nil, "a figure cut off by its frame is still cut")
+  if out then
+    eq(out:alphaAt(4, 9), 1,
+       "the shirt where it meets the bottom edge is KEPT -- the frame closes "
+       .. "the figure, it is not a way in")
+    eq(out:alphaAt(5, 6), 1, "and the shirt above it")
+    eq(out:alphaAt(0, 9), 0, "while the field beside the body on that edge goes")
+    eq(out:alphaAt(9, 9), 0, "on both sides")
+    eq(out:alphaAt(0, 0), 0, "and the corners of the square")
+    eq(out:alphaAt(4, 1), 0, "and the field above the figure")
   end
 end
 

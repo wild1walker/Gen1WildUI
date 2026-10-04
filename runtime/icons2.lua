@@ -233,10 +233,21 @@ function Icons2.install(context)
     -- For the length of ONE icon, and put back on the raising path too:
     -- GbcPalette is shared furniture and every other draw in the frame still
     -- wants it.  Same discipline the arena keeps with `Chrome.paletteFill`.
-    local realWith = GbcPalette.with
+    --
+    -- Both binds, not just `with`.  The engine's frame-time pass (0.3.5x)
+    -- inlined this draw's bind -- "GbcPalette.with without the closure: set,
+    -- draw, restore" -- so `drawIcon` calls `GbcPalette.use` directly, and a
+    -- swap of `with` alone stopped reaching it: colour icons went back
+    -- through the four-shade remap with nothing saying so.  `with` routes
+    -- through `use` as well, so standing `use` down covers both engines.
+    local realWith, realUse = GbcPalette.with, GbcPalette.use
     GbcPalette.with = function(_colors, body) return body() end
+    GbcPalette.use = function()
+      love.graphics.setShader()
+      return true
+    end
     local drawn, problem = pcall(base, menu, mon, px, py, ...)
-    GbcPalette.with = realWith
+    GbcPalette.with, GbcPalette.use = realWith, realUse
     if not drawn then
       broken = true
       mod.log:warn("colour party icons are off for this session: %s",

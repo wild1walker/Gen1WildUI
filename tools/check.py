@@ -161,6 +161,10 @@ def _parse(path: Path, problems: Problems) -> list[dict]:
     current: dict | None = None
     aliases: list[str] = []
     depth = 0
+    # A feature's `gen3 = { ... }` names a Gen 3 entry of its own, with
+    # `dir`/`entry` that must not be mistaken for the feature's own.  Its
+    # fields go to current["gen3"] until the table closes.
+    gen3_depth = 0
 
     for raw in text[start:].splitlines():
         line = raw.split("--", 1)[0] if not raw.strip().startswith("--") else ""
@@ -176,7 +180,26 @@ def _parse(path: Path, problems: Problems) -> list[dict]:
             continue
 
         if current is not None:
-            for key, value in FIELD.findall(stripped):
+            gen3_open = re.search(r"\bgen3\s*=\s*(\{|true)", stripped)
+            if gen3_open and gen3_open.group(1) == "true":
+                current["gen3"] = True
+            elif gen3_open:
+                current["gen3"] = {}
+                tail = stripped[gen3_open.start():]
+                gen3_depth = tail.count("{") - tail.count("}")
+                for key, value in FIELD.findall(tail):
+                    if key in {"dir", "entry"}:
+                        current["gen3"].setdefault(key, value)
+                stripped_fields = stripped[:gen3_open.start()]
+            elif gen3_depth > 0:
+                for key, value in FIELD.findall(stripped):
+                    if key in {"dir", "entry"}:
+                        current["gen3"].setdefault(key, value)
+                gen3_depth += opens - closes
+                stripped_fields = ""
+            else:
+                stripped_fields = stripped
+            for key, value in FIELD.findall(stripped_fields):
                 if key in {"id", "dir", "entry", "label", "adapter", "description"}:
                     current.setdefault(key, value)
             if "aliases = {" in stripped:
@@ -244,6 +267,17 @@ def check_features(problems: Problems, features: list[dict], quiet: bool) -> Non
                     f"{label}: {entry} neither returns an install function nor "
                     "reads its mod from `...`; the runtime will assume it "
                     "installed itself at chunk scope")
+
+        # Its Gen 3 entry, when it has one of its own: runtime/bundle.lua
+        # builds that path the same way, out of whichever of `dir` and `entry`
+        # the gen3 table replaces.
+        gen3 = feature.get("gen3")
+        if isinstance(gen3, dict):
+            gen3_path = (MODULES / gen3.get("dir", feature["dir"])
+                         / gen3.get("entry", entry))
+            if not gen3_path.exists():
+                problems.error(f"{label}: Gen 3 entry "
+                               f"{gen3_path.relative_to(ROOT)} does not exist")
 
         adapter = feature.get("adapter")
         if adapter:

@@ -8,11 +8,15 @@
 -- like we have for Gen 1 with the 2x2 selections" was about.
 --
 -- So the Gold arm is the frame and only the frame, and these cases are about
--- how narrowly it claims the strip: the command menu, on top of the stack,
--- outside a contest, with the option on.  Everything else -- a message, a
--- move list, the bug contest's eleven-glyph third label -- keeps the cart's
--- own box, and a claim that leaked into any of them would take a text box
--- away from a player mid-sentence.
+-- how narrowly it claims the strip: the two menus, on top of the stack, with
+-- the option on.  Everything else -- a message above all -- keeps the cart's
+-- own box, and a claim that leaked into one would take a text box away from a
+-- player mid-sentence.
+--
+-- The Bug Contest is NOT outside any more.  It used to be, for its command
+-- menu's eleven-glyph third label, and that took the move grid down with it:
+-- "during the Bug-Catching Contest held on Saturdays, the battle UI doesn't
+-- work".
 --
 -- Run:  luajit tests/battlemenu2_test.lua
 
@@ -78,8 +82,13 @@ local function glyphs(text)
         i = i + 1
       end
     else
-      out[#out + 1] = text:sub(i, i)
-      i = i + 1
+      -- A UTF-8 sequence is one glyph too: the charmap maps the two bytes of
+      -- the Bug Contest's x to the one tile the cart prints.
+      local lead = text:byte(i)
+      local len = (lead >= 0xF0 and 4) or (lead >= 0xE0 and 3)
+        or (lead >= 0xC0 and 2) or 1
+      out[#out + 1] = text:sub(i, i + len - 1)
+      i = i + len
     end
   end
   return out
@@ -496,11 +505,15 @@ do
   eq(visible(screen({ phase = "moves" })), false,
      "and the move menu's is ours too")
 
-  eq(visible(screen({ contest = { balls = 20 } })), true,
-     "and so does the bug contest, whose third label is PARKBALL and a count "
-     .. "-- eleven glyphs where a 10-tile box has seven")
-  overlay(screen({ contest = { balls = 20 } }))
-  eq(#boxes, 0, "no buttons over it either")
+  -- The Bug Contest: the same two menus, so the same strip.
+  eq(visible(screen({ contest = true, phase = "moves" })), false,
+     "the bug contest's MOVE menu is ours -- it is the same menu as out of "
+     .. "one, and standing it down is what was reported")
+  overlay(screen({ contest = true, phase = "moves" }))
+  eq(#boxes, 5, "four buttons and the move panel over them")
+
+  eq(visible(screen({ contest = true })), false,
+     "and so is its command menu")
 
   eq(visible(screen({ covered = true })), true,
      "and a battle with a screen open above it is not the one being asked "
@@ -508,6 +521,29 @@ do
 
   eq(visible({ phase = "menu" }), true,
      "nor is a state that is not a battle at all")
+end
+
+do
+  io.write("the bug contest's PARKBALL keeps its count\n")
+  -- ContestBattleMenuHeader's third label is PARKBALL and the two digits
+  -- .PrintParkBallsRemaining writes after it: eleven glyphs for a cell with
+  -- room for seven.  The count is what a player reads it for, so the word
+  -- gives way and the count does not.
+  local was = LABELS
+  LABELS = { "FIGHT", "<PK><MN>", "PARKBALL\xc3\x9720", "RUN" }
+  overlay(screen({ contest = true }))
+  ok(printed("PARK\xc3\x9720"),
+     "PARKBALL x20 is printed PARK x20: the count whole, the word cut")
+  ok(printed("FIGHT") and printed("RUN"), "and the other three as they are")
+  eq(#boxes, 4, "in four buttons")
+  LABELS = { "FIGHT", "<PK><MN>", "PARKBALL\xc3\x9707", "RUN" }
+  overlay(screen({ contest = true }))
+  ok(printed("PARK\xc3\x9707"), "a leading zero is the cart's and is kept")
+  -- A long label with no count is shortened the way it always was.
+  LABELS = { "FIGHT", "<PK><MN>", "ABCDEFGHIJ", "RUN" }
+  overlay(screen({ contest = true }))
+  ok(printed("ABCDEF."), "a label with no count is shortened the ordinary way")
+  LABELS = was
 end
 
 do

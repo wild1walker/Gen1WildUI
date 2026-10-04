@@ -38,6 +38,13 @@
 --                bundle surfaces that setting itself
 --   raw_option_keys  rows this feature writes by calling the engine's mod
 --                manager, which does not know about prefixes
+--   gen3         whether, and how, the feature runs on FireRed, LeafGreen and
+--                Emerald.  Absent is NO: Gen 3 is opt in, because a screen
+--                drawn in Red's chrome has no GBA screen to draw on -- and the
+--                GBA already draws its own dex, box, party, bag, battle menus
+--                and mod manager.  `true` runs the feature's own entry; a table
+--                names a Gen 3 entry of its own and replaces any other field it
+--                gives for that boot.  See runtime/bundle.lua.
 
 return {
   spec = {
@@ -146,6 +153,11 @@ return {
       --
       -- See modules/Gen1Arena/main.lua for the three tables and
       -- tools/make_gen2_towns.py for the town recolours.
+      --
+      -- And on FireRed, LeafGreen and Emerald, which is where the art was
+      -- drawn: it goes back onto the GBA field 1:1, chosen from the cart's
+      -- own battle terrain and the map.
+      gen3 = { entry = "gen3.lua" },
     },
 
     {

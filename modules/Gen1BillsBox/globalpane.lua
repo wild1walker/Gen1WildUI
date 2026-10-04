@@ -176,20 +176,104 @@ return function(mod, GlobalBox)
   -- is marked SEEN and OWNED on arrival.  The GLOBAL BOX is a trade with the
   -- other trainer not in the room, so it is the same two lines.
   --
-  -- Both generations keep the dex the same way -- `save.pokedex.seen` and
-  -- `.owned`, keyed by species -- so there is nothing to branch on.  A save
-  -- with no dex table at all (a very early game) is left alone rather than
-  -- given one.
+  -- ------- and the two generations do NOT name the second set alike
+  --
+  -- Reported again after this shipped: *"is there a way to make pokemon that
+  -- come from global box count to pokedex caught?"*  The note above used to
+  -- say both generations keep `.seen` and `.owned`, and that was Red's half
+  -- of the truth.  Gold's save is `pokedex = { seen = {}, caught = {} }`
+  -- (src/core/gen2/Save.lua) and every Gen 2 call site that registers a
+  -- POKeMON writes `caught` -- the catch, an NPC trade, a hatch, an
+  -- evolution.  So on Gold, Silver and Crystal this only ever wrote SEEN, and
+  -- the POKeMON stood in the dex as a silhouette you had met rather than one
+  -- you had.
+  --
+  -- Whichever of the two the save carries is written, and both when both are
+  -- there; neither is created.  An EGG is neither seen nor caught until it
+  -- hatches, which is the cart's rule and Breeding's (`isEgg`), so one is
+  -- left alone.
+  local function ownedSet(dex)
+    return type(dex.caught) == "table" and dex.caught or nil,
+           type(dex.owned) == "table" and dex.owned or nil
+  end
+
+  -- Returns the flags it newly set -- { seen = true, caught = true, ... } --
+  -- or nil when the dex already had all of them.  A pick-up keeps that
+  -- answer so a put-back can take back exactly what it gave (see
+  -- Session:untake).
+  local function register(dex, mon)
+    local species = type(mon) == "table" and mon.species or nil
+    if species == nil or mon.isEgg == true then return nil end
+    local fresh
+    local function mark(set, name)
+      if set and not set[species] then
+        set[species] = true
+        fresh = fresh or {}
+        fresh[name] = true
+      end
+    end
+    mark(type(dex.seen) == "table" and dex.seen or nil, "seen")
+    local caught, owned = ownedSet(dex)
+    mark(caught, "caught")
+    mark(owned, "owned")
+    return fresh
+  end
+
   local function registerReceived(game, mon)
     local dex = game and game.save and game.save.pokedex
-    local species = type(mon) == "table" and mon.species or nil
-    if not (type(dex) == "table" and species ~= nil) then return false end
-    if type(dex.seen) == "table" then dex.seen[species] = true end
-    if type(dex.owned) == "table" then dex.owned[species] = true end
-    return true
+    if type(dex) ~= "table" or type(mon) ~= "table" or mon.species == nil then
+      return false
+    end
+    if mon.isEgg == true then return false end
+    return true, register(dex, mon)
   end
 
   Pane.registerReceived = registerReceived
+
+  -- ------- every POKeMON this save already holds
+  --
+  -- The fix above is for the next withdrawal.  The ones a player has ALREADY
+  -- taken out on Gold are sitting in their party and their boxes with the dex
+  -- still saying it never caught them -- and they asked for exactly this:
+  -- "a mod that refreshes the dex by scanning each box slot one by one".
+  --
+  -- So every POKeMON in the party and in every box is registered when a save
+  -- is loaded.  It cannot credit anything the cart would not: on both
+  -- generations every way a POKeMON comes to be in your party or your PC --
+  -- caught, traded, given, hatched -- marks it owned on the way in, so a
+  -- POKeMON in your storage the dex says you never had is the dex being
+  -- wrong, never the other way round.  It walks a few hundred table entries
+  -- once per load and writes only what is missing.
+  --
+  -- Returns how many species it newly registered, for the log line.
+  function Pane.registerHeld(save)
+    local dex = type(save) == "table" and save.pokedex or nil
+    if type(dex) ~= "table" then return 0 end
+    -- On Gold an UNOWN is also a letter: every route the cart credits one by
+    -- (the catch, `givepoke`) records its form too (src/core/gen2/Unown.lua
+    -- registerCatch), and UNOWN MODE and the Ruins of Alph's count read that
+    -- list rather than `caught`.  Here only, not on a pick-up: the sweep sees
+    -- POKeMON that are really in the party and the boxes, and the form list
+    -- is the cart's own append-only record, so nothing put back could be
+    -- taken off it.  Gen 2 only -- on Red a Gen 2 module is not ours to ask.
+    local Unown = generation() == 2 and requireOr("src.core.gen2.Unown") or nil
+    local count = 0
+    local function walk(list)
+      if type(list) ~= "table" then return end
+      for _, mon in ipairs(list) do
+        if register(dex, mon) then count = count + 1 end
+        if Unown and type(Unown.registerCatch) == "function"
+            and type(mon) == "table" and mon.isEgg ~= true then
+          pcall(Unown.registerCatch, save, mon)
+        end
+      end
+    end
+    walk(save.party)
+    if type(save.boxes) == "table" then
+      for _, box in pairs(save.boxes) do walk(box) end
+    end
+    return count
+  end
 
   -- Whether this game could take a stored POKeMON out, without taking it out.
   -- The box screen asks before it draws a cell as one you can pick up, and the
@@ -399,7 +483,29 @@ return function(mod, GlobalBox)
     self:refresh()
     -- It is in this save now.  See registerReceived: the same two lines a
     -- link trade writes when a POKeMON arrives from another game.
-    registerReceived(game, mon)
+    local _, fresh = registerReceived(game, mon)
+    -- ...unless it is put straight back.  Picking a POKeMON up is not
+    -- keeping it: the screen holds it in hand until it lands in the party or
+    -- a box, and B or the screen closing puts it back through `untake`.  So
+    -- what this pick-up newly CREDITED -- caught on Gold, owned on Red -- is
+    -- remembered against its species until it is either kept (nothing more
+    -- happens) or put back (it is taken back).  SEEN is not taken back: the
+    -- player did see it.
+    local species = mon.species
+    if species ~= nil then
+      self.out = self.out or {}
+      self.outBy = self.outBy or {}
+      local entry = self.out[species] or { n = 0 }
+      entry.n = entry.n + 1
+      for flag in pairs(fresh or {}) do
+        if flag ~= "seen" then
+          entry.credited = entry.credited or {}
+          entry.credited[flag] = true
+        end
+      end
+      self.out[species] = entry
+      self.outBy[ticket] = species
+    end
     return mon, ticket
   end
 
@@ -412,8 +518,28 @@ return function(mod, GlobalBox)
     if ok and ticket.id ~= nil and tonumber(ticket.cell) then
       GlobalBox.cellsOf(self.bucket)[ticket.id] = tonumber(ticket.cell)
     end
+    if ok then self:uncredit(ticket) end
     self:refresh()
     return ok
+  end
+
+  -- Take back what a pick-up credited, once no POKeMON of that species is
+  -- still out of the GLOBAL BOX on this screen -- a second one in hand, or
+  -- one already put in the party, is still a reason for the dex to say so.
+  function Session:uncredit(ticket)
+    local species = self.outBy and self.outBy[ticket]
+    if species == nil then return end
+    self.outBy[ticket] = nil
+    local entry = self.out and self.out[species]
+    if not entry then return end
+    entry.n = entry.n - 1
+    if entry.n > 0 then return end
+    self.out[species] = nil
+    local dex = self.game and self.game.save and self.game.save.pokedex
+    if type(dex) ~= "table" or not entry.credited then return end
+    for flag in pairs(entry.credited) do
+      if type(dex[flag]) == "table" then dex[flag][species] = nil end
+    end
   end
 
   function Session:refusalText(reason)

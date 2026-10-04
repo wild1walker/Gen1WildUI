@@ -181,8 +181,46 @@ function Cutout2.cut(data, w, h, gaps)
     outside[key] = true
     qx[#qx + 1], qy[#qy + 1] = x, y
   end
-  for x = 0, w - 1 do push(x, 0); push(x, h - 1) end
-  for y = 0, h - 1 do push(0, y); push(w - 1, y) end
+  -- Where the engine drew nothing is outside wherever it is, so every gap
+  -- seeds -- that is what lets the flood reach round a leader's L-shaped face.
+  for i = 0, w * h - 1 do
+    if px[i] == -1 then push(i % w, math.floor(i / w)) end
+  end
+  -- ------- and a field pixel on the border only past the figure
+  --
+  -- The trainer card's portrait is the player cut off at the chest by its own
+  -- frame, so a white shirt reaching the bottom edge is field-coloured AND on
+  -- the border.  Seeding from every border pixel poured the flood straight in
+  -- through it and cut the shirt away -- "white areas being ignored and/or
+  -- cropped incorrectly".  The rule the battle's MON PAPER already keeps: on
+  -- each edge, only what lies beyond the outermost figure pixel of that edge
+  -- is the field.  Where the art runs into the frame, the frame closes it.
+  local function span(count, at)
+    local first, last
+    for i = 0, count - 1 do
+      if at(i) then
+        if not first then first = i end
+        last = i
+      end
+    end
+    return first, last
+  end
+  local function seedRow(y)
+    local first, last = span(w, function(x) return figure[y * w + x] end)
+    for x = 0, w - 1 do
+      if not first or x < first or x > last then push(x, y) end
+    end
+  end
+  local function seedColumn(x)
+    local first, last = span(h, function(y) return figure[y * w + x] end)
+    for y = 0, h - 1 do
+      if not first or y < first or y > last then push(x, y) end
+    end
+  end
+  seedRow(0)
+  seedRow(h - 1)
+  seedColumn(0)
+  seedColumn(w - 1)
   while head <= #qx do
     local x, y = qx[head], qy[head]
     head = head + 1
@@ -671,10 +709,15 @@ function Cutout2.new(context)
         if not on() then
           return baseSquare(screen, tx, ty, large, colors, ...)
         end
-        local realWith = GbcPalette.with
+        -- `use` as well as `with`: the engine inlines binds now (see
+        -- runtime/icons2.lua), and `with` reaches `use` anyway.
+        local realWith, realUse = GbcPalette.with, GbcPalette.use
         GbcPalette.with = GbcPalette.keyedWith
+        if type(GbcPalette.useKeyed) == "function" then
+          GbcPalette.use = GbcPalette.useKeyed
+        end
         local okDraw, err = pcall(baseSquare, screen, tx, ty, large, colors, ...)
-        GbcPalette.with = realWith
+        GbcPalette.with, GbcPalette.use = realWith, realUse
         if not okDraw then error(err, 0) end
         return err
       end

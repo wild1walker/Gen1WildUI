@@ -147,6 +147,29 @@ return function(mod)
     return pane
   end
 
+  -- The dex is told about every POKeMON a save already holds, once per load:
+  -- the ones taken out of the GLOBAL BOX on Gold before the withdrawal learned
+  -- to write `caught` are in the party and the boxes now, still uncredited.
+  -- See `registerHeld`.  Not behind the GLOBAL BOX row, because turning the
+  -- box off does not give back the POKeMON already taken out of it; and Gen 1
+  -- and Gen 2 only, because a Gen 3 dex is a pair of bit arrays rather than
+  -- two tables keyed by species.
+  if pane and type(pane.registerHeld) == "function" then
+    mod.events:on("save.loaded", function(payload)
+      local okGen, gen = pcall(pane.generation)
+      if not okGen or (gen ~= 1 and gen ~= 2) then return end
+      local save = type(payload) == "table" and payload.save or nil
+      local ok, count = pcall(pane.registerHeld, save)
+      if not ok then
+        mod.log:warn("the POKeDEX could not be checked against your storage: %s",
+                     tostring(count))
+      elseif (count or 0) > 0 then
+        mod.log:info("the POKeDEX now has %d species you were already holding",
+                     count)
+      end
+    end)
+  end
+
   local file = gen2 and "gen2screen.lua" or "screen.lua"
   local factory = submodule(file)
   if type(factory) ~= "function" then

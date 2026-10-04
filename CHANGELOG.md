@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.43.0
+
+Gen1Arena 0.37.0, Gen1BillsBox 1.14.0 and Gen1BattleUI 1.8.2 — the bug
+thread, and FireRed, LeafGreen and Emerald.
+
+- **FireRed, LeafGreen and Emerald.** The manifest claims `gen3`, and on a Gen 3
+  boot **BACKDROPS** installs and nothing else: the art is FireRed battle-field
+  art, and it goes back onto the GBA field 1:1, picked from the cart's terrain
+  and the map. The rest of the bundle is
+  screens the GBA already draws, so it stands down — not loaded at all. On Gen 3
+  a feature runs only when `features.lua` says `gen3`, and the bundle's menu,
+  theme and mattes are not installed: options are in the engine's own GBA mod
+  manager. `runtime/bundle.lua` knows three generations, not two.
+- **Pokémon from the GLOBAL BOX count in the Pokédex** (Gen1BillsBox). On Gold
+  a withdrawal only ever marked the species seen; it is caught now, and loading
+  a save sweeps the party and the boxes once so earlier ones count too. A
+  pick-up that is put straight back does not count.
+- **The Bug-Catching Contest gets the battle grid** (Gen1BattleUI), with
+  `PARKBALL×20` fitted so the count stays whole.
+- **Gold's backdrops** (Gen1Arena): TIME OF DAY follows the map's own night and
+  morning; CLEAR BOXES lays the bottom strip's box paper at 90% to 0% (boxes
+  over the HUD and the pics keep theirs); BATTLE BG = WORLD keeps the world
+  round the battle instead of black; the Lighthouse and towers are halls; sea
+  or lake by fishing group; a trainer battle opens without a stall on a
+  handheld; white inside the player's back pic stays white.
+- **Party icons in colour and keyed pictures survive the engine's inline
+  palette binds** on Gold (`runtime/icons2.lua`, `theme2.lua`, `cutout2.lua`).
+- `tools/check.py` checks a feature's Gen 3 entry exists.
+
 ## 1.42.0
 
 Gen1Arena 0.35.0 and 0.36.0.

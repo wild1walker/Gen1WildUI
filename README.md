@@ -5,6 +5,9 @@ suite, as one mod.** Nine features from nine sources. Eight are still their own
 mods with their own releases, tracked here and not forked; `BATTLE INTRO` began
 as somebody else's mod and is maintained in this repository now.
 
+Red, Blue and Yellow; Gold, Silver and Crystal; and — its battle backdrops —
+FireRed, LeafGreen and Emerald.
+
 Its other half is [Gen1WildQOL](https://github.com/wild1walker/Gen1WildQOL),
 which carries the quality-of-life features. The two know about each other: a
 feature in one can still find a feature in the other.
@@ -81,6 +84,31 @@ A row marked `*` needs a relaunch to take effect, and the footer says so. Every
 feature here except `BACKDROPS` is in that category: their upstream mods have
 no off switch of their own, so the bundle gates them at load rather than
 pretending to switch something already installed.
+
+## On FireRed, LeafGreen and Emerald
+
+The bundle claims `gen3`, and on a Gen 3 boot exactly one feature installs:
+**BACKDROPS**. The art is FireRed battle-field art in the first place, and
+there it goes back onto the GBA field 1:1, picked from the cart's own terrain
+and narrowed by the map (see
+[Gen1Arena](https://github.com/wild1walker/Gen1Arena#on-firered-leafgreen-and-emerald)).
+
+Everything else stands down there, because the GBA already draws it:
+
+| feature | on Gen 3 |
+|---|---|
+| **POKEDEX** | the cart's own dex has the area map, the size comparison and the cry |
+| **POKEMON BOX** | the cart's own PC is already a grid with the party beside it |
+| **PARTY MENU** | the cart's own party is already in each Pokémon's colours |
+| **BAG** | the cart's own bag has pockets and a description under every item |
+| **BATTLE MENUS** | the cart's own command and move menus are already 2x2 |
+| **MENU LAYOUT**, **MOD MANAGER** | the START menu and mod manager are the engine's own GBA screens; this bundle's options are in **MODS › Gen1WildUI › OPTIONS** there |
+| **UI THEME** | a GBA window has its own palette and frame |
+| **ITEM INFO**, **ELEVATOR PANEL**, **BATTLE INTRO** | the GBA already has each |
+
+A feature that stands down is not loaded at all, not half-run: on Gen 3 a
+feature runs only when `features.lua` says `gen3`, and the bundle's own menu,
+theme and mattes are not installed (`runtime/bundle.lua`).
 
 ## What is different from the standalone mods
 

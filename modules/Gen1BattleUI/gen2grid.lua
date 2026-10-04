@@ -65,10 +65,15 @@
 --
 -- ------- what it stands clear of
 --
--- THE BUG CONTEST MENU.  ContestBattleMenuHeader is the same grid moved out
--- to menu_coords 2, 12 because its third label is "PARKBALL" and the count
--- PrintNum writes after it -- eleven glyphs where a 10-tile box has seven.
--- It keeps the cart's own box.
+-- Nothing in THE BUG CONTEST any more.  This used to stand clear of the whole
+-- contest battle, on the grounds that ContestBattleMenuHeader's third label is
+-- "PARKBALL" and the count PrintNum writes after it -- eleven glyphs where a
+-- 10-tile box has seven.  That was a reason about ONE label on ONE menu, and
+-- it stood the move grid down with it: "during the Bug-Catching Contest held
+-- on Saturdays, the battle UI doesn't work", with a screenshot of the cart's
+-- own move list.  The move menu is the same menu in a contest as out of one,
+-- so it takes the grid; the command menu does too, and its long label keeps
+-- its count and gives up letters instead (see `fitCounted`).
 --
 -- THE MESSAGE.  Gold prints "<MON> what will you do?" into the left of the
 -- strip and opens the menu over the right of it.  Four buttons tile the whole
@@ -214,10 +219,43 @@ return function(mod, C)
     return out
   end
 
+  -- A label that will not fit and ENDS IN A COUNT keeps the count whole and
+  -- gives up letters from the word in front of it.  The Bug Contest's third
+  -- command is "PARKBALL" and the two-digit count after it, and of those the
+  -- count is the half a player is reading: which ball it is never changes
+  -- inside the contest, how many are left is the whole question.  So eleven
+  -- glyphs come out as PARK*20 in seven, cut on a glyph boundary with no
+  -- trailing dot -- the dot would cost the one glyph there is no room for --
+  -- and out of the cart's own localized string, so a translation is cut the
+  -- same way rather than replaced.
+  --
+  -- Anything else too long is shortened the ordinary way.
+  local COUNT_TAIL = "^(.-)(\xc3\x97%d+)$"
+
+  local function fitCounted(text, pixels)
+    text = tostring(text or "")
+    if C.width(text) <= pixels then return text end
+    local word, tail = text:match(COUNT_TAIL)
+    if not word or word == "" then return C.shorten(text, pixels) end
+    local room = pixels - C.width(tail)
+    if room <= 0 then return C.shorten(text, pixels) end
+    local ok, spans = pcall(Font.split, word)
+    if not ok or #spans == 0 then return C.shorten(text, pixels) end
+    for n = #spans, 1, -1 do
+      local cut = word:sub(1, spans[n].to):gsub("[%s%-]+$", "")
+      if cut ~= "" and C.width(cut) <= room then return cut .. tail end
+    end
+    return tail
+  end
+
+  Gen2.fitCounted = fitCounted
+
   local function commandLabels(state)
     local labels = state:menuLabels()
     local out = {}
-    for i = 1, 4 do out[i] = { text = tostring(labels[i] or "") } end
+    for i = 1, 4 do
+      out[i] = { text = fitCounted(tostring(labels[i] or ""), LABEL_W) }
+    end
     return out
   end
 
@@ -334,15 +372,15 @@ return function(mod, C)
     return top == state
   end
 
-  -- Deliberately narrow: one of the two menus, on top of the stack, outside a
-  -- contest, with that menu's own option on.  Every other phase -- above all
-  -- "messages" -- is left exactly as the cart draws it, which is the whole of
-  -- how dialogue takes the strip back.
+  -- Deliberately narrow: one of the two menus, on top of the stack, with that
+  -- menu's own option on.  Every other phase -- above all "messages" -- is
+  -- left exactly as the cart draws it, which is the whole of how dialogue
+  -- takes the strip back.  A Bug Contest battle is not an exception any more;
+  -- see the header.
   function Gen2.owns(state)
     if type(state) ~= "table" then return false end
     local option = OWNED[state.phase]
     if not option then return false end
-    if state.contest then return false end
     if not state.battle then return false end
     if mod.options:get(option) == false then return false end
     if state.phase == "menu" and type(state.menuLabels) ~= "function" then

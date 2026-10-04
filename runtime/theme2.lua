@@ -898,10 +898,13 @@ function Theme2.new(context)
           local function overPage(base)
             return function(speech, ...)
               if same(live, vanilla) then return base(speech, ...) end
-              local realWith = GbcPalette.with
+              -- `use` as well as `with`: the engine inlines binds now
+              -- (see runtime/icons2.lua), and `with` reaches `use` anyway.
+              local realWith, realUse = GbcPalette.with, GbcPalette.use
               GbcPalette.with = GbcPalette.keyedWith
+              GbcPalette.use = GbcPalette.useKeyed or realUse
               local ok, err = pcall(base, speech, ...)
-              GbcPalette.with = realWith
+              GbcPalette.with, GbcPalette.use = realWith, realUse
               if not ok then error(err, 0) end
               return err
             end
