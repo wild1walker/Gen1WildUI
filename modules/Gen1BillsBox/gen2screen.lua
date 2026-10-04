@@ -1276,13 +1276,16 @@ return function(mod, globalPane)
       taken[i], tickets[i] = mon, ticket
     end
 
-    for _, mon in ipairs(taken) do
+    for i, mon in ipairs(taken) do
       if page.global then
         local index, why = session:put(self.game, intoBox(mon))
         if not index then
           self:say(session:refusalText(why))
           return false
         end
+        -- From one GLOBAL page to another it never left the GLOBAL BOX, so
+        -- what taking it credited in the dex is taken back, as B would.
+        if moving[i].global then session:uncredit(tickets[i]) end
       else
         local cell = freeCell(self.save, page.box)
         if not cell then putBack() return false end

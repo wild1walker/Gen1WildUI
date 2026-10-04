@@ -1460,7 +1460,7 @@ return function(mod, globalPane)
       taken[i], tickets[i] = mon, ticket
     end
 
-    for _, mon in ipairs(taken) do
+    for i, mon in ipairs(taken) do
       if page.global then
         -- Refused BEFORE anything was taken (above), so a failure here is not
         -- a refusal -- it is the store gone wrong, and the honest answer is to
@@ -1471,6 +1471,9 @@ return function(mod, globalPane)
           self:say(session:refusalText(why))
           return false
         end
+        -- From one GLOBAL page to another it never left the GLOBAL BOX, so
+        -- what taking it credited in the dex is taken back, as B would.
+        if moving[i].global then session:uncredit(tickets[i]) end
       else
         local cell = freeCell(save, page.box)
         if not cell then putBack() return false end
