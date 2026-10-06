@@ -22,6 +22,10 @@ return {
         .. "press of A away",
       "seven features drawn from seven mods, each of which remains its own "
         .. "repository and is pinned here as a submodule",
+      "FireRed, LeafGreen and Emerald: BACKDROPS puts the battle art back "
+        .. "onto the GBA's own battle field, picked by the cart's terrain and "
+        .. "the map. The GBA draws its own dex, box, party, bag, menus and "
+        .. "mod manager, so nothing else in this half loads on a Gen 3 boot",
       "item icons: a picture of every item in the column left of its name, "
         .. "in the bag, in the mart's two lists and the item PC's three.  A "
         .. "machine is a disc in the colour of the type of the move it "
