@@ -2,8 +2,8 @@
 
 ## 1.43.0
 
-Gen1Arena 0.37.0, Gen1BillsBox 1.14.0 and Gen1BattleUI 1.8.2 — the bug
-thread, and FireRed, LeafGreen and Emerald.
+Gen1Arena 0.37.0, Gen1BillsBox 1.14.0, Gen1BattleUI 1.8.2 and Gen1Party 1.9.1
+— the bug thread, and FireRed, LeafGreen and Emerald.
 
 - **FireRed, LeafGreen and Emerald.** The manifest claims `gen3`, and on a Gen 3
   boot **BACKDROPS** installs and nothing else: the art is FireRed battle-field
@@ -27,6 +27,10 @@ thread, and FireRed, LeafGreen and Emerald.
   handheld; white inside the player's back pic stays white.
 - **Party icons in colour and keyed pictures survive the engine's inline
   palette binds** on Gold (`runtime/icons2.lua`, `theme2.lua`, `cutout2.lua`).
+- **On Gold's party page the hovered POKéMON walks again, and the one MOVE
+  carries flashes** (Gen1Party), with RULED ICONS on as it is by default: the
+  panel never asked the engine's `iconX`, which is where both read which row
+  is being drawn. The hovered icon also bobs by its HP, as the cart's does.
 - **Full-colour party icons stay in colour on a newer engine.** Its Gold party
   menu hands back an icon's `trueColor` with the frame, to keep a full-colour
   icon off the palette shader; "only the hovered icon walks" kept the first

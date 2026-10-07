@@ -198,9 +198,16 @@ return function(mod)
       end
       -- Fixed at ICON_PX with the rule on, and back on the engine's slide
       -- with it off -- which is the whole of what RULED ICONS buys or gives
-      -- back on this page.
-      local iconX = withRule and L.ICON_PX or self:iconX(i)
-      self:drawIcon(mon, iconX, G.iconY(i) + self:iconBob(i))
+      -- back on this page.  iconX is ASKED on every row either way: it is
+      -- where the engine says which row is being drawn, and the walk of the
+      -- hovered icon (Gen1WildUI's icons2) and the flash of the POKeMON MOVE
+      -- carries (gen2carry.lua) both read it there.  Asked only with the rule
+      -- off, neither ran on the default page.
+      local engineX = self:iconX(i)
+      local iconX = withRule and L.ICON_PX or engineX
+      -- The POKeMON goes to iconBob too: a newer engine bobs the hovered icon
+      -- by its HP band, 2 pixels green, 1 yellow, none red, as the cart does.
+      self:drawIcon(mon, iconX, G.iconY(i) + self:iconBob(i, mon))
       if withRule then rule(nameY) end
 
       local hp = self:shownHpFor(i, mon)
