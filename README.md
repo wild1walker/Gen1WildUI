@@ -92,6 +92,8 @@ The bundle claims `gen3`, and on a Gen 3 boot exactly one feature installs:
 there it goes back onto the GBA field 1:1, picked from the cart's own terrain
 and narrowed by the map (see
 [Gen1Arena](https://github.com/wild1walker/Gen1Arena#on-firered-leafgreen-and-emerald)).
+Ruby and Sapphire, which the engine runs in beta, are Gen 3 boots too and get
+the same.
 
 Everything else stands down there, because the GBA already draws it:
 
