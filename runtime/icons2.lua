@@ -132,8 +132,9 @@ function Icons2.install(context)
   --
   --     local frame = math.floor(self.clock / ICON_FRAME_STEPS) % 2
   --
-  -- so EVERY icon in the list flips between its two frames at once, all six
-  -- stepping together.  Reported as "the sprites shouldn't play flipping
+  -- (a newer engine divides by `PartyMenu.iconFrameSteps(mon)`, the cart's
+  -- HP-band speed, but off the same clock), so EVERY icon in the list flips
+  -- between its two frames on that one clock, all six stepping together.  Reported as "the sprites shouldn't play flipping
   -- between back and forth -- only the one I'm hovered over should play the
   -- walk south animation", which is what Red's box and party do: the row under
   -- the cursor animates and the rest stand still.
@@ -208,16 +209,24 @@ function Icons2.install(context)
 
   Icons2.walkFrame = walkFrame
 
+  -- Everything after the frame goes back exactly as it came.  A newer engine
+  -- answers a third value, the icon's `trueColor` (src/ui/gen2/PartyMenu.lua
+  -- iconFor), which `drawIcon` reads to leave a full-colour icon off the
+  -- palette shader; a wrapper that kept only two would hand every such icon
+  -- back to the shader and paint it in the party's four shades.
+  local function settle(menu, image, frame, ...)
+    -- Frame 0 is the one the cart rests on, so a still icon is the icon the
+    -- cart would draw between flips rather than a second pose.  It is also
+    -- cell 0 on a six-frame sheet -- standing, facing south -- so a still
+    -- icon needs nothing from the rule below.
+    if image and not menu.gen1wildAnimate then return image, 0, ... end
+    return image, walkFrame(image, frame), ...
+  end
+
   local baseIconFor = PartyMenu.iconFor
   if type(baseIconFor) == "function" then
     PartyMenu.iconFor = function(menu, mon, ...)
-      local image, frame = baseIconFor(menu, mon, ...)
-      -- Frame 0 is the one the cart rests on, so a still icon is the icon the
-      -- cart would draw between flips rather than a second pose.  It is also
-      -- cell 0 on a six-frame sheet -- standing, facing south -- so a still
-      -- icon needs nothing from the rule below.
-      if image and not menu.gen1wildAnimate then return image, 0 end
-      return image, walkFrame(image, frame)
+      return settle(menu, baseIconFor(menu, mon, ...))
     end
   end
 

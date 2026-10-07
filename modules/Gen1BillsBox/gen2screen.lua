@@ -95,7 +95,6 @@ return function(mod, globalPane)
 
   local REPEAT_DELAY, REPEAT_RATE = 16, 5
   local FLASH_PERIOD, FLASH_ON = 24, 16
-  local TICKS = 240
 
   local function option(key, fallback)
     local ok, value = pcall(function() return mod.options:get(key) end)
@@ -199,12 +198,18 @@ return function(mod, globalPane)
     if rawget(PartyMenu, ICON_RULE) then return end
     local baseIconFor = PartyMenu.iconFor
     if type(baseIconFor) ~= "function" then return end
+    -- Everything after the frame goes back exactly as it came: a newer
+    -- engine answers a third value, the icon's `trueColor`, which `drawIcon`
+    -- reads to keep a full-colour icon off the palette shader.  Kept to two,
+    -- every such icon on every Gold party screen went back to four shades.
+    local function settle(menu, image, frame, ...)
+      -- Frame 0 is the one the cart rests on, so a still icon is the icon
+      -- the cart would draw between flips rather than a second pose.
+      if image and not menu.gen1wildAnimate then return image, 0, ... end
+      return image, frame, ...
+    end
     PartyMenu.iconFor = function(menu, mon, ...)
-      local image, frame = baseIconFor(menu, mon, ...)
-      -- Frame 0 is the one the cart rests on, so a still icon is the icon the
-      -- cart would draw between flips rather than a second pose.
-      if image and not menu.gen1wildAnimate then return image, 0 end
-      return image, frame
+      return settle(menu, baseIconFor(menu, mon, ...))
     end
     PartyMenu[ICON_RULE] = true
   end
@@ -1682,10 +1687,12 @@ return function(mod, globalPane)
   local DIRECTIONS = { "up", "down", "left", "right" }
 
   function Screen:update(_dt)
-    self.ticks = (self.ticks + 1) % TICKS
+    self.ticks = self.ticks + 1
     -- The borrowed renderer's clock is driven from this screen's own counter,
-    -- AT ITS OWN RATE -- `iconFor` flips frames every ICON_FRAME_STEPS = 16,
-    -- and that is the cadence a Gold POKeMON walks at.
+    -- AT ITS OWN RATE -- `iconFor` flips frames every ICON_FRAME_STEPS = 16
+    -- (on a newer engine, every `PartyMenu.iconFrameSteps(mon)`: the cart's
+    -- HP-band speed, 9, 73 or 137), and that is the cadence a Gold POKeMON
+    -- walks at.
     --
     -- It used to be doubled, to match the Gen 1 box's ANIM_STEPS = 8 on the
     -- grounds that a storage grid next to a party list should not disagree
@@ -1697,9 +1704,12 @@ return function(mod, globalPane)
     -- this screen draws a party column of its own, so the same POKeMON was
     -- walking at one speed here and another in PARTY MENU.
     --
-    -- 240 ticks is fifteen whole frame-flips, so the walk does not jump when
-    -- the counter turns over.  The flash reads `self.ticks` directly and is
-    -- unaffected either way.
+    -- The counter never turns over.  It used to at 240, fifteen whole
+    -- 16-step flips, so the walk would not jump when it did; but 240 is not a
+    -- whole number of 9-, 73- or 137-step flips, and no small number is all
+    -- of them.  A count that only grows has no seam to jump at, and a double
+    -- counts frames exactly for longer than anyone holds a box screen open.
+    -- The flash reads `self.ticks` modulo its own period and does not care.
     if self.icons then self.icons.clock = self.ticks end
     local input = self.game and self.game.input
     if not input then return end

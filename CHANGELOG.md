@@ -27,6 +27,12 @@ thread, and FireRed, LeafGreen and Emerald.
   handheld; white inside the player's back pic stays white.
 - **Party icons in colour and keyed pictures survive the engine's inline
   palette binds** on Gold (`runtime/icons2.lua`, `theme2.lua`, `cutout2.lua`).
+- **Full-colour party icons stay in colour on a newer engine.** Its Gold party
+  menu hands back an icon's `trueColor` with the frame, to keep a full-colour
+  icon off the palette shader; "only the hovered icon walks" kept the first
+  two answers and dropped that one. Everything comes through now, and the
+  walk follows the engine's own speed, which on a newer one is the cart's
+  HP-band speed.
 - `tools/check.py` checks a feature's Gen 3 entry exists.
 
 ## 1.42.0

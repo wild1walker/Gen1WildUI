@@ -112,9 +112,13 @@ local SHEETS = {
   -- the mon facing AWAY and cell 3 is its south step
   follower = { getHeight = function() return 96 end },
 }
+-- A newer engine answers a third value, the icon's `trueColor`, which its
+-- drawIcon reads to keep a full-colour icon off the palette shader; the stub
+-- answers it for a mon that says so.
 PartyMenu.iconFor = function(menu, mon)
   return SHEETS[(mon and mon.sheet) or "cart"],
-         math.floor((menu.clock or 0) / 16) % 2
+         math.floor((menu.clock or 0) / 16) % 2,
+         mon and mon.trueColor or nil
 end
 
 package.loaded["src.ui.gen2.PartyMenu"] = PartyMenu
@@ -265,8 +269,13 @@ ok(ENGINE ~= nil, "an engine tree is found, so the reads below actually run")
 -- the selected row" -- it is why the highlighted icon sits a tile right.
 if ENGINE then
   local partySrc = assert(slurp(ENGINE .. "/src/ui/gen2/PartyMenu.lua"))
+  -- Two engine shapes, both of them one clock: an older one divides by a
+  -- fixed ICON_FRAME_STEPS, a newer one by the cart's HP-band speed for
+  -- that POKeMON (`iconFrameSteps`).
   ok(partySrc:find("local frame = math.floor(self.clock / ICON_FRAME_STEPS) % 2",
-                   1, true) ~= nil,
+                   1, true) ~= nil
+     or partySrc:find("return math.floor(self.clock / PartyMenu.iconFrameSteps(mon)) % 2",
+                      1, true) ~= nil,
      "every icon takes its frame from one clock, so they all flip together")
   ok(partySrc:find("self:drawIcon(mon, self:iconX(i)", 1, true) ~= nil,
      "and iconX(i) is called immediately before each drawIcon")
@@ -276,7 +285,7 @@ if ENGINE then
   local src = assert(slurp("runtime/icons2.lua"))
   ok(src:find("menu.gen1wildAnimate = (index == menu.index)", 1, true) ~= nil,
      "so the row is taken from iconX rather than re-derived")
-  ok(src:find("if image and not menu.gen1wildAnimate then return image, 0 end",
+  ok(src:find("if image and not menu.gen1wildAnimate then return image, 0, ... end",
               1, true) ~= nil,
      "and an unhovered icon rests on frame 0 -- the pose the cart draws "
      .. "between flips, not a second one")
@@ -318,15 +327,25 @@ if ENGINE then
   ok(boxSrc:find("self.icons.clock = self.ticks * 2", 1, true) == nil,
      "and nothing doubles it any more")
 
-  -- The counter has to turn over on a WHOLE flip or the walk jumps once a
-  -- cycle.  Both numbers are read rather than restated.
-  local steps = tonumber(partySrc:match("ICON_FRAME_STEPS%s*=%s*(%d+)"))
-  local ticks = tonumber(boxSrc:match("local TICKS%s*=%s*(%d+)"))
-  ok(steps and ticks, "both cadences are readable from the source")
-  eq(steps, 16, "the cart flips a party icon every sixteen steps")
-  eq(ticks % steps, 0,
-     ("%d ticks is a whole number of %d-step flips, so the walk does not "
-      .. "jump when the counter wraps"):format(ticks, steps))
+  -- The cadence, read rather than restated: a fixed 16 on an older engine,
+  -- the cart's HP-band speed on a newer one -- the frameset's 8, plus 0x00,
+  -- 0x40 or 0x80 by HP colour, plus one (engine/sprite_anims/core.asm).
+  local fixed = tonumber(partySrc:match("ICON_FRAME_STEPS%s*=%s*(%d+)"))
+  local duration = tonumber(partySrc:match("ICON_FRAME_DURATION%s*=%s*(%d+)"))
+  ok(fixed or duration, "the engine's cadence is readable from the source")
+  if fixed then
+    eq(fixed, 16, "the cart flips a party icon every sixteen steps")
+  else
+    eq(duration, 8, "the frameset holds each frame eight steps before the "
+       .. "HP band's offset")
+  end
+  -- A wrap would have to be a whole number of every one of those flips -- 16,
+  -- or 9, 73 and 137 -- or the walk jumps once a cycle.  No small number is,
+  -- so the box's counter does not wrap at all.
+  ok(boxSrc:find("self.ticks = self.ticks + 1", 1, true) ~= nil,
+     "the box's counter only counts up")
+  ok(boxSrc:match("self%.ticks%s*=%s*%(self%.ticks%s*%+%s*1%)%s*%%") == nil,
+     "and never wraps, so the walk has no seam to jump at")
 end
 
 do
@@ -363,6 +382,17 @@ do
   eq(frame, 0, "an unhovered follower icon stands still, facing south")
   _, frame = PartyMenu.iconFor(still, { sheet = "cart" })
   eq(frame, 0, "and so does an unhovered cart icon")
+
+  -- Whatever the engine answers after the frame comes back as it came: a
+  -- newer engine's `trueColor` third is what keeps a full-colour icon off
+  -- the four-shade remap, and a wrap that kept two values lost it.
+  local trueColor
+  _, frame, trueColor = PartyMenu.iconFor(still, { sheet = "cart", trueColor = true })
+  eq(trueColor, true, "a still icon keeps the engine's third answer")
+  _, frame, trueColor = PartyMenu.iconFor(hovered, { sheet = "follower", trueColor = true })
+  eq(trueColor, true, "and so does a walking one")
+  eq(select("#", PartyMenu.iconFor(still, { sheet = "cart" })), 3,
+     "and an answer of nil still comes back in its place")
 end
 
 -- ---- the engine's INLINE bind
