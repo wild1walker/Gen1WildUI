@@ -233,6 +233,26 @@ do
 end
 
 do
+  io.write("an EGG kept does not hold a real one's credit\n")
+  -- An EGG credits nothing, so it is not "one of that species still out":
+  -- kept in the party, it must not keep a real one caught when that one is
+  -- picked up and put back.
+  generation = 2
+  local session, game = sessionWith(goldSave(),
+    { { species = 152, isEgg = true }, { species = 152, nickname = "LEAFY" } })
+  local dex = game.save.pokedex
+  local egg = session:take(game, 1, 1)
+  ok(egg ~= nil and egg.isEgg == true, "the EGG comes out")
+  eq(dex.caught[152], nil, "an EGG is not a catch")
+  -- kept in the party: the screen never untakes it
+  local _, leafy = session:take(game, 1, 2)
+  eq(dex.caught[152], true, "the hatched one in hand is caught")
+  ok(session:untake(leafy), "and put back")
+  eq(dex.caught[152], nil,
+     "put back, it is not: the EGG still out is not one of that species")
+end
+
+do
   io.write("a species already caught is never uncaught\n")
   generation = 2
   local save = goldSave()

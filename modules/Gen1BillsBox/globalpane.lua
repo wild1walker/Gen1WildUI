@@ -491,8 +491,11 @@ return function(mod, GlobalBox)
     -- remembered against its species until it is either kept (nothing more
     -- happens) or put back (it is taken back).  SEEN is not taken back: the
     -- player did see it.
+    -- An EGG credits nothing, so it is not "one of that species still out"
+    -- either: kept in the party, it must not hold a real one's credit in
+    -- place when that one is put back.
     local species = mon.species
-    if species ~= nil then
+    if species ~= nil and not mon.isEgg then
       self.out = self.out or {}
       self.outBy = self.outBy or {}
       local entry = self.out[species] or { n = 0 }
