@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.43.1
+
+Gen1Arena 0.37.1.
+
+- **The backdrop covers the edges again on BATTLE BG = WORLD** (Gold, Silver,
+  Crystal). 1.43.0 left the whole surround of a WORLD battle to the world,
+  which took the picture out of the side bars too: on a 4:3 screen the dimmed
+  overworld showed either side of the field. The picture goes into the side
+  bars again, the strip beside the message box takes the letterbox colour as
+  on the other settings, and the world keeps only what the picture never
+  covers. **EDGE TO EDGE** off leaves all of it to the world.
+- **BATTLE HUD = EXTENDED keeps its HUD** with a backdrop up: a docked wide
+  battle's HUD and menus sit in what were the bars above and below the
+  field, and those bars were painted over them.
+- **Touch skins with a screen cutout** (and viewport layouts) get the bars
+  where the battle is, instead of a bar painted across it.
+
 ## 1.43.0
 
 Gen1Arena 0.37.0, Gen1BillsBox 1.14.0, Gen1BattleUI 1.8.2 and Gen1Party 1.9.1
